@@ -46,7 +46,7 @@
                     console.log("Passed");
                     try
                     {
-                        const response = await this.$axios.post('api/auth/forget',{
+                        const response = await this.$axios.post(`${import.meta.env.VITE_API_URL}/api/auth/forget`,{
                             email : this.email,
                             password : this.password
                         });
@@ -142,4 +142,5 @@ hr{
   margin-top: 5px;
   text-align: center;
 }
+
 </style>
