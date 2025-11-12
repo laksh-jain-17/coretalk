@@ -748,12 +748,12 @@ export default {
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' }
         ],*/
-	iceServers: [
+		iceServers: [
   { urls: 'stun:stun.l.google.com:19302' },
   {
     urls: 'turn:your-turn-server.com:3478',
-    username: process.env.VITE_TURN_USERNAME,
-    credential: process.env.VITE_TURN_PASSWORD
+    username: import.meta.env.VITE_TURN_USERNAME,
+    credential: import.meta.env.VITE_TURN_PASSWORD
   }
 ],
         iceCandidatePoolSize: 10
@@ -2292,3 +2292,4 @@ body {
 }
 
 </style>
+
