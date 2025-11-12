@@ -27,7 +27,7 @@ export default {
     return {
       roomId: '',
       message: '',
-      user:null,
+      user: null,
       showdown: false,
       title: '',
       isHost: false,
@@ -35,120 +35,99 @@ export default {
     };
   },
   methods: {
-    erase()
-    {
+    erase() {
       this.message = false;
     },
-    entering()
-    {
-       this.$router.push(`/Settings`);	
+    entering() {
+      this.$router.push(`/Settings`);
     },
-    checkuser(){
-      if(this.roomId === '')
-      {
-        console.log('Empty Room ID');
+    checkuser() {
+      if (this.roomId === '') {
         this.message = 'Fill your Room ID';
         return;
       }
       const token = localStorage.getItem('token');
-      if(!token)
-      {
+      if (!token) {
         this.message = "Please login first";
         return;
       }
-      this.$axios.post('api/auth/join',{
+      this.$axios.post('https://coretalk-backend-1067959155765.asia-south1.run.app/api/auth/join', {
         roomId: this.roomId
       },
       {
-        headers:{
+        headers: {
           Authorization: `Bearer ${token}`
         }
       })
       .then(res => {
         const roomid = res.data.roomid;
-        localStorage.setItem('token',res.data.token);
-        localStorage.setItem('meetingtitle',this.title);
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('meetingtitle', this.title);
         this.$router.push(`/MeetingRoom/${roomid}`);
       })
       .catch(err => {
-        if(err.response)
-        {
+        if (err.response) {
           console.error(err.response.data.msg);
           this.message = "Failed to join";
-        }
-        else{
+        } else {
           this.message = "Network error";
           console.error("Network error");
         }
       });
     },
-    createroom()
-    {
-      localStorage.setItem('isHost','true');
+    createroom() {
+      localStorage.setItem('isHost', 'true');
       this.showdown = true;
-      if(this.showdown == true && this.title == "")
-      {
+      if (this.showdown == true && this.title == "") {
         this.message = "Enter the Room Title";
         return;
       }
       const token = localStorage.getItem('token');
-      console.log(token);
-      if(!token)
-      {
+      if (!token) {
         this.message = "Please login first";
         return;
       }
-      this.$axios.post('/api/auth/create',{},{
+      this.$axios.post('https://coretalk-backend-1067959155765.asia-south1.run.app/api/auth/create', {}, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       })
-      .then(res=>{
+      .then(res => {
         const roomid = res.data.roomid;
-        localStorage.setItem('roomid',roomid);
-        localStorage.setItem('meetingtitle',this.title);
+        localStorage.setItem('roomid', roomid);
+        localStorage.setItem('meetingtitle', this.title);
         this.$router.push(`/MeetingRoom/${roomid}`);
       })
       .catch(err => {
-        if(err.response) {
+        if (err.response) {
           console.error('Create room error response:', err.response.data);
           this.message = err.response.data.msg || "Failed to create room";
-        }
-        else{
+        } else {
           console.error('Create room error:', err);
           this.message = "Network error or backend not responding";
         }
       });
     },
-    showdash()
-    {
+    showdash() {
       this.$router.push('/Admin');
     },
   },
-  async mounted()
-  {
+  async mounted() {
     const token = localStorage.getItem('token');
-    if(!token)
-    {
+    if (!token) {
       this.message = "Please login first";
-      //this.$router.push('/Login');
       return;
     }
-    try
-    {
-      const res = await this.$axios.get('/api/auth/schedule',{
-      headers : {
-          Authorization:`Bearer ${token}`,
+    try {
+      const res = await this.$axios.get('https://coretalk-backend-1067959155765.asia-south1.run.app/api/auth/schedule', {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
       });
-      //this.message = res.data.msg;
       this.user = res.data.user;
-    }
-    catch(err)
-    {
-      this.message = "Authetication failed";
+    } catch (err) {
+      this.message = "Authentication failed";
       localStorage.removeItem('token');
-      //this.$router.push('/Login');
     }
   }
 };
@@ -251,3 +230,4 @@ export default {
   }
 }
 </style>
+
