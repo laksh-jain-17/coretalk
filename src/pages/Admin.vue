@@ -262,7 +262,7 @@ export default {
     },
 
     async fetchData(endpoint, token) {
-      const res = await fetch(`http://localhost:5000${endpoint}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}${endpoint}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -276,7 +276,7 @@ export default {
       
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`http://localhost:5000/api/admin/users/${userId}`, {
+        const res = await fetch(`https://coretalk-backend-1067959155765.asia-south1.run.app/api/admin/users/${userId}`, {
           method: "DELETE",
           headers: {
             'Authorization': `Bearer ${token}`
@@ -862,4 +862,5 @@ table tbody td {
     grid-template-columns: 1fr;
   }
 }
+
 </style>
