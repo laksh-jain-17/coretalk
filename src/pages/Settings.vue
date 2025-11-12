@@ -66,7 +66,7 @@ export default {
       }
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:5000/api/auth/report", {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/report`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -97,7 +97,7 @@ export default {
 
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch("http://localhost:5000/api/auth/delete-account", {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/delete-account`, {
           method: "DELETE",
           headers: {
             "Authorization": `Bearer ${token}`
@@ -119,7 +119,6 @@ export default {
   }
 }
 </script>
-
 <style scoped>
 .settings-page {
   background-color: white;
