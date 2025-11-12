@@ -333,7 +333,7 @@ export default {
     initSocket() {
       console.log('Initializing socket connection...');
       
-      this.socket = io("http://localhost:5000", {
+      this.socket = io(`${import.meta.env.VITE_API_URL}`, {
         transports: ['websocket'],
         upgrade: true,
         timeout: 20000,
@@ -1305,7 +1305,7 @@ export default {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/end-meeting", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -1329,7 +1329,7 @@ export default {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/mute-all", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -1350,7 +1350,7 @@ export default {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/lock-meeting", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/lock-meeting`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -2290,4 +2290,5 @@ body {
   color:white;
   border-radius:2px;
 }
+
 </style>
