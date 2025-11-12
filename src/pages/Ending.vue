@@ -52,7 +52,7 @@ export default {
         }
 
         await axios.post(
-          'http://localhost:5000/api/reviews/add',
+          `${import.meta.env.VITE_API_URL}/api/reviews/add`,
           { comment },
           { 
             headers: {
@@ -211,4 +211,5 @@ button {
     font-size: 1.2rem;
   }
 }
+
 </style>
