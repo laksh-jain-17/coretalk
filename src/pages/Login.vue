@@ -121,9 +121,11 @@ export default {
       
       try {
         // Send the credential token to your backend
-        const res = await this.$axios.post('/api/auth/google-login', {
-          credential: response.credential
-        });
+        const res = await this.$axios.post(
+          `${import.meta.env.VITE_API_URL}/api/auth/google-login`,
+          { credential: response.credential }
+        );
+
 
         if (res.data.token) {
           // Store authentication data
@@ -163,7 +165,7 @@ export default {
         return;
       }
       try {
-        const res = await this.$axios.post('/api/auth/login', {
+        const res = await this.$axios.post(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
           email: this.email,
           password: this.password
         });
@@ -340,4 +342,5 @@ export default {
 #new_updates p {
   text-align:center;
 }
+
 </style>
