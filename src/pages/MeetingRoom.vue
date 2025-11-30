@@ -718,35 +718,66 @@ export default {
     if (exists >= 0) this.participants[exists] = data;
     else this.participants.push(data);
   },
-
-  updateParticipantStatus(userId, type, enabled) {
-    const p = this.participants.find((x) => x.id === userId);
-    if (!p) return;
-
-    if (type === "video") p.hasVideo = enabled;
-    if (type === "mic") p.hasMic = enabled;
-    if (type === "hand") p.hand = enabled;
-    if (type === "screenShare") p.isScreenSharing = enabled;
-
-    const wrap = document.querySelector(`[data-peer-id="${userId}"]`);
-    if (wrap) {
-      let indicator = wrap.querySelector(".status-indicator");
-      if (!indicator) {
-        indicator = document.createElement("div");
-        indicator.className = "status-indicator";
-        indicator.style.cssText =
-          "position:absolute;top:6px;right:6px;background:#0008;color:#fff;padding:3px 5px;border-radius:4px;font-size:12px;display:flex;gap:4px;";
-        wrap.appendChild(indicator);
+  updateParticipantStatus(userId, statusType, isEnabled) 
+  {
+    const participant = this.participants.find(p => p.id === userId);
+    if (participant) 
+    {
+      if (statusType === 'video') 
+      {
+        participant.hasVideo = isEnabled;
+        if (!isEnabled) 
+        {
+          const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
+          if (wrapper) 
+          {
+            wrapper.remove();
+            delete this.remoteVideos[userId];
+          }
+        }
+      } 
+      else if (statusType === 'mic') 
+      {
+        participant.hasMic = isEnabled;
+      } 
+      else if (statusType === 'screenShare') 
+      {
+        participant.isScreenSharing = isEnabled;
+      } 
+      else if (statusType === 'hand') 
+      {
+        participant.hand = isEnabled;
       }
-
+      this.$forceUpdate();
+    }
+  // Update indicator
+    const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
+    if (wrapper) 
+    {
+      let indicator = wrapper.querySelector('.status-indicator');
+      if (!indicator) 
+      {
+        indicator = document.createElement('div');
+        indicator.className = 'status-indicator';
+        indicator.style.cssText = `
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          display: flex;
+          gap: 4px;
+          font-size: 16px;
+          background: rgba(0,0,0,0.7);
+          padding: 4px;
+          border-radius: 4px;
+        `;
+        wrapper.appendChild(indicator);
+      }
       indicator.innerHTML = `
-        <span>${p.hasMic ? "🎤" : "🔇"}</span>
-        <span>${p.hasVideo ? "📹" : "❌"}</span>
-        ${p.isScreenSharing ? "<span>🖥️</span>" : ""}
+        <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
+        <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
+        ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
       `;
     }
-
-    this.$forceUpdate();
   },
 
   // =====================================================
@@ -1410,5 +1441,6 @@ body {
   border-radius: 6px;
 }
 </style>
+
 
 
