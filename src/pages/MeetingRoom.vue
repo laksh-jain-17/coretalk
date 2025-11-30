@@ -473,8 +473,8 @@ export default {
       });
 
       this.socket.on('hand-raised', ({ userId, userName, isRaised }) => {
-        console.log(`${userName} ${isRaised ? 'raised' : 'lowered'} hand`);
-      });
+  this.updateParticipantStatus(userId, 'hand', isRaised);
+});
 
       // ============ MEDIA STATUS EVENTS ============
       this.socket.on('video-status', ({ userId, userName, isVideoOn }) => {
@@ -1112,7 +1112,8 @@ export default {
           name: displayName,
           isHost: p.isHost || false,
           hasMic: p.hasMic || false,
-          hasVideo: p.hasVideo || false
+          hasVideo: p.hasVideo || false,
+          hand: p.hand || false
         });
       }
       
@@ -1170,6 +1171,10 @@ export default {
     } else if (statusType === 'mic') {
       participant.hasMic = isEnabled;
     } else if (statusType === 'screenShare') {
+      participant.isScreenSharing = isEnabled;
+    } else if (statusType === 'hand') {
+      participant.hand = isEnabled;
+    }
       participant.isScreenSharing = isEnabled;
     }
     
@@ -1554,7 +1559,8 @@ async stopScreenShare() {
         const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
         
         if (videoSender) {
-          await videoSender.replaceTrack(null);
+          if (!this.blackTrack) { this.blackTrack = this.createBlackVideoTrack(); }
+await videoSender.replaceTrack(this.blackTrack);
           console.log(`✅ Removed video for peer ${peerId}`);
         }
       }
@@ -2306,5 +2312,6 @@ body {
 }
 
 </style>
+
 
 
