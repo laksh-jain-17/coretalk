@@ -7,17 +7,21 @@
         <button @click="turn">Change Panel</button>
       </div>
     </transition>
+
     <div id="main-content">
       <div id="host">
         <video ref="localVideo" autoplay muted playsinline></video>
         <div v-if="!videoon">{{ userName || 'Host' }}</div>
       </div>
+
       <div id="participants" ref="participantsBox"></div>
     </div>
+
     <div v-if="isPoorNetwork" class="transcript-box">
       <h3>Real time transcript</h3>
       <div v-for="(line,i) in transcript" :key="i">{{line}}</div>
     </div>
+
     <transition name="slide-fade">
       <div id="navbar" v-show="trayVisible">
         <ul>
@@ -34,6 +38,7 @@
               <li>{{ micon ? 'Mute' : 'Unmute' }}</li>
             </ul>
           </li>
+
           <li>
             <button
               @mouseenter="() => setHover('video')"
@@ -47,6 +52,7 @@
               <li>{{ videoon ? 'Stop Video' : 'Start Video' }}</li>
             </ul>
           </li>
+
           <li>
             <button
               @mouseenter="() => setHover('share')"
@@ -59,23 +65,7 @@
               <li>Share screen</li>
             </ul>
           </li>
-          <!--li v-if="isHost" class="dropdown" @click="toggleDropdown('settings')" tabindex="0" @blur="closeDropdown">
-            <button
-              @mouseenter="() => setHover('settings')"
-              @mouseleave="() => setHover(null)"
-            >
-              <IconMaterialSymbolsLightSettings />
-            </button>
-            <ul v-if="hoveredIcon === 'settings'" class="tooltip">
-              <li>Settings</li>
-            </ul>
-            <ul v-if="activeDropdown === 'settings'" class="dropdown-menu">
-              <li @click="endMeeting">End meetings</li>
-              <li @click="muteAll">Mute All</li>
-              <li @click="lockMeeting">Session lock</li>
-              <li @click="transfer">Host transfer</li>
-            </ul>
-          </li-->
+
           <li>
             <button
               @click="leave"
@@ -89,6 +79,8 @@
             </ul>
           </li>
         </ul>
+
+        <!-- RIGHT SIDE -->
         <ul id="rightpane">
           <li>
             <button @click="togglePanel('list')" @mouseenter="() => setHover('participants')" @mouseleave="() => setHover(null)">
@@ -98,19 +90,20 @@
             <ul v-if="hoveredIcon === 'participants'" class="tooltip">
               <li>Participants</li>
             </ul>
+
             <div id="list-box" v-if="activePanel === 'list'">
               <div class="list-header">
                 Participants ({{ participants.length + 1 }})
                 <button @click="togglePanel(null)">X</button>
               </div>
+
               <div class="list-body">
-                <!-- Show current user first -->
                 <div class="participant self">
                   <ul>
                     <li>{{ userName }} (You) {{ isHost ? '(Host)' : '' }}</li>
                   </ul>
                 </div>
-                <!-- Show other participants -->
+
                 <div class="participant" v-for="p in participants" :key="p.id">
                   <ul>
                     <li>{{ p.name }} {{ p.isHost ? '(Host)' : '' }}</li>
@@ -119,25 +112,27 @@
               </div>
             </div>
           </li>
+
           <li>
             <button @click="togglePanel('chat')" @mouseenter="() => setHover('chat')" @mouseleave="() => setHover(null)">
               <IconMaterialSymbolsChat />
               <span v-if="unreadMessages > 0" class="message-badge">{{ unreadMessages }}</span>
             </button>
+
             <ul v-if="hoveredIcon === 'chat'" class="tooltip">
               <li>Chat</li>
             </ul>
+
             <div id="chat-box" v-if="activePanel === 'chat'">
-              <div class="chat-header">
-                Chat
-                <button @click="togglePanel(null)">X</button>
-              </div>
+              <div class="chat-header">Chat <button @click="togglePanel(null)">X</button></div>
+
               <div class="chat-body" ref="chatBody">
                 <div v-for="(msg, index) in messages" :key="index" class="message">
                   <div class="message-header">{{ msg.sender }}</div>
                   <div class="message-text">{{ msg.text }}</div>
                 </div>
               </div>
+
               <div class="chat-input-section">
                 <input 
                   type="text" 
@@ -145,12 +140,12 @@
                   v-model="newMessage" 
                   placeholder="Type a message..." 
                   @keyup.enter="sendMessage" 
-                  maxlength="500"
                 />
                 <button class="chat-send" @click="sendMessage" :disabled="!newMessage.trim()">Send</button>
               </div>
             </div>
           </li>
+
           <li class="dropdown">
             <button @click.stop="toggleDropdown('extras')" @mouseenter="() => setHover('extras')" @mouseleave="() => setHover(null)">
               <IconMaterialSymbolsLightMoreVert />
@@ -158,30 +153,13 @@
             <ul v-if="hoveredIcon === 'extras'" class="tooltip">
               <li>More</li>
             </ul>
+
             <ul v-if="activeDropdown === 'extras'" class="dropdown-menu extras-menu">
-              <li @click.stop="hand_raised">
-                {{ hand ? 'Lower hand' : 'Raise hand' }}
-                <div id="hand_warning" v-if="hand">
-                  <p>Hand was raised.</p>
-                </div>
-              </li>
+              <li @click.stop="hand_raised">{{ hand ? 'Lower hand' : 'Raise hand' }}</li>
+
               <li @click.stop="toggle_info">
                 Info
-                <div id="info_box" v-if="show_info">
-                  <div id="inside_info">
-                    <div id="info_header">
-                      <b>Meeting Info</b>
-                      <button @click.stop="close_info">X</button>
-                    </div>
-                    <hr />
-                    <p>Meeting Title: {{ title }}</p>
-                    <p>Room ID: {{ roomId }}</p>
-                    <p>Participants: {{ participants.length + 1 }}</p>
-                    <button id="copylink" @click="copystring">Copy Link</button>
-                  </div>
-                </div>
               </li>
-              <!--li @click.stop>Help</li-->
             </ul>
           </li>
         </ul>
@@ -189,6 +167,8 @@
     </transition>
   </div>
 </template>
+
+
 <script>
 import { jwtDecode } from 'jwt-decode';
 import { io } from 'socket.io-client';
@@ -197,14 +177,12 @@ export default {
   name: 'MeetingRoom',
   data() {
     return {
-      // User & Room info
       isHost: false,
       userName: '',
       userId: '',
       roomId: '',
       title: 'Meeting Room',
-      
-      // UI State
+
       hoveredIcon: null,
       activeDropdown: null,
       activePanel: null,
@@ -213,1712 +191,949 @@ export default {
       show_info: false,
       hand: false,
       turned: true,
-      
-      // Media State - START WITH BOTH OFF
+
       micon: false,
       videoon: false,
       localStream: null,
       isScreenSharing: false,
       screenTrack: null,
       screenStream: null,
-      
-      // Recording
+
       mediaRecorder: null,
       recordedChunks: [],
       isRecording: false,
       record: false,
-      
-      // Communication
+
       socket: null,
       isSocketConnected: false,
       participants: [],
       messages: [],
       newMessage: '',
       unreadMessages: 0,
-      
-      // WebRTC
-      peers: {},           
-      remoteVideos: {},    
+
+      peers: {},
+      remoteVideos: {},
       pendingCandidates: {},
       peerNegotiating: {},
-      
-      // Network & Transcript
+
       isPoorNetwork: false,
       transcript: [],
       networkCheckInterval: null,
       recognition: null,
-      
-      // Internal flags
+
       hasInitializedSocket: false,
       broadcastQueue: [],
       isInitializingMedia: false,
       broadcastRetryTimer: null
     };
   },
-
-  computed: {
-    computedRoomId() {
-      return this.$route.params.id || 'default-room';
-    }
-  },
-
-  watch: {
-    isPoorNetwork(newVal) {
-      if(newVal) {
-        console.log("Poor network -> Transcript enabled");
-        this.recognition?.start();
-      } else {
-        console.log("Network normal -> Transcript disabled");
-        this.recognition?.stop();
-      }
-    },
-
-    activePanel(newVal) {
-      if (newVal !== 'chat') {
-        this.unreadMessages = 0;
-      }
-    }
-  },
-
   methods: {
-    // ============ INITIALIZATION ============
-    initUserFromToken() {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No token found');
-        this.$router.push('/Login');
-        return false;
+          // ============ INITIALIZATION ============
+  initUserFromToken() {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      this.$router.push("/Login");
+      return false;
+    }
+
+    try {
+      const decoded = jwtDecode(token);
+
+      this.userId =
+        decoded.id ||
+        decoded.userId ||
+        decoded.user?.id ||
+        `user_${Date.now()}`;
+
+      const stored = localStorage.getItem("username");
+      this.userName =
+        decoded.name ||
+        decoded.username ||
+        decoded.user?.username ||
+        decoded.email?.split("@")[0] ||
+        stored ||
+        `User-${this.userId.slice(0, 6)}`;
+
+      if (this.userName.includes("@")) {
+        this.userName = this.userName.split("@")[0];
       }
 
+      this.isHost =
+        localStorage.getItem("isHost") === "true" ||
+        decoded.isHost === true;
+
+      return true;
+    } catch (err) {
+      localStorage.removeItem("token");
+      this.$router.push("/Login");
+      return false;
+    }
+  },
+
+  // ============ SOCKET CONNECTION ============
+  initSocket() {
+    this.socket = io(`${import.meta.env.VITE_API_URL}`, {
+      transports: ["websocket"],
+      reconnection: true,
+    });
+
+    this.socket.on("connect", () => {
+      this.isSocketConnected = true;
+
+      this.socket.emit("join-room", {
+        roomId: this.roomId,
+        userName: this.userName,
+        userId: this.userId,
+        isHost: this.isHost,
+      });
+
+      this.startBroadcastRetry();
+    });
+
+    this.socket.on("disconnect", () => {
+      this.isSocketConnected = false;
+    });
+
+    // ----- ROOM EVENTS -----
+    this.socket.on("participants-list", (list) => {
+      this.updateParticipantsList(list);
+    });
+
+    this.socket.on("user-joined", async (user) => {
+      if (user.id !== this.socket.id) {
+        this.addParticipant(user);
+        setTimeout(() => this.startOffer(user.id), 1000);
+      }
+    });
+
+    this.socket.on("user-left", (id) => {
+      this.cleanupPeer(id);
+      this.participants = this.participants.filter((p) => p.id !== id);
+    });
+
+    this.socket.on("existing-users", async (users) => {
+      for (const u of users || []) {
+        if (u.id !== this.socket.id) {
+          this.addParticipant(u);
+          setTimeout(() => this.startOffer(u.id), 1000);
+        }
+      }
+    });
+
+    // ----- SIGNALING -----
+    this.socket.on("signal", async ({ from, signal }) => {
+      if (signal.type === "offer") {
+        await this.handleOffer(from, signal.sdp);
+      } else if (signal.type === "answer") {
+        await this.handleAnswer(from, signal.sdp);
+      } else if (signal.candidate) {
+        await this.handleIceCandidate(from, signal.candidate);
+      }
+    });
+
+    // ----- CHAT -----
+    this.socket.on("chat-message", (msg) => {
+      this.messages.push(msg);
+      if (this.activePanel !== "chat") {
+        this.unreadMessages++;
+      }
+      this.$nextTick(() => {
+        const body = this.$refs.chatBody;
+        if (body) body.scrollTop = body.scrollHeight;
+      });
+    });
+
+    // ----- HAND RAISE -----
+    this.socket.on("hand-raised", ({ userId, userName, isRaised }) => {
+      this.updateParticipantStatus(userId, "hand", isRaised);
+    });
+
+    // ----- MEDIA EVENTS -----
+    this.socket.on("video-status", (data) => {
+      this.updateParticipantStatus(data.userId, "video", data.isVideoOn);
+    });
+
+    this.socket.on("mic-status", (data) => {
+      this.updateParticipantStatus(data.userId, "mic", data.isMicOn);
+    });
+
+    this.socket.on("screen-share-status", (data) => {
+      this.updateParticipantStatus(
+        data.userId,
+        "screenShare",
+        data.isScreenSharing
+      );
+    });
+
+    this.socket.on("meeting-locked", () => alert("Meeting locked by host"));
+
+    this.socket.on("all-muted", () => {
+      if (!this.isHost && this.micon) this.toggleMic();
+    });
+  },
+
+  // =====================================================
+  // ============ BROADCAST + QUEUE SYSTEM ===============
+  // =====================================================
+
+  startBroadcastRetry() {
+    if (this.broadcastRetryTimer) clearInterval(this.broadcastRetryTimer);
+
+    this.broadcastRetryTimer = setInterval(() => {
+      if (this.broadcastQueue.length && this.isSocketConnected) {
+        this.processQueuedBroadcasts();
+      }
+    }, 2000);
+  },
+
+  processQueuedBroadcasts() {
+    const pending = [...this.broadcastQueue];
+    this.broadcastQueue = [];
+
+    for (const msg of pending) {
       try {
-        const decoded = jwtDecode(token);
-        
-        this.userId = decoded.id || decoded.userId || decoded.user?.id || `user_${Date.now()}`;
-        
-        const storedEmail = localStorage.getItem('username');
-        this.userName = 
-          decoded.name || 
-          decoded.user?.name || 
-          decoded.username || 
-          decoded.user?.username ||
-          (storedEmail && !storedEmail.includes('@') ? storedEmail : null) ||
-          decoded.email || 
-          decoded.user?.email || 
-          storedEmail ||
-          `User-${this.userId.substring(0, 8)}`;
-        
-        if (this.userName.includes('@')) {
-          const emailParts = this.userName.split('@');
-          this.userName = emailParts[0] || `User-${this.userId.substring(0, 8)}`;
-        }
-        
-        const storedIsHost = localStorage.getItem('isHost');
-        this.isHost = storedIsHost === 'true' || decoded.isHost === true;
-        
-        console.log('User initialized:', { 
-          userId: this.userId, 
-          userName: this.userName, 
-          isHost: this.isHost 
-        });
-        
-        return true;
-      } catch (error) {
-        console.error('Error decoding token:', error);
-        localStorage.removeItem('token');
-        this.$router.push('/Login');
-        return false;
+        this.socket.emit(msg.event, msg.data);
+      } catch {
+        this.broadcastQueue.push(msg);
       }
-    },
+    }
+  },
 
-    initSocket() {
-      console.log('Initializing socket connection...');
-      
-      this.socket = io(`${import.meta.env.VITE_API_URL}`, {
-        transports: ['websocket'],
-        upgrade: true,
-        timeout: 20000,
-        forceNew: true,
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        reconnectionAttempts: 5
-      });
-
-      // ============ CONNECTION EVENTS ============
-      this.socket.on('connect', () => {
-        console.log('Socket connected:', this.socket.id);
-        
-        // Mark as connected immediately
-        this.isSocketConnected = true;
-        
-        const joinData = { 
-          roomId: this.roomId, 
-          userName: this.userName,
-          userId: this.userId,
-          isHost: this.isHost
-        };
-        
-        console.log('Joining room:', joinData);
-        this.socket.emit('join-room', joinData);
-        
-        // Start broadcast retry mechanism
-        this.startBroadcastRetry();
-      });
-
-      this.socket.on('connect_error', (err) => {
-        console.error('Socket connect error:', err.message);
-        this.isSocketConnected = false;
-      });
-
-      this.socket.on('disconnect', (reason) => {
-        console.log('Socket disconnected:', reason);
-        this.isSocketConnected = false;
-        
-        if (reason === 'io server disconnect') {
-          setTimeout(() => {
-            if (!this.socket?.connected) {
-              this.socket.connect();
-            }
-          }, 1000);
-        }
-      });
-      
-      this.socket.on('reconnect', (attemptNumber) => {
-        console.log('Socket reconnected after', attemptNumber, 'attempts');
-        this.isSocketConnected = true;
-        
-        const joinData = { 
-          roomId: this.roomId, 
-          userName: this.userName,
-          userId: this.userId,
-          isHost: this.isHost
-        };
-        this.socket.emit('join-room', joinData);
-        
-        this.startBroadcastRetry();
-      });
-
-      // ============ ROOM EVENTS ============
-      this.socket.on('userRole', (role) => {
-        console.log('Received userRole:', role);
-        this.isHost = role === 'host';
-      });
-
-      this.socket.on('participants-list', (list) => {
-        console.log('Participants list received:', list);
-        this.updateParticipantsList(list);
-      });
-
-      this.socket.on('user-joined', async (user) => {
-        console.log('User joined:', user);
-        if (user.id !== this.socket.id && user.id !== this.userId) {
-          this.addParticipant(user);
-          
-          setTimeout(async () => {
-            await this.startOffer(user.id);
-          }, 1500);
-        }
-      });
-
-      this.socket.on('user-left', (userId) => {
-        console.log('User left:', userId);
-        this.cleanupPeer(userId);
-        this.participants = this.participants.filter(p => p.id !== userId);
-      });
-
-      this.socket.on('existing-users', async (users) => {
-        console.log('Existing users:', users);
-        
-        for (const user of users || []) {
-          if (user?.id && user.id !== this.socket.id && user.id !== this.userId) {
-            this.addParticipant(user);
-            
-            setTimeout(async () => {
-              await this.startOffer(user.id);
-            }, 1000 + Math.random() * 1000);
-          }
-        }
-      });
-
-      // ============ SIGNALING EVENTS ============
-      this.socket.on('signal', async ({ from, signal }) => {
-        if (signal.type === 'offer') {
-          await this.handleOffer(from, signal.sdp);
-        } else if (signal.type === 'answer') {
-          await this.handleAnswer(from, signal.sdp);
-        } else if (signal.candidate) {
-          await this.handleIceCandidate(from, signal.candidate);
-        }
-      });
-
-      // ============ COMMUNICATION EVENTS ============
-      this.socket.on('chat-message', ({ sender, text, timestamp }) => {
-        const message = { 
-          sender: sender || 'Unknown', 
-          text: text || '', 
-          timestamp: timestamp || Date.now() 
-        };
-        this.messages.push(message);
-        
-        if (this.activePanel !== 'chat') {
-          this.unreadMessages++;
-        }
-        
-        this.$nextTick(() => {
-          const chatBody = this.$refs.chatBody;
-          if (chatBody) {
-            chatBody.scrollTop = chatBody.scrollHeight;
-          }
-        });
-      });
-
-      this.socket.on('hand-raised', ({ userId, userName, isRaised }) => {
-  this.updateParticipantStatus(userId, 'hand', isRaised);
-});
-
-      // ============ MEDIA STATUS EVENTS ============
-      this.socket.on('video-status', ({ userId, userName, isVideoOn }) => {
-        console.log(`${userName} video: ${isVideoOn ? 'ON' : 'OFF'}`);
-        this.updateParticipantStatus(userId, 'video', isVideoOn);
-      });
-
-      this.socket.on('mic-status', ({ userId, userName, isMicOn }) => {
-        console.log(`${userName} mic: ${isMicOn ? 'ON' : 'OFF'}`);
-        this.updateParticipantStatus(userId, 'mic', isMicOn);
-      });
-
-      this.socket.on('screen-share-status', ({ userId, userName, isScreenSharing }) => {
-  console.log(`${userName} ${isScreenSharing ? 'started' : 'stopped'} screen sharing`);
-  this.updateParticipantStatus(userId, 'screenShare', isScreenSharing);
-  
-  // Optional: Show notification to users
-  if (isScreenSharing) {
-    console.log(`${userName} is now sharing their screen`);
-    // You can add a toast notification here if you want
-  }
-});
-
-      // ============ HOST CONTROL EVENTS ============
-      this.socket.on('meeting-locked', () => {
-        console.log('Meeting locked by host');
-        alert('Meeting has been locked by the host');
-      });
-
-      this.socket.on('all-muted', () => {
-        console.log('All participants muted by host');
-        if (!this.isHost && this.micon) {
-          this.toggleMic();
-        }
-      });
-
-      this.hasInitializedSocket = true;
-    },
-
-    // ============ BROADCAST MANAGEMENT ============
-    startBroadcastRetry() {
-      // Clear existing timer
-      if (this.broadcastRetryTimer) {
-        clearInterval(this.broadcastRetryTimer);
-      }
-      
-      // Process queue every 2 seconds
-      this.broadcastRetryTimer = setInterval(() => {
-        if (this.broadcastQueue.length > 0 && this.isSocketConnected) {
-          this.processQueuedBroadcasts();
-        }
-      }, 2000);
-    },
-
-    processQueuedBroadcasts() {
-      if (!this.isSocketConnected || !this.socket?.connected) {
+  safeBroadcast(event, data) {
+    if (this.socket && this.socket.connected) {
+      try {
+        this.socket.emit(event, data);
         return;
-      }
-
-      console.log(`Processing ${this.broadcastQueue.length} queued broadcasts...`);
-      
-      const toProcess = [...this.broadcastQueue];
-      this.broadcastQueue = [];
-
-      for (const broadcast of toProcess) {
-        try {
-          this.socket.emit(broadcast.event, broadcast.data);
-          console.log(`QUEUED BROADCAST SUCCESS: ${broadcast.event}`);
-        } catch (error) {
-          console.error(`QUEUED BROADCAST FAILED: ${broadcast.event}`, error);
-          this.broadcastQueue.push(broadcast);
-        }
-      }
-    },
-
-    safeBroadcast(event, data) {
-      console.log(`Attempting broadcast: ${event}`, {
-        socketExists: !!this.socket,
-        socketConnected: this.socket?.connected,
-        isSocketConnected: this.isSocketConnected
-      });
-
-      if (this.socket && this.socket.connected && this.isSocketConnected) {
-        try {
-          this.socket.emit(event, data);
-          console.log(`BROADCAST SUCCESS: ${event}`);
-          return true;
-        } catch (error) {
-          console.error(`BROADCAST FAILED: ${event}`, error);
-          this.broadcastQueue.push({ event, data });
-          return false;
-        }
-      } else {
-        console.warn(`Socket not ready - QUEUING: ${event}`);
+      } catch {
         this.broadcastQueue.push({ event, data });
-        return false;
       }
-    },
+    } else {
+      this.broadcastQueue.push({ event, data });
+    }
+  },
 
-    broadcastVideoStatus(isVideoOn) {
-      const data = {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isVideoOn: isVideoOn
-      };
-      
-      console.log('Broadcasting video status:', isVideoOn);
-      this.safeBroadcast('video-status', data);
-    },
+  // =====================================================
+  // ============ MEDIA CONTROLS (MIC & CAMERA) ==========
+  // =====================================================
 
-    broadcastMicStatus(isMicOn) {
-      const data = {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isMicOn: isMicOn
-      };
-      
-      console.log('Broadcasting mic status:', isMicOn);
-      this.safeBroadcast('mic-status', data);
-    },
+  async toggleMic() {
+    if (this.isInitializingMedia) return;
+    this.isInitializingMedia = true;
 
-    // ============ MEDIA CONTROLS ============
-    async toggleMic() {
-      if (this.isInitializingMedia) return;
-      this.isInitializingMedia = true;
-
-      try {
-        if (this.micon) {
-          // Turn OFF
-          console.log('Turning microphone OFF');
-          if (this.localStream) {
-            this.localStream.getAudioTracks().forEach(track => {
-              track.stop();
-              this.localStream.removeTrack(track);
-            });
-          }
-          
-          // Remove audio from all peers
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const audioSender = pc.getSenders().find(s => s.track?.kind === 'audio');
-            if (audioSender) {
-              pc.removeTrack(audioSender);
-            }
-          }
-          
-          this.micon = false;
-          this.broadcastMicStatus(false);
-          
-        } else {
-          // Turn ON
-          console.log('Turning microphone ON');
-          const audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true
-            }
+    try {
+      if (this.micon) {
+        if (this.localStream) {
+          this.localStream.getAudioTracks().forEach((t) => {
+            t.stop();
+            this.localStream.removeTrack(t);
           });
-
-          const audioTrack = audioStream.getAudioTracks()[0];
-          if (!this.localStream) this.localStream = new MediaStream();
-          this.localStream.addTrack(audioTrack);
-
-          // Add audio to all peers
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            pc.addTrack(audioTrack, this.localStream);
-            
-            // Renegotiate
-            await this.renegotiateConnection(peerId);
-          }
-
-          this.micon = true;
-          this.broadcastMicStatus(true);
         }
-      } catch (error) {
-        console.error('Error accessing microphone:', error);
-        alert('Could not access microphone. Please check permissions.');
+
+        for (const id in this.peers) {
+          const pc = this.peers[id];
+          const sender = pc.getSenders().find((s) => s.track?.kind === "audio");
+          if (sender) pc.removeTrack(sender);
+        }
+
         this.micon = false;
         this.broadcastMicStatus(false);
-      } finally {
-        this.isInitializingMedia = false;			
-      }
-    },
+      } else {
+        const audio = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
 
-    async toggleVideo() {
-      if (this.isInitializingMedia) return;
-      this.isInitializingMedia = true;
+        const track = audio.getAudioTracks()[0];
 
-      try {
-        if (this.videoon) {
-          // Turn OFF
-          console.log('Turning camera OFF');
-          if (this.localStream) {
-            this.localStream.getVideoTracks().forEach(track => {
-              track.stop();
-              this.localStream.removeTrack(track);
-            });
-          }
-          
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) {
-            videoElement.srcObject = null;
-          }
-          
-          // Remove video from all peers
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (videoSender) {
-              pc.removeTrack(videoSender);
-            }
-          }
-          
-          this.videoon = false;
-          this.broadcastVideoStatus(false);
-          
-        } else {
-          // Turn ON
-          console.log('Turning camera ON');
-          const videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 30 }
-            }
-          });
-          
-          const videoTrack = videoStream.getVideoTracks()[0];
-          if (!this.localStream) this.localStream = new MediaStream();
-          this.localStream.addTrack(videoTrack);
-          
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) {
-            videoElement.srcObject = this.localStream;
-            videoElement.muted = true;
-            await videoElement.play();
-          }
-          
-          // Add video to all peers
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            pc.addTrack(videoTrack, this.localStream);
-            
-            // Renegotiate
-            await this.renegotiateConnection(peerId);
-          }
-          
-          this.videoon = true;
-          this.broadcastVideoStatus(true);
+        if (!this.localStream) this.localStream = new MediaStream();
+        this.localStream.addTrack(track);
+
+        for (const id in this.peers) {
+          const pc = this.peers[id];
+          pc.addTrack(track, this.localStream);
+          await this.renegotiateConnection(id);
         }
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        alert('Could not access camera. Please check permissions.');
+
+        this.micon = true;
+        this.broadcastMicStatus(true);
+      }
+    } catch (err) {
+      this.micon = false;
+      this.broadcastMicStatus(false);
+    }
+
+    this.isInitializingMedia = false;
+  },
+
+  async toggleVideo() {
+    if (this.isInitializingMedia) return;
+    this.isInitializingMedia = true;
+
+    try {
+      if (this.videoon) {
+        if (this.localStream) {
+          this.localStream.getVideoTracks().forEach((t) => {
+            t.stop();
+            this.localStream.removeTrack(t);
+          });
+        }
+
+        const el = this.$refs.localVideo;
+        if (el) el.srcObject = null;
+
+        for (const id in this.peers) {
+          const pc = this.peers[id];
+          const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+          if (sender) pc.removeTrack(sender);
+        }
+
         this.videoon = false;
         this.broadcastVideoStatus(false);
-      } finally {
-        this.isInitializingMedia = false;
+      } else {
+        const video = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+        const track = video.getVideoTracks()[0];
+
+        if (!this.localStream) this.localStream = new MediaStream();
+        this.localStream.addTrack(track);
+
+        const el = this.$refs.localVideo;
+        if (el) {
+          el.srcObject = this.localStream;
+          await el.play();
+        }
+
+        for (const id in this.peers) {
+          const pc = this.peers[id];
+          pc.addTrack(track, this.localStream);
+          await this.renegotiateConnection(id);
+        }
+
+        this.videoon = true;
+        this.broadcastVideoStatus(true);
       }
-    },
+    } finally {
+      this.isInitializingMedia = false;
+    }
+  },
 
-        // ============ WEBRTC PEER MANAGEMENT ============
-    async createPeerConnection(remoteId, isInitiator = false) {
-  console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
+  // =====================================================
+  // ============ WEBRTC PEER CONNECTIONS ================
+  // =====================================================
 
-  // ✅ Define ICE servers safely
-  const iceServers = [
-    { urls: 'stun:stun.l.google.com:19302' }
-  ];
+  async createPeerConnection(remoteId, isInitiator = false) {
+    const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
 
-  // Only add TURN if both username and password exist
-  const turnUsername = import.meta.env.VITE_TURN_USERNAME;
-  const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
-  const turnUrl = import.meta.env.VITE_TURN_URL || 'turn:your-turn-server.com:3478';
-
-  if (turnUsername && turnPassword) {
-    iceServers.push({
-      urls: turnUrl,
-      username: turnUsername,
-      credential: turnPassword
+    const pc = new RTCPeerConnection({
+      iceServers,
+      iceCandidatePoolSize: 10,
     });
-  } else {
-    console.warn('⚠️ TURN credentials missing — using STUN only');
-  }
 
-  // ✅ Create Peer Connection
-  const pc = new RTCPeerConnection({
-    iceServers,
-    iceCandidatePoolSize: 10
-  });
-
-  // ICE Candidate handler
-  pc.onicecandidate = (event) => {
-    if (event.candidate && this.isSocketConnected) {
-      try {
-        this.socket.emit('signal', {
+    pc.onicecandidate = (event) => {
+      if (event.candidate && this.isSocketConnected) {
+        this.socket.emit("signal", {
           to: remoteId,
-          signal: { candidate: event.candidate }
-        });
-      } catch (error) {
-        console.error('Error sending ICE candidate:', error);
-      }
-    }
-  };
-
-  // Track handler
-  pc.ontrack = (event) => {
-    console.log(`Received ${event.track.kind} track from ${remoteId}`);
-    const stream = event.streams[0];
-    if (stream) {
-      this.handleRemoteStream(remoteId, stream);
-    }
-  };
-
-  // ICE connection state handler
-  pc.oniceconnectionstatechange = () => {
-    console.log(`ICE state for ${remoteId}: ${pc.iceConnectionState}`);
-
-    if (pc.iceConnectionState === 'failed') {
-      console.log(`ICE failed for ${remoteId} - restarting`);
-      pc.restartIce();
-    }
-
-    if (pc.iceConnectionState === 'disconnected') {
-      setTimeout(() => {
-        if (pc.iceConnectionState === 'disconnected') {
-          this.cleanupPeer(remoteId);
-        }
-      }, 10000);
-    }
-  };
-
-  // Add local media tracks if available
-  if (this.localStream) {
-    this.localStream.getTracks().forEach(track => {
-      console.log(`Adding ${track.kind} track to peer ${remoteId}`);
-      pc.addTrack(track, this.localStream);
-    });
-  }
-
-  this.peers[remoteId] = pc;
-  this.peerNegotiating[remoteId] = false;
-  return pc;
-},
-
-
-    async handleOffer(from, offer) {
-      try {
-        console.log(`Handling offer from ${from}`);
-        
-        let pc = this.peers[from];
-        if (!pc) {
-          pc = await this.createPeerConnection(from, false);
-        }
-
-        // CRITICAL FIX: Check signaling state before setting remote description
-        if (pc.signalingState !== 'stable') {
-          console.log(`Peer ${from} not stable (${pc.signalingState}), waiting...`);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        if (pc.signalingState === 'have-local-offer') {
-          console.log(`Collision with ${from} - rolling back`);
-          await pc.setLocalDescription({ type: 'rollback' });
-        }
-
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        
-        // Process queued ICE candidates
-        if (this.pendingCandidates[from]) {
-          for (const candidate of this.pendingCandidates[from]) {
-            try {
-              await pc.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch (err) {
-              console.error('Error adding queued candidate:', err);
-            }
-          }
-          delete this.pendingCandidates[from];
-        }
-        
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        
-        if (this.isSocketConnected) {
-          this.socket.emit('signal', {
-            to: from,
-            signal: { type: 'answer', sdp: pc.localDescription }
-          });
-          console.log(`Answer sent to ${from}`);
-        }
-      } catch (err) {
-        console.error('Error handling offer:', err);
-      }
-    },
-
-    async handleAnswer(from, answer) {
-      try {
-        console.log(`Handling answer from ${from}`);
-        const pc = this.peers[from];
-        
-        if (!pc) {
-          console.error(`No peer connection for ${from}`);
-          return;
-        }
-
-        // CRITICAL FIX: Only set remote description if in correct state
-        if (pc.signalingState === 'have-local-offer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          
-          // Process queued ICE candidates
-          if (this.pendingCandidates[from]) {
-            for (const candidate of this.pendingCandidates[from]) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(candidate));
-              } catch (err) {
-                console.error('Error adding queued candidate:', err);
-              }
-            }
-            delete this.pendingCandidates[from];
-          }
-          
-          console.log(`Answer handled from ${from}`);
-          this.peerNegotiating[from] = false;
-        } else {
-          console.log(`Ignoring answer from ${from} - wrong state: ${pc.signalingState}`);
-        }
-      } catch (err) {
-        console.error('Error handling answer:', err);
-      }
-    },
-
-    async handleIceCandidate(from, candidate) {
-      try {
-        const pc = this.peers[from];
-        if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          console.log(`ICE candidate added from ${from}`);
-        } else {
-          if (!this.pendingCandidates[from]) {
-            this.pendingCandidates[from] = [];
-          }
-          this.pendingCandidates[from].push(candidate);
-          console.log(`ICE candidate queued for ${from}`);
-        }
-      } catch (err) {
-        console.error('Error adding ICE candidate:', err);
-      }
-    },
-
-    handleRemoteStream(remoteId, stream) {
-      console.log(`Setting up remote stream for ${remoteId}`, stream.getTracks().length, 'tracks');
-      
-      let wrapper = document.querySelector(`[data-peer-id="${remoteId}"]`);
-      
-      // Check if stream has any active tracks
-      const hasActiveTracks = stream.getTracks().some(track => track.enabled && track.readyState === 'live');
-      
-      if (!hasActiveTracks) {
-        // Remove video box if no active tracks
-        if (wrapper) {
-          console.log(`Removing video box for ${remoteId} - no active tracks`);
-          wrapper.remove();
-          delete this.remoteVideos[remoteId];
-        }
-        return;
-      }
-      
-      if (!wrapper) {
-        wrapper = document.createElement('div');
-        wrapper.setAttribute('data-peer-id', remoteId);
-        wrapper.className = 'remote-participant';
-        wrapper.style.cssText = `
-          display: inline-flex;
-          flex-direction: column;
-          align-items: center;
-          margin: 8px;
-          border: 2px solid #333;
-          border-radius: 8px;
-          padding: 8px;
-          background-color: rgba(0,0,0,0.5);
-          position: relative;
-        `;
-
-        const vid = document.createElement('video');
-        vid.autoplay = true;
-        vid.playsInline = true;
-        vid.muted = false;
-        vid.style.cssText = `
-          width: 280px;
-          height: 160px;
-          border-radius: 8px;
-          object-fit: cover;
-          background-color: #000;
-        `;
-
-        const label = document.createElement('div');
-        const participant = this.participants.find(p => p.id === remoteId);
-        const pName = participant?.name || `User-${remoteId.substring(0, 6)}`;
-        label.textContent = pName;
-        label.style.cssText = `
-          margin-top: 6px;
-          font-size: 14px;
-          color: #eee;
-          font-weight: bold;
-          text-align: center;
-          word-wrap: break-word;
-          max-width: 280px;
-        `;
-
-        wrapper.appendChild(vid);
-        wrapper.appendChild(label);
-        this.remoteVideos[remoteId] = vid;
-
-        if (this.$refs.participantsBox) {
-          this.$refs.participantsBox.appendChild(wrapper);
-        }
-      }
-
-      const vid = wrapper.querySelector('video');
-      if (vid && stream) {
-        vid.srcObject = stream;
-        
-        const playPromise = vid.play();
-        if (playPromise) {
-          playPromise.then(() => {
-            console.log(`Remote video playing for ${remoteId}`);
-          }).catch(err => {
-            console.warn(`Video play failed for ${remoteId}:`, err.name);
-          });
-        }
-      }
-      
-      // Monitor track changes
-      stream.getTracks().forEach(track => {
-        track.onended = () => {
-          console.log(`Track ended for ${remoteId}`);
-          const currentStream = vid.srcObject;
-          if (currentStream) {
-            const remainingTracks = currentStream.getTracks().filter(t => t.readyState === 'live' && t.enabled);
-            if (remainingTracks.length === 0) {
-              console.log(`No more tracks - removing ${remoteId} video box`);
-              wrapper.remove();
-              delete this.remoteVideos[remoteId];
-            }
-          }
-        };
-      });
-    },
-
-    async startOffer(remoteId) {
-      if (remoteId === this.socket?.id || remoteId === this.userId) {
-        return;
-      }
-
-      console.log(`Starting offer to ${remoteId}`);
-      
-      try {
-        const pc = await this.createPeerConnection(remoteId, true);
-        
-        const offer = await pc.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: true
-        });
-        
-        await pc.setLocalDescription(offer);
-
-        if (this.isSocketConnected) {
-          this.socket.emit('signal', {
-            to: remoteId,
-            signal: { type: 'offer', sdp: offer }
-          });
-          console.log(`Offer sent to ${remoteId}`);
-        }
-      } catch (err) {
-        console.error(`Error creating/sending offer to ${remoteId}:`, err);
-      }
-    },
-
-    cleanupPeer(peerId) {
-      console.log(`Cleaning up peer: ${peerId}`);
-      
-      if (this.peers[peerId]) {
-        try {
-          this.peers[peerId].close();
-        } catch (e) {
-          console.error('Error closing peer connection:', e);
-        }
-        delete this.peers[peerId];
-      }
-
-      if (this.peerNegotiating[peerId]) {
-        delete this.peerNegotiating[peerId];
-      }
-
-      if (this.pendingCandidates[peerId]) {
-        delete this.pendingCandidates[peerId];
-      }
-
-      const wrapper = document.querySelector(`[data-peer-id="${peerId}"]`);
-      if (wrapper && wrapper.parentNode) {
-        wrapper.parentNode.removeChild(wrapper);
-      }
-
-      if (this.remoteVideos[peerId]) {
-        delete this.remoteVideos[peerId];
-      }
-    },
-
-    // ============ PARTICIPANT MANAGEMENT ============
-    updateParticipantsList(list) {
-      console.log('Updating participants list:', list);
-      
-      const participantsMap = new Map();
-      
-      for (const p of list || []) {
-        if (!p || !p.id || p.id === this.socket?.id || p.id === this.userId) {
-          continue;
-        }
-        
-        let displayName = p.name || p.userName || p.username;
-        
-        if (displayName && displayName.includes('@')) {
-          displayName = displayName.split('@')[0];
-        }
-        
-        if (!displayName || displayName === 'undefined' || displayName === 'null') {
-          displayName = `User-${p.id.substring(0, 8)}`;
-        }
-        
-        participantsMap.set(p.id, {
-          id: p.id,
-          name: displayName,
-          isHost: p.isHost || false,
-          hasMic: p.hasMic || false,
-          hasVideo: p.hasVideo || false,
-          hand: p.hand || false
+          signal: { candidate: event.candidate },
         });
       }
-      
-      this.participants = Array.from(participantsMap.values());
-      console.log('Updated participants:', this.participants);
-    },
+    };
 
-    addParticipant(user) {
-      if (!user || !user.id || user.id === this.socket?.id || user.id === this.userId) {
-        return;
-      }
-      
-      const existingIndex = this.participants.findIndex(p => p.id === user.id);
-      
-      let displayName = user.name || user.userName || user.username || 'Anonymous';
-      
-      if (displayName && displayName.includes('@')) {
-        displayName = displayName.split('@')[0];
-      }
-      
-      if (!displayName || displayName === 'undefined' || displayName === 'null') {
-        displayName = `User-${user.id.substring(0, 8)}`;
-      }
-      
-      const participantData = {
-        id: user.id,
-        name: displayName,
-        isHost: user.isHost || false,
-        hasMic: user.hasMic || false,
-        hasVideo: user.hasVideo || false
-      };
-      
-      if (existingIndex >= 0) {
-        this.participants[existingIndex] = participantData;
-      } else {
-        this.participants.push(participantData);
-      }
-    },
+    pc.ontrack = (event) => {
+      const stream = event.streams[0];
+      if (stream) this.handleRemoteStream(remoteId, stream);
+    };
 
-    updateParticipantStatus(userId, statusType, isEnabled) {
-  const participant = this.participants.find(p => p.id === userId);
-  if (participant) {
-    if (statusType === 'video') {
-      participant.hasVideo = isEnabled;
-      
-      // Remove video box if video is OFF
-      if (!isEnabled) {
-        const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
-        if (wrapper) {
-          console.log(`Removing video box for ${userId} - video turned OFF`);
-          wrapper.remove();
-          delete this.remoteVideos[userId];
-        }
-      }
-    } else if (statusType === 'mic') {
-      participant.hasMic = isEnabled;
-    } else if (statusType === 'screenShare') {
-      participant.isScreenSharing = isEnabled;
-    } else if (statusType === 'hand') {
-      participant.hand = isEnabled;
-    }
-      participant.isScreenSharing = isEnabled;
-    }
-    
-    this.$forceUpdate();
-  }
-  
-  // Update status indicator if video box exists
-  const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
-  if (wrapper) {
-    let indicator = wrapper.querySelector('.status-indicator');
-    if (!indicator) {
-      indicator = document.createElement('div');
-      indicator.className = 'status-indicator';
-      indicator.style.cssText = `
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        display: flex;
-        gap: 4px;
-        font-size: 16px;
-        background: rgba(0,0,0,0.7);
-        padding: 4px;
-        border-radius: 4px;
-      `;
-      wrapper.appendChild(indicator);
-    }
-    
-    indicator.innerHTML = `
-      <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
-      <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
-      ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
-    `;
-  }
-},
-
-    // ============ UI CONTROLS ============
-    togglePanel(panel) {
-      this.activePanel = this.activePanel === panel ? null : panel;
-      this.activeDropdown = null;
-      
-      if (panel === 'chat') {
-        this.unreadMessages = 0;
-      }
-    },
-
-    setHover(icon) {
-      this.hoveredIcon = icon;
-    },
-
-    toggleDropdown(type) {
-      this.activeDropdown = this.activeDropdown === type ? null : type;
-      this.activePanel = null;
-    },
-
-    closeDropdown() {
-      this.activeDropdown = null;
-    },
-
-    resetinactivityTimer() {
-      this.trayVisible = true;
-      clearTimeout(this.inactivityTimer);
-      this.inactivityTimer = setTimeout(() => {
-        this.trayVisible = false;
-      }, 5000);
-    },
-
-    turn() {
-      this.turned = !this.turned;
-    },
-
-    // ============ CHAT & HAND RAISE ============
-    sendMessage() {
-      const text = (this.newMessage || '').trim();
-      if (!text) return;
-      
-      const message = {
-        sender: this.userName,
-        text: text,
-        timestamp: Date.now()
-      };
-      
-      this.safeBroadcast('chat-message', {
-        roomId: this.roomId,
-        ...message
-      });
-      
-      this.newMessage = '';
-      
-      this.$nextTick(() => {
-        const chatBody = this.$refs.chatBody;
-        if (chatBody) {
-          chatBody.scrollTop = chatBody.scrollHeight;
-        }
-      });
-    },
-
-    hand_raised() {
-      this.hand = !this.hand;
-      
-      this.safeBroadcast('hand-raised', {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isRaised: this.hand
-      });
-    },
-
-    // ============ MEETING INFO ============
-    toggle_info() {
-      this.show_info = !this.show_info;
-    },
-
-    close_info() {
-      this.show_info = false;
-    },
-
-    copystring() {
-      const meetingLink = window.location.href;
-      navigator.clipboard.writeText(meetingLink)
-        .then(() => {
-          alert("Meeting link copied to clipboard!");
-        })
-        .catch(err => {
-          console.error("Failed to copy link:", err);
-          const textArea = document.createElement('textarea');
-          textArea.value = meetingLink;
-          document.body.appendChild(textArea);
-          textArea.select();
-          document.execCommand('copy');
-          document.body.removeChild(textArea);
-          alert("Meeting link copied to clipboard!");
-        });
-    },
-
-    leave() {
-      this.cleanup();
-      this.$router.push('/Ending');
-    },
-
-  
-
-    // ============ HOST CONTROLS ============
-    async endMeeting() {
-      if (!this.isHost) {
-        alert("Only host can end the meeting");
-        return;
-      }
-
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId: this.roomId })
-        });
-        
-        if (res.ok) {
-          this.cleanup();
-          this.$router.push('/Ending');
-        } else {
-          console.error('Failed to end meeting');
-        }
-      } catch(err) {
-        console.error("Error ending meeting:", err);
-      }
-    },
-
-    async muteAll() {
-      if (!this.isHost) {
-        alert("Only host can mute all participants");
-        return;
-      }
-
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId: this.roomId })
-        });
-        
-        if (res.ok) {
-          console.log("All participants muted");
-        }
-      } catch(err) {
-        console.error("Error muting all participants:", err);
-      }
-    },
-
-    async lockMeeting() {
-      if (!this.isHost) {
-        alert("Only host can lock the meeting");
-        return;
-      }
-
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/lock-meeting`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId: this.roomId })
-        });
-        
-        if (res.ok) {
-          console.log("Meeting locked");
-          alert("Meeting has been locked");
-        }
-      } catch(err) {
-        console.error("Error locking meeting:", err);
-      }
-    },
-
-    transfer() {
-      if (!this.isHost) {
-        alert("Only host can transfer meeting");
-        return;
-      }
-      alert("Host transfer - Work in progress");
-    },
-
-    // ============ SCREEN SHARING ============
-    // COMPLETE FIX for Screen Sharing Issues
-// Replace your existing sharescreen() and stopScreenShare() methods with these:
-
-async sharescreen() {
-  try {
-    if (!this.isScreenSharing) {
-      console.log('=== STARTING SCREEN SHARE ===');
-      
-      // Get screen share stream
-      const stream = await navigator.mediaDevices.getDisplayMedia({ 
-        video: {
-          cursor: "always",
-          displaySurface: "monitor" // or "window" or "browser"
-        },
-        audio: false 
-      });
-      
-      this.screenStream = stream;
-      this.screenTrack = stream.getVideoTracks()[0];
-      
-      console.log('Screen track obtained:', this.screenTrack);
-
-      // Update local video element
-      const el = this.$refs.localVideo;
-      if (el) {
-        el.srcObject = stream;
-        await el.play().catch(err => {
-          console.error('Error playing local screen share:', err);
-        });
-      }
-
-      // Replace video track in ALL peer connections
-      let replacementCount = 0;
-      for (const peerId in this.peers) {
-        const pc = this.peers[peerId];
-        console.log(`Replacing track for peer ${peerId}`);
-        
-        const senders = pc.getSenders();
-        const videoSender = senders.find(s => s.track?.kind === 'video');
-        
-        if (videoSender && videoSender.track) {
-          // Replace existing video track with screen track
-          await videoSender.replaceTrack(this.screenTrack);
-          console.log(`✅ Replaced video track for peer ${peerId}`);
-          replacementCount++;
-        } else {
-          // No existing video sender - add screen track
-          pc.addTrack(this.screenTrack, stream);
-          console.log(`✅ Added screen track for peer ${peerId}`);
-          replacementCount++;
-          
-          // Trigger renegotiation
-          await this.renegotiateConnection(peerId);
-        }
-      }
-      
-      console.log(`Screen track sent to ${replacementCount} peers`);
-
-      // Handle when user stops sharing via browser UI
-      this.screenTrack.onended = () => {
-        console.log('Screen share ended by user');
-        this.stopScreenShare();
-      };
-      
-      this.isScreenSharing = true;
-      
-      // Broadcast status
-      this.broadcastScreenShareStatus(true);
-      
-      console.log('=== SCREEN SHARE STARTED ===');
-      
-    } else {
-      // Stop screen sharing
-      await this.stopScreenShare();
-    }
-  } catch (err) {
-    console.error("Error sharing screen:", err);
-    
-    if (err.name === 'NotAllowedError') {
-      alert("Screen sharing permission denied. Please allow screen sharing.");
-    } else if (err.name === 'NotFoundError') {
-      alert("No screen available to share.");
-    } else {
-      alert("Could not start screen sharing: " + err.message);
-    }
-    
-    this.isScreenSharing = false;
-  }
-},
-
-async stopScreenShare() {
-  try {
-    console.log('=== STOPPING SCREEN SHARE ===');
-    
-    // Stop screen track
-    if (this.screenTrack) {
-      this.screenTrack.stop();
-      this.screenTrack = null;
-    }
-    
-    // Stop screen stream
-    if (this.screenStream) {
-      this.screenStream.getTracks().forEach(t => t.stop());
-      this.screenStream = null;
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((t) => pc.addTrack(t, this.localStream));
     }
 
-    // Restore camera if it was on before screen share
-    if (this.videoon) {
-      console.log('Restoring camera...');
-      
-      // Get camera stream
-      const videoStream = await navigator.mediaDevices.getUserMedia({ 
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 }
-        }
-      });
-      
-      const videoTrack = videoStream.getVideoTracks()[0];
-      
-      // Update local video element
-      const el = this.$refs.localVideo;
-      if (el) {
-        el.srcObject = videoStream;
-        await el.play().catch(() => {});
-      }
-      
-      // Add to local stream
-      if (!this.localStream) this.localStream = new MediaStream();
-      
-      // Remove old video tracks
-      this.localStream.getVideoTracks().forEach(track => {
-        this.localStream.removeTrack(track);
-      });
-      
-      // Add new video track
-      this.localStream.addTrack(videoTrack);
-      
-      // Replace in all peer connections
-      for (const peerId in this.peers) {
-        const pc = this.peers[peerId];
-        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-        
-        if (videoSender) {
-          await videoSender.replaceTrack(videoTrack);
-          console.log(`✅ Restored camera for peer ${peerId}`);
-        } else {
-          pc.addTrack(videoTrack, this.localStream);
-          await this.renegotiateConnection(peerId);
-        }
-      }
-      
-    } else {
-      // Camera was off - just clear local video
-      const el = this.$refs.localVideo;
-      if (el) {
-        el.srcObject = null;
-      }
-      
-      // Remove video track from all peers
-      for (const peerId in this.peers) {
-        const pc = this.peers[peerId];
-        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-        
-        if (videoSender) {
-          if (!this.blackTrack) { this.blackTrack = this.createBlackVideoTrack(); }
-await videoSender.replaceTrack(this.blackTrack);
-          console.log(`✅ Removed video for peer ${peerId}`);
-        }
-      }
-    }
-    
-    this.isScreenSharing = false;
-    
-    // Broadcast status
-    this.broadcastScreenShareStatus(false);
-    
-    console.log('=== SCREEN SHARE STOPPED ===');
-    
-  } catch (err) {
-    console.error("Error stopping screen share:", err);
-    this.isScreenSharing = false;
-  }
-},
+    this.peers[remoteId] = pc;
+    this.peerNegotiating[remoteId] = false;
 
-// Add this method for broadcasting
-broadcastScreenShareStatus(isSharing) {
-  const data = {
-    roomId: this.roomId,
-    userId: this.userId,
-    userName: this.userName,
-    isScreenSharing: isSharing
-  };
-  
-  console.log('Broadcasting screen share status:', isSharing);
-  this.safeBroadcast('screen-share-status', data);
-},
+    return pc;
+  },
 
-// IMPROVED renegotiation with better error handling
-async renegotiateConnection(peerId) {
-  const pc = this.peers[peerId];
-  if (!pc || this.peerNegotiating[peerId]) {
-    console.log(`Cannot renegotiate peer ${peerId} - ${!pc ? 'no connection' : 'already negotiating'}`);
-    return;
-  }
+  async startOffer(remoteId) {
+    if (remoteId === this.userId || remoteId === this.socket.id) return;
 
-  try {
-    this.peerNegotiating[peerId] = true;
-    console.log(`Renegotiating connection with ${peerId}...`);
-    
-    // Check signaling state
-    if (pc.signalingState !== 'stable') {
-      console.log(`Peer ${peerId} not in stable state: ${pc.signalingState} - waiting...`);
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    // Create and set offer
-    const offer = await pc.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: true
-    });
-    
+    const pc = await this.createPeerConnection(remoteId, true);
+
+    const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    
-    if (this.isSocketConnected) {
-      this.socket.emit('signal', {
-        to: peerId,
-        signal: { type: 'offer', sdp: offer }
-      });
-      console.log(`✅ Renegotiation offer sent to ${peerId}`);
-    } else {
-      console.error('Socket not connected - cannot send renegotiation offer');
+
+    this.safeBroadcast("signal", {
+      to: remoteId,
+      signal: { type: "offer", sdp: offer },
+    });
+  },
+
+  async handleOffer(from, offer) {
+    let pc = this.peers[from];
+    if (!pc) pc = await this.createPeerConnection(from, false);
+
+    if (pc.signalingState === "have-local-offer") {
+      await pc.setLocalDescription({ type: "rollback" });
     }
-  } catch (err) {
-    console.error(`Renegotiation error for ${peerId}:`, err);
-  } finally {
-    setTimeout(() => {
-      this.peerNegotiating[peerId] = false;
-    }, 2000);
-  }
-},
 
-    // ============ RECORDING ============
-    async recording() {
-      if (!this.isHost) {
-        alert("Only host can start recording");
-        return;
-      }
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
-      this.record = !this.record;
-      
-      if(this.record) {
-        try {
-          const screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: true
-          });
-          
-          this.recordedChunks = [];
-          this.mediaRecorder = new MediaRecorder(screenStream, {mimeType: "video/webm"});
-          
-          this.mediaRecorder.ondataavailable = (e) => {
-            if(e.data && e.data.size > 0) {
-              this.recordedChunks.push(e.data);
-            }
-          };
-          
-          this.mediaRecorder.onstop = () => {
-            const blob = new Blob(this.recordedChunks, {type:"video/webm"});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `meeting-${this.roomId}-${Date.now()}.webm`;
-            a.click();
-            URL.revokeObjectURL(url);
-          };
-          
-          this.mediaRecorder.start();
-          this.isRecording = true;
-          console.log("Recording started");
-        } catch(err) {
-          console.error("Recording failed:", err);
-          this.record = false;
-        }
-      } else {
-        if(this.mediaRecorder && this.isRecording) {
-          this.mediaRecorder.stop();
-          this.isRecording = false;
-          console.log("Recording stopped");
-        }
-      }
-    },
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
 
-    async silent_background() {
-      if (!this.isHost) {
-        alert("Only host can toggle silent background mode");
-        return;
-      }
-      alert("Silent background mode - Work in progress");
-    },
+    this.safeBroadcast("signal", {
+      to: from,
+      signal: { type: "answer", sdp: answer },
+    });
+  },
 
-    // ============ NETWORK & TRANSCRIPTION ============
-    async checkNetworkQuality() {
-      if (!this.localStream || Object.keys(this.peers).length === 0) {
-        return;
-      }
-
-      let poorConnection = false;
-      
-      for (const peerId in this.peers) {
-        const pc = this.peers[peerId];
-        try {
-          const stats = await pc.getStats();
-          stats.forEach(report => {
-            if (report.type === "outbound-rtp" && !report.isRemote) {
-              const packetsSent = report.packetsSent || 0;
-              const packetsLost = report.packetsLost || 0;
-              
-              if (packetsSent > 50) {
-                const lossRate = packetsLost / (packetsSent + packetsLost);
-                if (lossRate > 0.05) {
-                  poorConnection = true;
-                }
-              }
-            }
-          });
-        } catch(err) {
-          console.error("Error getting stats for peer", peerId, err);
-        }
-      }
-      
-      this.isPoorNetwork = poorConnection;
-    },
-
-    initTranscription() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        console.warn("Browser does not support speech recognition");
-        return;
-      }
-
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
-
-      this.recognition.onresult = (event) => {
-        let final = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript.trim();
-          if (event.results[i].isFinal) {
-            final += transcript + ' ';
-          }
-        }
-
-        if (final) {
-          this.transcript.push(final);
-          console.log('Transcript:', final);
-        }
-      };
-
-      this.recognition.onerror = (e) => console.error('Speech recognition error:', e);
-      this.recognition.onend = () => {
-        if (this.isPoorNetwork) this.recognition.start();
-      };
-    },
-
-    // ============ CLEANUP ============
-    cleanup() {
-      console.log('Cleaning up resources...');
-      
-      if (this.broadcastRetryTimer) {
-        clearInterval(this.broadcastRetryTimer);
-        this.broadcastRetryTimer = null;
-      }
-      
-      for (const id in this.peers) {
-        try { 
-          this.peers[id].close(); 
-        } catch (e) {
-          console.error('Error closing peer connection:', e);
-        }
-      }
-      this.peers = {};
-      this.remoteVideos = {};
-      this.pendingCandidates = {};
-      this.peerNegotiating = {};
-
-      if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          try {
-            track.stop();
-          } catch (e) {
-            console.error('Error stopping track:', e);
-          }
-        });
-        this.localStream = null;
-      }
-
-      if (this.screenStream) {
-        this.screenStream.getTracks().forEach(track => {
-          try {
-            track.stop();
-          } catch (e) {
-            console.error('Error stopping screen track:', e);
-          }
-        });
-        this.screenStream = null;
-      }
-
-      if (this.mediaRecorder && this.isRecording) {
-        try {
-          this.mediaRecorder.stop();
-        } catch (e) {
-          console.error('Error stopping recorder:', e);
-        }
-      }
-
-      if (this.socket) {
-        this.socket.disconnect();
-        this.socket = null;
-      }
-
-      if (this.networkCheckInterval) {
-        clearInterval(this.networkCheckInterval);
-        this.networkCheckInterval = null;
-      }
-      
-      if (this.inactivityTimer) {
-        clearTimeout(this.inactivityTimer);
-        this.inactivityTimer = null;
-      }
-
-      if (this.recognition) {
-        try {
-          this.recognition.stop();
-        } catch (e) {
-          console.error('Error stopping recognition:', e);
-        }
-      }
-
-      if (this.$refs.participantsBox) {
-        const remoteElements = this.$refs.participantsBox.querySelectorAll('[data-peer-id]');
-        remoteElements.forEach(element => {
-          try {
-            element.remove();
-          } catch (e) {
-            console.error('Error removing element:', e);
-          }
-        });
-      }
-
-      this.participants = [];
-      this.messages = [];
-      this.micon = false;
-      this.videoon = false;
-      this.isScreenSharing = false;
-      this.isRecording = false;
-      this.record = false;
-      this.isSocketConnected = false;
-      this.hasInitializedSocket = false;
-      this.broadcastQueue = [];
+  async handleAnswer(from, answer) {
+    const pc = this.peers[from];
+    if (pc?.signalingState === "have-local-offer") {
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
     }
   },
 
-  // ============ LIFECYCLE HOOKS ============
-  beforeUnmount() {
-    this.cleanup();
-    
-    document.removeEventListener("mousemove", this.resetinactivityTimer);
-    document.removeEventListener("keydown", this.resetinactivityTimer);
-    document.removeEventListener("click", this.resetinactivityTimer);
-    document.removeEventListener("touchstart", this.resetinactivityTimer);
+  async handleIceCandidate(from, candidate) {
+    const pc = this.peers[from];
+    if (!pc || !pc.remoteDescription) {
+      if (!this.pendingCandidates[from]) this.pendingCandidates[from] = [];
+      this.pendingCandidates[from].push(candidate);
+      return;
+    }
+    await pc.addIceCandidate(new RTCIceCandidate(candidate));
   },
 
-  async mounted() {
-    console.log('=== MEETING ROOM MOUNTING ===');
-    
-    if (!this.initUserFromToken()) {
+  // =====================================================
+  // ============ REMOTE STREAM HANDLING ================
+  // =====================================================
+
+  handleRemoteStream(remoteId, stream) {
+    let wrapper = document.querySelector(`[data-peer-id="${remoteId}"]`);
+
+    const hasTracks = stream.getTracks().some(
+      (t) => t.enabled && t.readyState === "live"
+    );
+
+    if (!hasTracks) {
+      if (wrapper) wrapper.remove();
+      delete this.remoteVideos[remoteId];
       return;
     }
 
-    this.roomId = this.computedRoomId;
-    
-    console.log('Meeting room initialized:', {
-      roomId: this.roomId,
-      userName: this.userName,
-      userId: this.userId,
-      isHost: this.isHost
+    if (!wrapper) {
+      wrapper = document.createElement("div");
+      wrapper.className = "remote-participant";
+      wrapper.setAttribute("data-peer-id", remoteId);
+      wrapper.style.cssText =
+        "display:flex;flex-direction:column;align-items:center;margin:8px;background:#0002;border-radius:8px;padding:6px;position:relative;";
+
+      const vid = document.createElement("video");
+      vid.autoplay = true;
+      vid.playsInline = true;
+      vid.style.cssText =
+        "width:260px;height:150px;border-radius:6px;background:#000;object-fit:cover;";
+
+      const label = document.createElement("div");
+      const participant = this.participants.find((p) => p.id === remoteId);
+      label.textContent =
+        participant?.name || `User-${remoteId.slice(0, 6)}`;
+      label.style.cssText =
+        "color:#fff;margin-top:4px;font-size:13px;max-width:260px;text-align:center;";
+
+      wrapper.appendChild(vid);
+      wrapper.appendChild(label);
+
+      this.remoteVideos[remoteId] = vid;
+      if (this.$refs.participantsBox)
+        this.$refs.participantsBox.appendChild(wrapper);
+    }
+
+    const vid = wrapper.querySelector("video");
+    if (vid) {
+      vid.srcObject = stream;
+      vid.play().catch(() => {});
+    }
+  },
+
+  cleanupPeer(id) {
+    if (this.peers[id]) {
+      try {
+        this.peers[id].close();
+      } catch {}
+      delete this.peers[id];
+    }
+
+    const wrapper = document.querySelector(`[data-peer-id="${id}"]`);
+    if (wrapper) wrapper.remove();
+
+    delete this.remoteVideos[id];
+  },
+
+  // =====================================================
+  // ============ PARTICIPANTS ===========================
+  // =====================================================
+
+  updateParticipantsList(list) {
+    const mapped = [];
+
+    (list || []).forEach((p) => {
+      if (!p || p.id === this.userId || p.id === this.socket.id) return;
+
+      let nm =
+        p.name ||
+        p.userName ||
+        p.username ||
+        `User-${p.id.slice(0, 6)}`;
+
+      if (nm.includes("@")) nm = nm.split("@")[0];
+
+      mapped.push({
+        id: p.id,
+        name: nm,
+        isHost: p.isHost,
+        hand: p.hand || false,
+        hasMic: p.hasMic || false,
+        hasVideo: p.hasVideo || false,
+        isScreenSharing: p.isScreenSharing || false,
+      });
     });
-    
+
+    this.participants = mapped;
+  },
+
+  addParticipant(user) {
+    if (!user || !user.id) return;
+    if (user.id === this.userId || user.id === this.socket.id) return;
+
+    let nm = user.name || user.userName || "Anonymous";
+    if (nm.includes("@")) nm = nm.split("@")[0];
+
+    const exists = this.participants.findIndex((p) => p.id === user.id);
+    const data = {
+      id: user.id,
+      name: nm,
+      isHost: user.isHost,
+    };
+
+    if (exists >= 0) this.participants[exists] = data;
+    else this.participants.push(data);
+  },
+
+  updateParticipantStatus(userId, type, enabled) {
+    const p = this.participants.find((x) => x.id === userId);
+    if (!p) return;
+
+    if (type === "video") p.hasVideo = enabled;
+    if (type === "mic") p.hasMic = enabled;
+    if (type === "hand") p.hand = enabled;
+    if (type === "screenShare") p.isScreenSharing = enabled;
+
+    const wrap = document.querySelector(`[data-peer-id="${userId}"]`);
+    if (wrap) {
+      let indicator = wrap.querySelector(".status-indicator");
+      if (!indicator) {
+        indicator = document.createElement("div");
+        indicator.className = "status-indicator";
+        indicator.style.cssText =
+          "position:absolute;top:6px;right:6px;background:#0008;color:#fff;padding:3px 5px;border-radius:4px;font-size:12px;display:flex;gap:4px;";
+        wrap.appendChild(indicator);
+      }
+
+      indicator.innerHTML = `
+        <span>${p.hasMic ? "🎤" : "🔇"}</span>
+        <span>${p.hasVideo ? "📹" : "❌"}</span>
+        ${p.isScreenSharing ? "<span>🖥️</span>" : ""}
+      `;
+    }
+
+    this.$forceUpdate();
+  },
+
+  // =====================================================
+  // ============ CHAT + UI CONTROLS =====================
+  // =====================================================
+
+  sendMessage() {
+    const txt = this.newMessage.trim();
+    if (!txt) return;
+
+    this.safeBroadcast("chat-message", {
+      roomId: this.roomId,
+      sender: this.userName,
+      text: txt,
+      timestamp: Date.now(),
+    });
+
+    this.newMessage = "";
+  },
+
+  hand_raised() {
+    this.hand = !this.hand;
+
+    this.safeBroadcast("hand-raised", {
+      roomId: this.roomId,
+      userId: this.userId,
+      userName: this.userName,
+      isRaised: this.hand,
+    });
+  },
+
+  setHover(v) {
+    this.hoveredIcon = v;
+  },
+
+  togglePanel(p) {
+    this.activePanel = this.activePanel === p ? null : p;
+    this.activeDropdown = null;
+
+    if (p === "chat") this.unreadMessages = 0;
+  },
+
+  toggleDropdown(t) {
+    this.activeDropdown = this.activeDropdown === t ? null : t;
+    this.activePanel = null;
+  },
+
+  toggle_info() {
+    this.show_info = !this.show_info;
+  },
+
+  close_info() {
+    this.show_info = false;
+  },
+
+  copystring() {
+    navigator.clipboard.writeText(window.location.href);
+  },
+
+  leave() {
+    this.cleanup();
+    this.$router.push("/Ending");
+  },
+
+  // =====================================================
+  // ============ HOST CONTROLS ==========================
+  // =====================================================
+
+  async endMeeting() {
+    if (!this.isHost) return;
+
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId: this.roomId }),
+    });
+
+    if (res.ok) {
+      this.cleanup();
+      this.$router.push("/Ending");
+    }
+  },
+
+  async muteAll() {
+    if (!this.isHost) return;
+
+    await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId: this.roomId }),
+    });
+  },
+
+  async lockMeeting() {
+    if (!this.isHost) return;
+
+    await fetch(`${import.meta.env.VITE_API_URL}/api/lock-meeting`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId: this.roomId }),
+    });
+
+    alert("Meeting locked");
+  },
+
+  // =====================================================
+  // ============ SCREEN SHARING =========================
+  // =====================================================
+
+  async sharescreen() {
+    if (!this.isScreenSharing) {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+      });
+
+      this.screenStream = stream;
+      this.screenTrack = stream.getVideoTracks()[0];
+
+      const el = this.$refs.localVideo;
+      if (el) el.srcObject = stream;
+
+      for (const id in this.peers) {
+        const pc = this.peers[id];
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+
+        if (sender) {
+          await sender.replaceTrack(this.screenTrack);
+        }
+      }
+
+      this.screenTrack.onended = () => this.stopScreenShare();
+      this.isScreenSharing = true;
+
+      this.safeBroadcast("screen-share-status", {
+        roomId: this.roomId,
+        userId: this.userId,
+        userName: this.userName,
+        isScreenSharing: true,
+      });
+    } else {
+      await this.stopScreenShare();
+    }
+  },
+
+  async stopScreenShare() {
+    if (this.screenTrack) this.screenTrack.stop();
+    if (this.screenStream)
+      this.screenStream.getTracks().forEach((t) => t.stop());
+
+    if (this.videoon) {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+
+      const track = stream.getVideoTracks()[0];
+
+      const el = this.$refs.localVideo;
+      if (el) el.srcObject = stream;
+
+      if (!this.localStream) this.localStream = new MediaStream();
+      this.localStream.addTrack(track);
+
+      for (const id in this.peers) {
+        const pc = this.peers[id];
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) await sender.replaceTrack(track);
+      }
+    } else {
+      const el = this.$refs.localVideo;
+      if (el) el.srcObject = null;
+    }
+
+    this.isScreenSharing = false;
+    this.safeBroadcast("screen-share-status", {
+      roomId: this.roomId,
+      userId: this.userId,
+      userName: this.userName,
+      isScreenSharing: false,
+    });
+  },
+
+  async renegotiateConnection(id) {
+    const pc = this.peers[id];
+    if (!pc || pc.signalingState !== "stable") return;
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    this.safeBroadcast("signal", {
+      to: id,
+      signal: { type: "offer", sdp: offer },
+    });
+  },
+
+  // =====================================================
+  // ============ RECORDING ==============================
+  // =====================================================
+
+  async recording() {
+    if (!this.isHost) return;
+
+    this.record = !this.record;
+
+    if (this.record) {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+
+      this.recordedChunks = [];
+      this.mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "video/webm",
+      });
+
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) this.recordedChunks.push(e.data);
+      };
+
+      this.mediaRecorder.onstop = () => {
+        const blob = new Blob(this.recordedChunks, { type: "video/webm" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+
+        a.href = url;
+        a.download = `meeting-${this.roomId}-${Date.now()}.webm`;
+        a.click();
+
+        URL.revokeObjectURL(url);
+      };
+
+      this.mediaRecorder.start();
+      this.isRecording = true;
+    } else {
+      if (this.mediaRecorder && this.isRecording) {
+        this.mediaRecorder.stop();
+        this.isRecording = false;
+      }
+    }
+  },
+
+  // =====================================================
+  // ============ NETWORK QUALITY CHECK ==================
+  // =====================================================
+
+  async checkNetworkQuality() {
+    if (!this.localStream || !Object.keys(this.peers).length) return;
+
+    let poor = false;
+
+    for (const id in this.peers) {
+      try {
+        const stats = await this.peers[id].getStats();
+
+        stats.forEach((rep) => {
+          if (rep.type === "outbound-rtp") {
+            const sent = rep.packetsSent || 0;
+            const lost = rep.packetsLost || 0;
+
+            if (sent > 50 && lost / (sent + lost) > 0.05) poor = true;
+          }
+        });
+      } catch {}
+    }
+
+    this.isPoorNetwork = poor;
+  },
+
+  initTranscription() {
+    const SR =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SR) return;
+
+    this.recognition = new SR();
+    this.recognition.continuous = true;
+    this.recognition.interimResults = true;
+
+    this.recognition.onresult = (event) => {
+      let final = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal)
+          final += event.results[i][0].transcript + " ";
+      }
+
+      if (final) this.transcript.push(final);
+    };
+
+    this.recognition.onerror = () => {};
+    this.recognition.onend = () => {
+      if (this.isPoorNetwork) this.recognition.start();
+    };
+  },
+
+  // =====================================================
+  // ============ CLEANUP =================================
+  // =====================================================
+
+  cleanup() {
+    if (this.broadcastRetryTimer)
+      clearInterval(this.broadcastRetryTimer);
+
+    for (const id in this.peers) {
+      try {
+        this.peers[id].close();
+      } catch {}
+    }
+
+    if (this.localStream)
+      this.localStream.getTracks().forEach((t) => t.stop());
+
+    if (this.screenStream)
+      this.screenStream.getTracks().forEach((t) => t.stop());
+
+    if (this.mediaRecorder && this.isRecording)
+      this.mediaRecorder.stop();
+
+    if (this.socket) this.socket.disconnect();
+
+    if (this.networkCheckInterval)
+      clearInterval(this.networkCheckInterval);
+
+    if (this.inactivityTimer)
+      clearTimeout(this.inactivityTimer);
+
+    if (this.recognition) {
+      try {
+        this.recognition.stop();
+      } catch {}
+    }
+
+    this.participants = [];
+    this.messages = [];
+    this.remoteVideos = {};
+    this.peers = {};
+  },
+    // ============ LIFECYCLE HOOKS ============
+  async mounted() {
+    if (!this.initUserFromToken()) return;
+
+    this.roomId = this.computedRoomId;
     this.localStream = new MediaStream();
-    
+
     this.initSocket();
     this.initTranscription();
-    
+
     setTimeout(() => {
-      this.networkCheckInterval = setInterval(() => {
-        this.checkNetworkQuality();
-      }, 5000);
+      this.networkCheckInterval = setInterval(
+        () => this.checkNetworkQuality(),
+        5000
+      );
     }, 5000);
 
+    // Auto-hide navbar
     this.resetinactivityTimer();
     document.addEventListener("mousemove", this.resetinactivityTimer);
     document.addEventListener("keydown", this.resetinactivityTimer);
     document.addEventListener("click", this.resetinactivityTimer);
     document.addEventListener("touchstart", this.resetinactivityTimer);
+  },
 
-    console.log('=== COMPONENT MOUNTED SUCCESSFULLY ===');
-  }
+  beforeUnmount() {
+    this.cleanup();
+
+    document.removeEventListener("mousemove", this.resetinactivityTimer);
+    document.removeEventListener("keydown", this.resetinactivityTimer);
+    document.removeEventListener("click", this.resetinactivityTimer);
+    document.removeEventListener("touchstart", this.resetinactivityTimer);
+  },
 };
 </script>
+
 <style>
+/* ================= GLOBAL ================= */
 body {
   background-color: #222021;
   margin: 0;
-  font-family: Arial, sans-serif;
   color: white;
+  font-family: Arial, sans-serif;
 }
+
 #page {
   display: flex;
   height: 100vh;
   overflow: hidden;
 }
+
+/* ================= LEFT TRAY ================= */
 #left-tray {
   width: 200px;
   background-color: #333;
@@ -1926,392 +1141,274 @@ body {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.3);
   position: fixed;
   top: 0;
   bottom: 0;
-  transition: left 0.4s ease, right 0.4s ease;
-  z-index: 5;
+  transition: all 0.3s ease;
+  z-index: 6;
 }
-.left-tray-left { left: 0; right: auto; }
-.left-tray-right { right: 0; left: auto; }
+
+.left-tray-left {
+  left: 0;
+}
+.left-tray-right {
+  right: 0;
+}
 
 #left-tray button {
   background-color: #444;
-  color: white;
   border: none;
   padding: 10px;
+  color: white;
   border-radius: 8px;
   cursor: pointer;
 }
-#left-tray button:hover { background-color: #555; }
+#left-tray button:hover {
+  background-color: #555;
+}
 
+/* ================= MAIN CONTENT ================= */
 #main-content {
   flex: 1;
-  display: flex;
-  flex-direction: column;
   padding: 20px;
-  box-sizing: border-box;
-  transition: margin 0.4s ease;
+  transition: margin 0.3s ease;
 }
 
-/* Main content margins based on tray position and visibility */
-#page:not(.tray-on-right):not(.tray-hidden) #main-content {
-  margin-left: 200px;
-  margin-right: 0;
-}
-#page.tray-on-right:not(.tray-hidden) #main-content {
-  margin-right: 200px;
-  margin-left: 0;
-}
 #page.tray-hidden #main-content {
   margin-left: 0;
   margin-right: 0;
 }
+#page:not(.tray-hidden):not(.tray-on-right) #main-content {
+  margin-left: 200px;
+}
+#page.tray-on-right:not(.tray-hidden) #main-content {
+  margin-right: 200px;
+}
 
+/* ================= HOST VIDEO ================= */
 #host {
-  flex: 3;
-  background-color: blue;
+  background: #2d4dff;
   border-radius: 10px;
-  margin-bottom: 20px;
-  padding-bottom: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   position: relative;
-  overflow: hidden;
+  height: 55%;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 #host video {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  background-color: transparent;
-  z-index: 1;
+  background: black;
 }
 
+/* ================= PARTICIPANTS ROW ================= */
 #participants {
-  flex: 1;
   background-color: #3a3f47;
   border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
   padding: 10px;
-  margin-bottom: 80px;
+  display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 120px;
 }
 
-/* Navbar */
+/* ================= NAVBAR ================= */
 #navbar {
   position: fixed;
   bottom: 0;
   left: 0;
+  background: #1f1f1f;
   width: 100%;
-  background-color: #1f1f1f;
   height: 60px;
-  border-top: 1px solid #444;
+  padding: 0 40px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 40px;
-  box-sizing: border-box;
+  border-top: 1px solid #444;
   z-index: 10;
 }
+
 #navbar ul {
-  display: flex;
   list-style: none;
+  display: flex;
+  gap: 20px;
   margin: 0;
   padding: 0;
-  gap: 20px;
 }
-#navbar li { position: relative; }
-#navbar li button {
-  background-color: white;
-  color: black;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  min-width: 100px;
-  text-align: center;
-  transition: background 0.3s;
-}
-#navbar li button:hover { background-color: #ddd; }
 
+#navbar li button {
+  background: white;
+  padding: 10px 16px;
+  border: none;
+  color: black;
+  border-radius: 10px;
+  cursor: pointer;
+  min-width: 100px;
+}
+#navbar li button:hover {
+  background: #ddd;
+}
+
+/* ================= RIGHT PANE ================= */
 #rightpane {
   display: flex;
   gap: 16px;
-  align-items: center;
-}
-#rightpane li { list-style: none; position: relative; }
-#rightpane li button {
-  background-color: #f0f0f0;
-  color: #000;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  min-width: 100px;
-  text-align: center;
-  transition: background 0.3s ease;
 }
 
-/* Dropdowns */
-.dropdown { position: relative; }
+/* ================= DROPDOWN ================= */
 .dropdown-menu {
   position: absolute;
   bottom: 60px;
-  background-color: #1f1f1f;
+  right: 0;
+  background: #1f1f1f;
   border-radius: 6px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.3);
   list-style: none;
-  min-width: 120px;
   padding: 5px 0;
-  z-index: 15;
-  display: flex;
-  flex-direction: column;
+  min-width: 140px;
+  box-shadow: 0px 0px 10px #0005;
+  z-index: 20;
 }
 .dropdown-menu li {
-  margin: 0;
-  color: white;
   padding: 8px 15px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-.dropdown-menu li:hover { background-color: #333; }
-
-/* Transitions */
-.slide-fade-enter-active, .slide-fade-leave-active { transition: all 0.3s ease; }
-.slide-fade-enter-from, .slide-fade-leave-to { opacity: 0; transform: translateY(100%); }
-
-.slide-left-enter-active, .slide-left-leave-active { transition: all 0.4s ease; }
-.slide-left-enter-from { transform: translateX(-100%); opacity: 0; }
-.slide-left-leave-to { transform: translateX(-100%); opacity: 0; }
-.slide-left-enter-to, .slide-left-leave-from { transform: translateX(0); opacity: 1; }
-
-.extras-menu {
-  right: 0;
-  left: auto;
-  bottom: 60px;
-  background-color: #1f1f1f;
-  padding: 5px 0;
-  border-radius: 6px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.3);
-  list-style: none;
-  min-width: 140px;
-  position: absolute;
-  text-align: left;
-  z-index: 15;
-  display: flex;
-  flex-direction: column;
-}
-.extras-menu li {
-  margin: 0;
   color: white;
-  text-decoration: none;
-  display: block;
-  padding: 8px 15px;
   cursor: pointer;
-  transition: background-color 0.2s;
 }
-.extras-menu li:hover { background-color: #333; }
+.dropdown-menu li:hover {
+  background: #333;
+}
 
-/* Chat (force dark text so it isn't invisible on white bubbles) */
-#chat-box,
-#chat-box .chat-body,
-#chat-box .message { color: #202124; }
-
+/* ================= CHAT PANEL ================= */
 #chat-box {
   position: fixed;
   bottom: 70px;
   right: 0;
   width: 320px;
   height: calc(100vh - 70px);
-  background-color: #f8f9fa;
+  background: #f1f1f1;
   border-left: 1px solid #ccc;
   display: flex;
   flex-direction: column;
   z-index: 100;
-  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
-  font-family: 'Segoe UI', sans-serif;
 }
+
 .chat-header {
-  padding: 14px 16px;
-  font-size: 18px;
-  font-weight: 600;
-  background-color: #e8eaed;
+  background: #e8e8e8;
+  padding: 14px;
+  font-weight: bold;
   border-bottom: 1px solid #ccc;
-  display: flex;
-  color: black;
-  justify-content: space-between;
-  align-items: center;
 }
-.chat-body { flex: 1; padding: 16px; overflow-y: auto; }
+
+.chat-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
 .message {
-  background-color: white;
-  padding: 10px 14px;
+  background: white;
   border-radius: 8px;
-  margin-bottom: 10px;
-  border: 1px solid #dadce0;
-  box-shadow: 0 1px 3px rgba(60,64,67,0.08);
-  max-width: 80%;
+  padding: 10px;
+  margin-bottom: 12px;
+  border: 1px solid #ccc;
 }
+
 .chat-input-section {
+  background: #e8e8e8;
+  padding: 10px;
   display: flex;
-  padding: 12px;
-  border-top: 1px solid #ccc;
-  background-color: #e8eaed;
 }
 .chat-input {
   flex: 1;
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #ccc;
-  outline: none;
-  background-color: white;
 }
 .chat-send {
-  margin-left: 8px;
-  padding: 10px 16px;
-  background-color: #1a73e8;
-  color: black;
+  background: #1a73e8;
   border: none;
+  padding: 10px;
+  color: black;
   border-radius: 8px;
-  cursor: pointer;
+  margin-left: 8px;
 }
-.chat-send:hover { background-color: #1558d6; }
 
-/* Participants side panel (text visible) */
-#list-box,
-#list-box .list-body,
-#list-box .participant { color: #202124; }
-
+/* ================= PARTICIPANT LIST PANEL ================= */
 #list-box {
   position: fixed;
   bottom: 70px;
   right: 0;
   width: 320px;
   height: calc(100vh - 70px);
-  background-color: #f8f9fa;
+  background: #f8f9fa;
   border-left: 1px solid #ccc;
+  z-index: 100;
   display: flex;
   flex-direction: column;
-  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  font-family: 'Segoe UI', sans-serif;
-  transition: transform 0.3s ease;
-}
-.list-header {
-  padding: 14px 16px;
-  font-size: 18px;
-  font-weight: 600;
-  background-color: #e8eaed;
-  border-bottom: 1px solid #ccc;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.list-body { flex: 1; padding: 16px; overflow-y: auto; }
-.participant {
-  background-color: white;
-  border: 1px solid #dadce0;
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-bottom: 10px;
-  box-shadow: 0 1px 3px rgba(60,64,67,0.1);
 }
 
+.list-header {
+  padding: 14px;
+  font-size: 18px;
+  font-weight: bold;
+  background: #e8eaed;
+  border-bottom: 1px solid #ccc;
+}
+
+.list-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.participant {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+/* ================= TOOLTIP ================= */
 .tooltip {
   position: absolute;
   bottom: 60px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: black;
-  color: white;
+  background: black;
   padding: 6px 8px;
   border-radius: 6px;
   font-size: 12px;
   white-space: nowrap;
-  z-index: 99;
-  pointer-events: none;
 }
 
+/* ================= INFO BOX ================= */
 #info_box {
   position: fixed;
   right: 70px;
-  bottom: 70px;
-  width: 240px;
-  background-color: white;
+  bottom: 80px;
+  background: white;
   color: black;
-  border-radius: 10px;
   padding: 15px;
-  font-family: 'Segoe UI', sans-serif;
-  z-index: 101;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  width: 240px;
+  border-radius: 10px;
+  z-index: 110;
+  box-shadow: 0px 4px 12px #0004;
 }
-#inside_info { width: 100%; }
-#info_header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-#info_header b { font-size: 16px; font-weight: 600; }
-#info_header button {
-  background: none;
-  border: none;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  color: #666;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-#info_header button:hover { background-color: #f0f0f0; }
-#info_box hr { border: none; border-top: 1px solid #ddd; margin: 10px 0; }
-#info_box p { margin: 8px 0; font-size: 14px; }
-#hand_warning {
-  position: fixed;
-  right: 640px;
-  width: 200px;
-  bottom: 70px;
-  background-color: #333;
-  color: white;
-  display: flex;
-  border-radius: 5px;
-  padding-top: 10px;
-  padding-left: 10px;
-  font-family: 'Segoe UI', sans-serif;
-  flex-direction: column;
-  z-index: 101;
-}
+
+/* ================= TRANSCRIPT ================= */
 .transcript-box {
+  background: #0008;
   position: absolute;
-  bottom: 100px;
+  bottom: 85px;
   left: 20px;
-  background: rgba(0,0,0,0.7);
-  color: white;
-  padding: 10px;
   max-width: 300px;
   max-height: 200px;
+  padding: 10px;
   overflow-y: auto;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 6px;
 }
-#copylink
-{
-  background-color:black;
-  color:white;
-  border-radius:2px;
-}
-
 </style>
-
 
 
