@@ -728,6 +728,7 @@ export default {
         participant.hasVideo = isEnabled;
         if (!isEnabled) 
         {
+          //const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
           const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
           if (wrapper) 
           {
@@ -751,6 +752,7 @@ export default {
       this.$forceUpdate();
     }
   // Update indicator
+    //const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
     const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
     if (wrapper) 
     {
@@ -1441,6 +1443,7 @@ body {
   border-radius: 6px;
 }
 </style>
+
 
 
 
