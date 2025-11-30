@@ -81,11 +81,13 @@ io.on('connection', (socket) => {
 
     socket.join(roomId);
     
+    // Broadcast updated participant list to everyone in the room
     io.to(roomId).emit('participants-list', rooms[roomId]);
     
     const existingUsers = rooms[roomId].filter(p => p.id !== socket.id);
     socket.emit('existing-users', existingUsers);
     
+    // Notify others that a user joined (excluding sender)
     socket.to(roomId).emit('user-joined', userData);
 
     console.log(`Room ${roomId} participants:`, rooms[roomId].map(p => ({ name: p.name, id: p.id })));
@@ -109,10 +111,13 @@ io.on('connection', (socket) => {
     }
   });
 
+  // === HAND RAISED (now broadcast to entire room) ===
   socket.on('hand-raised', ({ roomId, userId, userName, isRaised }) => {
     if (roomId) {
       console.log(`${userName} ${isRaised ? 'raised' : 'lowered'} hand in room ${roomId}`);
-      socket.to(roomId).emit('hand-raised', {
+      // Broadcast to everyone in the room (including the origin)
+      io.to(roomId).emit('hand-raised', {
+        roomId,
         userId,
         userName,
         isRaised
@@ -120,10 +125,12 @@ io.on('connection', (socket) => {
     }
   });
 
+  // === MEDIA STATUS UPDATES ===
   socket.on('video-status', ({ roomId, userId, userName, isVideoOn }) => {
     if (roomId) {
       console.log(`${userName} video status: ${isVideoOn ? 'ON' : 'OFF'} in room ${roomId}`);
-      socket.to(roomId).emit('video-status', {
+      // Broadcast to everyone so UI states remain consistent
+      io.to(roomId).emit('video-status', {
         userId,
         userName,
         isVideoOn
@@ -134,7 +141,7 @@ io.on('connection', (socket) => {
   socket.on('mic-status', ({ roomId, userId, userName, isMicOn }) => {
     if (roomId) {
       console.log(`${userName} mic status: ${isMicOn ? 'ON' : 'OFF'} in room ${roomId}`);
-      socket.to(roomId).emit('mic-status', {
+      io.to(roomId).emit('mic-status', {
         userId,
         userName,
         isMicOn
@@ -143,27 +150,30 @@ io.on('connection', (socket) => {
   });
 
   socket.on('screen-share-status', (data) => {
-  console.log('Screen share status from', data.userName, ':', data.isScreenSharing);
-  
-  // Broadcast to all users in room except sender
-  socket.to(data.roomId).emit('screen-share-status', {
-    userId: data.userId,
-    userName: data.userName,
-    isScreenSharing: data.isScreenSharing
+    if (!data || !data.roomId) return;
+    console.log('Screen share status from', data.userName, ':', data.isScreenSharing);
+    // Broadcast to everyone in room to keep attendees consistent
+    io.to(data.roomId).emit('screen-share-status', {
+      userId: data.userId,
+      userName: data.userName,
+      isScreenSharing: data.isScreenSharing
+    });
   });
-});
 
+  // Host actions (broadcast to everyone)
   socket.on('mute-all', ({ roomId }) => {
     if (roomId) {
       console.log(`Muting all participants in room ${roomId}`);
-      socket.to(roomId).emit('all-muted');
+      // Broadcast to all (including host) that everyone should be muted
+      io.to(roomId).emit('all-muted');
     }
   });
 
-  socket.on('lock-meeting', ({ roomId }) => {
+  socket.on('lock-meeting', ({ roomId, locked }) => {
     if (roomId) {
-      console.log(`Locking meeting in room ${roomId}`);
-      socket.to(roomId).emit('meeting-locked');
+      console.log(`Locking meeting in room ${roomId} - locked: ${locked}`);
+      // Broadcast lock state to everyone
+      io.to(roomId).emit('meeting-locked', { locked: !!locked });
     }
   });
 
@@ -188,7 +198,9 @@ io.on('connection', (socket) => {
         delete rooms[joinedRoom];
         console.log(`Room ${joinedRoom} deleted - no participants left`);
       } else {
+        // Update everyone in the room
         io.to(joinedRoom).emit('participants-list', rooms[joinedRoom]);
+        // Notify others that a user left (excluding the disconnected socket)
         socket.to(joinedRoom).emit('user-left', socket.id);
         console.log(`User left room ${joinedRoom}, ${rooms[joinedRoom].length} participants remaining`);
       }
@@ -223,11 +235,11 @@ app.post('/api/mute-all', (req, res) => {
 });
 
 app.post('/api/lock-meeting', (req, res) => {
-  const { roomId } = req.body;
+  const { roomId, locked } = req.body;
   
   if (roomId && rooms[roomId]) {
-    console.log(`Locking meeting via API: ${roomId}`);
-    io.to(roomId).emit('meeting-locked');
+    console.log(`Locking meeting via API: ${roomId} - locked: ${locked}`);
+    io.to(roomId).emit('meeting-locked', { locked: !!locked });
     res.json({ success: true, message: 'Meeting locked' });
   } else {
     res.status(404).json({ success: false, message: 'Room not found' });
