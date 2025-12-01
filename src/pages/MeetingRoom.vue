@@ -1,7 +1,4 @@
 <template>
-  <!-- Hidden canvas used to generate black-screen track -->
-  <canvas ref="blackCanvas" width="640" height="360" style="display:none;"></canvas>
-
   <div :class="{'tray-on-right':!turned, 'tray-hidden':!trayVisible}" id="page">
     <transition name="slide-left">
       <div id="left-tray" :class="turned ? 'left-tray-left' : 'left-tray-right'" v-if="trayVisible">
@@ -10,30 +7,17 @@
         <button @click="turn">Change Panel</button>
       </div>
     </transition>
-
     <div id="main-content">
       <div id="host">
         <video ref="localVideo" autoplay muted playsinline></video>
-
-        <!-- Camera-off placeholder for HOST -->
-        <div v-if="!videoon" class="video-off-placeholder">
-          <svg width="60" height="60" viewBox="0 0 24 24" fill="white">
-            <path d="M21 6.5L16 10V7c0-1.1-.9-2-2-2H5C3.9 5 3 5.9 3 7v10c0 
-              1.1.9 2 2 2h9c1.1 0 2-.9 2-2v-3l5 3.5V6.5z"/>
-          </svg>
-        </div>
-
         <div v-if="!videoon">{{ userName || 'Host' }}</div>
       </div>
-
       <div id="participants" ref="participantsBox"></div>
     </div>
-
     <div v-if="isPoorNetwork" class="transcript-box">
       <h3>Real time transcript</h3>
       <div v-for="(line,i) in transcript" :key="i">{{line}}</div>
     </div>
-
     <transition name="slide-fade">
       <div id="navbar" v-show="trayVisible">
         <ul>
@@ -50,7 +34,6 @@
               <li>{{ micon ? 'Mute' : 'Unmute' }}</li>
             </ul>
           </li>
-
           <li>
             <button
               @mouseenter="() => setHover('video')"
@@ -64,7 +47,6 @@
               <li>{{ videoon ? 'Stop Video' : 'Start Video' }}</li>
             </ul>
           </li>
-
           <li>
             <button
               @mouseenter="() => setHover('share')"
@@ -77,7 +59,23 @@
               <li>Share screen</li>
             </ul>
           </li>
-
+          <!--li v-if="isHost" class="dropdown" @click="toggleDropdown('settings')" tabindex="0" @blur="closeDropdown">
+            <button
+              @mouseenter="() => setHover('settings')"
+              @mouseleave="() => setHover(null)"
+            >
+              <IconMaterialSymbolsLightSettings />
+            </button>
+            <ul v-if="hoveredIcon === 'settings'" class="tooltip">
+              <li>Settings</li>
+            </ul>
+            <ul v-if="activeDropdown === 'settings'" class="dropdown-menu">
+              <li @click="endMeeting">End meetings</li>
+              <li @click="muteAll">Mute All</li>
+              <li @click="lockMeeting">Session lock</li>
+              <li @click="transfer">Host transfer</li>
+            </ul>
+          </li-->
           <li>
             <button
               @click="leave"
@@ -91,7 +89,6 @@
             </ul>
           </li>
         </ul>
-
         <ul id="rightpane">
           <li>
             <button @click="togglePanel('list')" @mouseenter="() => setHover('participants')" @mouseleave="() => setHover(null)">
@@ -101,43 +98,46 @@
             <ul v-if="hoveredIcon === 'participants'" class="tooltip">
               <li>Participants</li>
             </ul>
-
             <div id="list-box" v-if="activePanel === 'list'">
               <div class="list-header">
                 Participants ({{ participants.length + 1 }})
                 <button @click="togglePanel(null)">X</button>
               </div>
               <div class="list-body">
+                <!-- Show current user first -->
                 <div class="participant self">
-                  <ul><li>{{ userName }} (You) {{ isHost ? '(Host)' : '' }}</li></ul>
+                  <ul>
+                    <li>{{ userName }} (You) {{ isHost ? '(Host)' : '' }}</li>
+                  </ul>
                 </div>
-
+                <!-- Show other participants -->
                 <div class="participant" v-for="p in participants" :key="p.id">
-                  <ul><li>{{ p.name }} {{ p.isHost ? '(Host)' : '' }}</li></ul>
+                  <ul>
+                    <li>{{ p.name }} {{ p.isHost ? '(Host)' : '' }}</li>
+                  </ul>
                 </div>
               </div>
             </div>
           </li>
-
           <li>
             <button @click="togglePanel('chat')" @mouseenter="() => setHover('chat')" @mouseleave="() => setHover(null)">
               <IconMaterialSymbolsChat />
               <span v-if="unreadMessages > 0" class="message-badge">{{ unreadMessages }}</span>
             </button>
-            <ul v-if="hoveredIcon === 'chat'" class="tooltip"><li>Chat</li></ul>
-
+            <ul v-if="hoveredIcon === 'chat'" class="tooltip">
+              <li>Chat</li>
+            </ul>
             <div id="chat-box" v-if="activePanel === 'chat'">
               <div class="chat-header">
-                Chat <button @click="togglePanel(null)">X</button>
+                Chat
+                <button @click="togglePanel(null)">X</button>
               </div>
-
               <div class="chat-body" ref="chatBody">
                 <div v-for="(msg, index) in messages" :key="index" class="message">
                   <div class="message-header">{{ msg.sender }}</div>
                   <div class="message-text">{{ msg.text }}</div>
                 </div>
               </div>
-
               <div class="chat-input-section">
                 <input 
                   type="text" 
@@ -151,13 +151,13 @@
               </div>
             </div>
           </li>
-
           <li class="dropdown">
             <button @click.stop="toggleDropdown('extras')" @mouseenter="() => setHover('extras')" @mouseleave="() => setHover(null)">
               <IconMaterialSymbolsLightMoreVert />
             </button>
-            <ul v-if="hoveredIcon === 'extras'" class="tooltip"><li>More</li></ul>
-
+            <ul v-if="hoveredIcon === 'extras'" class="tooltip">
+              <li>More</li>
+            </ul>
             <ul v-if="activeDropdown === 'extras'" class="dropdown-menu extras-menu">
               <li @click.stop="hand_raised">
                 {{ hand ? 'Lower hand' : 'Raise hand' }}
@@ -165,7 +165,6 @@
                   <p>Hand was raised.</p>
                 </div>
               </li>
-
               <li @click.stop="toggle_info">
                 Info
                 <div id="info_box" v-if="show_info">
@@ -182,10 +181,10 @@
                   </div>
                 </div>
               </li>
+              <!--li @click.stop>Help</li-->
             </ul>
           </li>
         </ul>
-
       </div>
     </transition>
   </div>
@@ -238,8 +237,8 @@ export default {
       unreadMessages: 0,
       
       // WebRTC
-      peers: {},           // RTCPeerConnection objects keyed by remote id
-      remoteVideos: {},    // video elements keyed by remote id
+      peers: {},           
+      remoteVideos: {},    
       pendingCandidates: {},
       peerNegotiating: {},
       
@@ -267,10 +266,10 @@ export default {
     isPoorNetwork(newVal) {
       if(newVal) {
         console.log("Poor network -> Transcript enabled");
-        try { this.recognition?.start(); } catch(e) { /* ignore */ }
+        this.recognition?.start();
       } else {
         console.log("Network normal -> Transcript disabled");
-        try { this.recognition?.stop(); } catch(e) { /* ignore */ }
+        this.recognition?.stop();
       }
     },
 
@@ -308,7 +307,7 @@ export default {
           storedEmail ||
           `User-${this.userId.substring(0, 8)}`;
         
-        if (this.userName && this.userName.includes('@')) {
+        if (this.userName.includes('@')) {
           const emailParts = this.userName.split('@');
           this.userName = emailParts[0] || `User-${this.userId.substring(0, 8)}`;
         }
@@ -367,7 +366,7 @@ export default {
       });
 
       this.socket.on('connect_error', (err) => {
-        console.error('Socket connect error:', err?.message || err);
+        console.error('Socket connect error:', err.message);
         this.isSocketConnected = false;
       });
 
@@ -378,7 +377,7 @@ export default {
         if (reason === 'io server disconnect') {
           setTimeout(() => {
             if (!this.socket?.connected) {
-              try { this.socket.connect(); } catch(e) {}
+              this.socket.connect();
             }
           }, 1000);
         }
@@ -443,7 +442,6 @@ export default {
 
       // ============ SIGNALING EVENTS ============
       this.socket.on('signal', async ({ from, signal }) => {
-        if (!signal) return;
         if (signal.type === 'offer') {
           await this.handleOffer(from, signal.sdp);
         } else if (signal.type === 'answer') {
@@ -490,9 +488,15 @@ export default {
       });
 
       this.socket.on('screen-share-status', ({ userId, userName, isScreenSharing }) => {
-        console.log(`${userName} ${isScreenSharing ? 'started' : 'stopped'} screen sharing`);
-        this.updateParticipantStatus(userId, 'screenShare', isScreenSharing);
-      });
+  console.log(`${userName} ${isScreenSharing ? 'started' : 'stopped'} screen sharing`);
+  this.updateParticipantStatus(userId, 'screenShare', isScreenSharing);
+  
+  // Optional: Show notification to users
+  if (isScreenSharing) {
+    console.log(`${userName} is now sharing their screen`);
+    // You can add a toast notification here if you want
+  }
+});
 
       // ============ HOST CONTROL EVENTS ============
       this.socket.on('meeting-locked', () => {
@@ -512,10 +516,12 @@ export default {
 
     // ============ BROADCAST MANAGEMENT ============
     startBroadcastRetry() {
+      // Clear existing timer
       if (this.broadcastRetryTimer) {
         clearInterval(this.broadcastRetryTimer);
       }
       
+      // Process queue every 2 seconds
       this.broadcastRetryTimer = setInterval(() => {
         if (this.broadcastQueue.length > 0 && this.isSocketConnected) {
           this.processQueuedBroadcasts();
@@ -528,12 +534,15 @@ export default {
         return;
       }
 
+      console.log(`Processing ${this.broadcastQueue.length} queued broadcasts...`);
+      
       const toProcess = [...this.broadcastQueue];
       this.broadcastQueue = [];
 
       for (const broadcast of toProcess) {
         try {
           this.socket.emit(broadcast.event, broadcast.data);
+          console.log(`QUEUED BROADCAST SUCCESS: ${broadcast.event}`);
         } catch (error) {
           console.error(`QUEUED BROADCAST FAILED: ${broadcast.event}`, error);
           this.broadcastQueue.push(broadcast);
@@ -542,9 +551,16 @@ export default {
     },
 
     safeBroadcast(event, data) {
+      console.log(`Attempting broadcast: ${event}`, {
+        socketExists: !!this.socket,
+        socketConnected: this.socket?.connected,
+        isSocketConnected: this.isSocketConnected
+      });
+
       if (this.socket && this.socket.connected && this.isSocketConnected) {
         try {
           this.socket.emit(event, data);
+          console.log(`BROADCAST SUCCESS: ${event}`);
           return true;
         } catch (error) {
           console.error(`BROADCAST FAILED: ${event}`, error);
@@ -552,6 +568,7 @@ export default {
           return false;
         }
       } else {
+        console.warn(`Socket not ready - QUEUING: ${event}`);
         this.broadcastQueue.push({ event, data });
         return false;
       }
@@ -564,6 +581,8 @@ export default {
         userName: this.userName,
         isVideoOn: isVideoOn
       };
+      
+      console.log('Broadcasting video status:', isVideoOn);
       this.safeBroadcast('video-status', data);
     },
 
@@ -574,6 +593,8 @@ export default {
         userName: this.userName,
         isMicOn: isMicOn
       };
+      
+      console.log('Broadcasting mic status:', isMicOn);
       this.safeBroadcast('mic-status', data);
     },
 
@@ -585,18 +606,20 @@ export default {
       try {
         if (this.micon) {
           // Turn OFF
+          console.log('Turning microphone OFF');
           if (this.localStream) {
             this.localStream.getAudioTracks().forEach(track => {
-              try { track.stop(); } catch(e) {}
-              try { this.localStream.removeTrack(track); } catch(e) {}
+              track.stop();
+              this.localStream.removeTrack(track);
             });
           }
           
+          // Remove audio from all peers
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
             const audioSender = pc.getSenders().find(s => s.track?.kind === 'audio');
             if (audioSender) {
-              try { pc.removeTrack(audioSender); } catch(e) {}
+              pc.removeTrack(audioSender);
             }
           }
           
@@ -605,6 +628,7 @@ export default {
           
         } else {
           // Turn ON
+          console.log('Turning microphone ON');
           const audioStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
@@ -617,14 +641,13 @@ export default {
           if (!this.localStream) this.localStream = new MediaStream();
           this.localStream.addTrack(audioTrack);
 
+          // Add audio to all peers
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
-            try {
-              pc.addTrack(audioTrack, this.localStream);
-              await this.renegotiateConnection(peerId);
-            } catch(err) {
-              console.warn('Error adding audio to peer', peerId, err);
-            }
+            pc.addTrack(audioTrack, this.localStream);
+            
+            // Renegotiate
+            await this.renegotiateConnection(peerId);
           }
 
           this.micon = true;
@@ -646,30 +669,26 @@ export default {
 
       try {
         if (this.videoon) {
-          // Turn OFF camera: stop tracks and remove from peers, show black placeholder locally
+          // Turn OFF
+          console.log('Turning camera OFF');
           if (this.localStream) {
             this.localStream.getVideoTracks().forEach(track => {
-              try { track.stop(); } catch(e) {}
-              try { this.localStream.removeTrack(track); } catch(e) {}
+              track.stop();
+              this.localStream.removeTrack(track);
             });
           }
           
           const videoElement = this.$refs.localVideo;
           if (videoElement) {
             videoElement.srcObject = null;
-            // show username overlay (existing template already shows name when !videoon)
           }
           
+          // Remove video from all peers
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
             const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
             if (videoSender) {
-              try {
-                // replace with null / no track - browsers may throw; safer to remove sender
-                pc.removeTrack(videoSender);
-              } catch(e) {
-                console.warn('Error removing video sender for peer', peerId, e);
-              }
+              pc.removeTrack(videoSender);
             }
           }
           
@@ -677,7 +696,8 @@ export default {
           this.broadcastVideoStatus(false);
           
         } else {
-          // Turn ON camera
+          // Turn ON
+          console.log('Turning camera ON');
           const videoStream = await navigator.mediaDevices.getUserMedia({ 
             video: {
               width: { ideal: 1280 },
@@ -688,42 +708,22 @@ export default {
           
           const videoTrack = videoStream.getVideoTracks()[0];
           if (!this.localStream) this.localStream = new MediaStream();
-          
-          // remove any previous video tracks safely
-          this.localStream.getVideoTracks().forEach(t => {
-            try { this.localStream.removeTrack(t); } catch(e) {}
-          });
-          
           this.localStream.addTrack(videoTrack);
           
           const videoElement = this.$refs.localVideo;
           if (videoElement) {
             videoElement.srcObject = this.localStream;
             videoElement.muted = true;
-            try { await videoElement.play(); } catch(e) { /* ignore */ }
+            await videoElement.play();
           }
           
+          // Add video to all peers
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
-            try {
-              // try to find existing sender and replace track; otherwise add track
-              const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-              if (sender) {
-                try {
-                  await sender.replaceTrack(videoTrack);
-                } catch (replaceErr) {
-                  console.warn('replaceTrack failed, removing+adding', replaceErr);
-                  try { pc.removeTrack(sender); } catch(e) {}
-                  pc.addTrack(videoTrack, this.localStream);
-                  await this.renegotiateConnection(peerId);
-                }
-              } else {
-                pc.addTrack(videoTrack, this.localStream);
-                await this.renegotiateConnection(peerId);
-              }
-            } catch(err) {
-              console.warn('Error adding/replacing video track for peer', peerId, err);
-            }
+            pc.addTrack(videoTrack, this.localStream);
+            
+            // Renegotiate
+            await this.renegotiateConnection(peerId);
           }
           
           this.videoon = true;
@@ -739,89 +739,23 @@ export default {
       }
     },
 
-    // small helper: create a placeholder box for remote user when their video is off
-    ensurePlaceholderForPeer(remoteId, labelText) {
-      let wrapper = document.querySelector(`[data-peer-id="${remoteId}"]`);
-      if (!wrapper) {
-        wrapper = document.createElement('div');
-        wrapper.setAttribute('data-peer-id', remoteId);
-        wrapper.className = 'remote-participant';
-        wrapper.style.cssText = `
-          display: inline-flex;
-          flex-direction: column;
-          align-items: center;
-          margin: 8px;
-          border: 2px solid #333;
-          border-radius: 8px;
-          padding: 8px;
-          background-color: rgba(0,0,0,0.5);
-          position: relative;
-          width: 280px;
-          height: 160px;
-          justify-content: center;
-        `;
-        if (this.$refs.participantsBox) {
-          this.$refs.participantsBox.appendChild(wrapper);
-        }
-      }
-      // remove any video element
-      const vid = wrapper.querySelector('video');
-      if (vid) vid.remove();
-
-      // add placeholder block
-      let placeholder = wrapper.querySelector('.video-placeholder');
-      if (!placeholder) {
-        placeholder = document.createElement('div');
-        placeholder.className = 'video-placeholder';
-        placeholder.style.cssText = `
-          width: 100%;
-          height: 100%;
-          background-color: #000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          font-weight: bold;
-          font-size: 16px;
-          border-radius: 6px;
-        `;
-        wrapper.insertBefore(placeholder, wrapper.firstChild);
-      }
-      placeholder.textContent = labelText || `User-${remoteId.substring(0,6)}`;
-      
-      // ensure label (name) below placeholder
-      let label = wrapper.querySelector('.remote-label');
-      if (!label) {
-        label = document.createElement('div');
-        label.className = 'remote-label';
-        label.style.cssText = `
-          margin-top: 6px;
-          font-size: 14px;
-          color: #eee;
-          font-weight: bold;
-          text-align: center;
-          word-wrap: break-word;
-          max-width: 280px;
-        `;
-        wrapper.appendChild(label);
-      }
-      label.textContent = labelText || `User-${remoteId.substring(0,6)}`;
-    },
-
-    // ============ WEBRTC PEER MANAGEMENT ============
+        // ============ WEBRTC PEER MANAGEMENT ============
     async createPeerConnection(remoteId, isInitiator = false) {
       console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
       
       const pc = new RTCPeerConnection({
-        iceServers: [
+       /* iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          // Replace TURN placeholder with real values in env when deploying
-          {
-            urls: 'turn:your-turn-server.com:3478',
-            username: process.env.VITE_TURN_USERNAME,
-            credential: process.env.VITE_TURN_PASSWORD
-          }
-        ],
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ],*/
+	iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  {
+    urls: 'turn:your-turn-server.com:3478',
+    username: process.env.VITE_TURN_USERNAME,
+    credential: process.env.VITE_TURN_PASSWORD
+  }
+],
         iceCandidatePoolSize: 10
       });
 
@@ -839,6 +773,7 @@ export default {
       };
 
       pc.ontrack = (event) => {
+        console.log(`Received ${event.track.kind} track from ${remoteId}`);
         const stream = event.streams[0];
         if (stream) {
           this.handleRemoteStream(remoteId, stream);
@@ -850,7 +785,7 @@ export default {
         
         if (pc.iceConnectionState === 'failed') {
           console.log(`ICE failed for ${remoteId} - restarting`);
-          try { pc.restartIce(); } catch(e) {}
+          pc.restartIce();
         }
         
         if (pc.iceConnectionState === 'disconnected') {
@@ -865,7 +800,8 @@ export default {
       // Add existing local tracks
       if (this.localStream) {
         this.localStream.getTracks().forEach(track => {
-          try { pc.addTrack(track, this.localStream); } catch(e) {}
+          console.log(`Adding ${track.kind} track to peer ${remoteId}`);
+          pc.addTrack(track, this.localStream);
         });
       }
 
@@ -883,12 +819,15 @@ export default {
           pc = await this.createPeerConnection(from, false);
         }
 
+        // CRITICAL FIX: Check signaling state before setting remote description
         if (pc.signalingState !== 'stable') {
+          console.log(`Peer ${from} not stable (${pc.signalingState}), waiting...`);
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         if (pc.signalingState === 'have-local-offer') {
-          try { await pc.setLocalDescription({ type: 'rollback' }); } catch(e) {}
+          console.log(`Collision with ${from} - rolling back`);
+          await pc.setLocalDescription({ type: 'rollback' });
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -913,6 +852,7 @@ export default {
             to: from,
             signal: { type: 'answer', sdp: pc.localDescription }
           });
+          console.log(`Answer sent to ${from}`);
         }
       } catch (err) {
         console.error('Error handling offer:', err);
@@ -929,9 +869,11 @@ export default {
           return;
         }
 
+        // CRITICAL FIX: Only set remote description if in correct state
         if (pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
           
+          // Process queued ICE candidates
           if (this.pendingCandidates[from]) {
             for (const candidate of this.pendingCandidates[from]) {
               try {
@@ -943,6 +885,7 @@ export default {
             delete this.pendingCandidates[from];
           }
           
+          console.log(`Answer handled from ${from}`);
           this.peerNegotiating[from] = false;
         } else {
           console.log(`Ignoring answer from ${from} - wrong state: ${pc.signalingState}`);
@@ -957,11 +900,13 @@ export default {
         const pc = this.peers[from];
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          console.log(`ICE candidate added from ${from}`);
         } else {
           if (!this.pendingCandidates[from]) {
             this.pendingCandidates[from] = [];
           }
           this.pendingCandidates[from].push(candidate);
+          console.log(`ICE candidate queued for ${from}`);
         }
       } catch (err) {
         console.error('Error adding ICE candidate:', err);
@@ -973,7 +918,19 @@ export default {
       
       let wrapper = document.querySelector(`[data-peer-id="${remoteId}"]`);
       
-      // If wrapper doesn't exist create it
+      // Check if stream has any active tracks
+      const hasActiveTracks = stream.getTracks().some(track => track.enabled && track.readyState === 'live');
+      
+      if (!hasActiveTracks) {
+        // Remove video box if no active tracks
+        if (wrapper) {
+          console.log(`Removing video box for ${remoteId} - no active tracks`);
+          wrapper.remove();
+          delete this.remoteVideos[remoteId];
+        }
+        return;
+      }
+      
       if (!wrapper) {
         wrapper = document.createElement('div');
         wrapper.setAttribute('data-peer-id', remoteId);
@@ -988,7 +945,6 @@ export default {
           padding: 8px;
           background-color: rgba(0,0,0,0.5);
           position: relative;
-          width: 280px;
         `;
 
         const vid = document.createElement('video');
@@ -996,7 +952,7 @@ export default {
         vid.playsInline = true;
         vid.muted = false;
         vid.style.cssText = `
-          width: 100%;
+          width: 280px;
           height: 160px;
           border-radius: 8px;
           object-fit: cover;
@@ -1004,7 +960,6 @@ export default {
         `;
 
         const label = document.createElement('div');
-        label.className = 'remote-label';
         const participant = this.participants.find(p => p.id === remoteId);
         const pName = participant?.name || `User-${remoteId.substring(0, 6)}`;
         label.textContent = pName;
@@ -1028,51 +983,31 @@ export default {
       }
 
       const vid = wrapper.querySelector('video');
-
-      // If there are no active video tracks -> show placeholder (black screen + name)
-      const videoTracks = stream.getVideoTracks();
-      const hasActiveTracks = videoTracks.some(track => track.enabled && track.readyState === 'live');
-
-      if (!hasActiveTracks) {
-        // show placeholder instead
-        const participant = this.participants.find(p => p.id === remoteId);
-        const pName = participant?.name || `User-${remoteId.substring(0, 6)}`;
-        this.ensurePlaceholderForPeer(remoteId, pName);
-        return;
-      }
-
-      // If code reaches here there is at least one active video track
       if (vid && stream) {
         vid.srcObject = stream;
-        // remove placeholder if any
-        const placeholder = wrapper.querySelector('.video-placeholder');
-        if (placeholder) placeholder.remove();
-
+        
         const playPromise = vid.play();
         if (playPromise) {
           playPromise.then(() => {
-            // started
+            console.log(`Remote video playing for ${remoteId}`);
           }).catch(err => {
-            console.warn(`Video play failed for ${remoteId}:`, err && err.name);
+            console.warn(`Video play failed for ${remoteId}:`, err.name);
           });
         }
       }
       
-      // Monitor track changes: if video track ends, show placeholder
+      // Monitor track changes
       stream.getTracks().forEach(track => {
         track.onended = () => {
-          const currentStream = vid?.srcObject;
+          console.log(`Track ended for ${remoteId}`);
+          const currentStream = vid.srcObject;
           if (currentStream) {
-            const remainingTracks = currentStream.getTracks().filter(t => t.readyState === 'live' && t.enabled && t.kind === 'video');
+            const remainingTracks = currentStream.getTracks().filter(t => t.readyState === 'live' && t.enabled);
             if (remainingTracks.length === 0) {
-              const participant = this.participants.find(p => p.id === remoteId);
-              const pName = participant?.name || `User-${remoteId.substring(0, 6)}`;
-              this.ensurePlaceholderForPeer(remoteId, pName);
+              console.log(`No more tracks - removing ${remoteId} video box`);
+              wrapper.remove();
+              delete this.remoteVideos[remoteId];
             }
-          } else {
-            const participant = this.participants.find(p => p.id === remoteId);
-            const pName = participant?.name || `User-${remoteId.substring(0, 6)}`;
-            this.ensurePlaceholderForPeer(remoteId, pName);
           }
         };
       });
@@ -1100,6 +1035,7 @@ export default {
             to: remoteId,
             signal: { type: 'offer', sdp: offer }
           });
+          console.log(`Offer sent to ${remoteId}`);
         }
       } catch (err) {
         console.error(`Error creating/sending offer to ${remoteId}:`, err);
@@ -1167,6 +1103,7 @@ export default {
       }
       
       this.participants = Array.from(participantsMap.values());
+      console.log('Updated participants:', this.participants);
     },
 
     addParticipant(user) {
@@ -1202,53 +1139,57 @@ export default {
     },
 
     updateParticipantStatus(userId, statusType, isEnabled) {
-      const participant = this.participants.find(p => p.id === userId);
-      if (participant) {
-        if (statusType === 'video') {
-          participant.hasVideo = isEnabled;
-          
-          // If video turned OFF show placeholder rather than removing entire box
-          if (!isEnabled) {
-            const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
-            const pName = participant?.name || `User-${userId.substring(0,6)}`;
-            this.ensurePlaceholderForPeer(userId, pName);
-          }
-        } else if (statusType === 'mic') {
-          participant.hasMic = isEnabled;
-        } else if (statusType === 'screenShare') {
-          participant.isScreenSharing = isEnabled;
-        }
-        this.$forceUpdate();
-      }
+  const participant = this.participants.find(p => p.id === userId);
+  if (participant) {
+    if (statusType === 'video') {
+      participant.hasVideo = isEnabled;
       
-      // Update status indicator if video box exists
-      const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
-      if (wrapper) {
-        let indicator = wrapper.querySelector('.status-indicator');
-        if (!indicator) {
-          indicator = document.createElement('div');
-          indicator.className = 'status-indicator';
-          indicator.style.cssText = `
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            display: flex;
-            gap: 4px;
-            font-size: 16px;
-            background: rgba(0,0,0,0.7);
-            padding: 4px;
-            border-radius: 4px;
-          `;
-          wrapper.appendChild(indicator);
+      // Remove video box if video is OFF
+      if (!isEnabled) {
+        const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
+        if (wrapper) {
+          console.log(`Removing video box for ${userId} - video turned OFF`);
+          wrapper.remove();
+          delete this.remoteVideos[userId];
         }
-        
-        indicator.innerHTML = `
-          <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
-          <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
-          ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
-        `;
       }
-    },
+    } else if (statusType === 'mic') {
+      participant.hasMic = isEnabled;
+    } else if (statusType === 'screenShare') {
+      participant.isScreenSharing = isEnabled;
+    }
+    
+    this.$forceUpdate();
+  }
+  
+  // Update status indicator if video box exists
+  const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
+  if (wrapper) {
+    let indicator = wrapper.querySelector('.status-indicator');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.className = 'status-indicator';
+      indicator.style.cssText = `
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: flex;
+        gap: 4px;
+        font-size: 16px;
+        background: rgba(0,0,0,0.7);
+        padding: 4px;
+        border-radius: 4px;
+      `;
+      wrapper.appendChild(indicator);
+    }
+    
+    indicator.innerHTML = `
+      <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
+      <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
+      ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
+    `;
+  }
+},
 
     // ============ UI CONTROLS ============
     togglePanel(panel) {
@@ -1354,6 +1295,8 @@ export default {
       this.$router.push('/Ending');
     },
 
+  
+
     // ============ HOST CONTROLS ============
     async endMeeting() {
       if (!this.isHost) {
@@ -1431,181 +1374,247 @@ export default {
     },
 
     // ============ SCREEN SHARING ============
-    async sharescreen() {
-      try {
-        if (!this.isScreenSharing) {
-          const stream = await navigator.mediaDevices.getDisplayMedia({ 
-            video: {
-              cursor: "always",
-              displaySurface: "monitor"
-            },
-            audio: false 
-          });
-          
-          this.screenStream = stream;
-          this.screenTrack = stream.getVideoTracks()[0];
+    // COMPLETE FIX for Screen Sharing Issues
+// Replace your existing sharescreen() and stopScreenShare() methods with these:
 
-          const el = this.$refs.localVideo;
-          if (el) {
-            el.srcObject = stream;
-            try { await el.play(); } catch(e) {}
-          }
+async sharescreen() {
+  try {
+    if (!this.isScreenSharing) {
+      console.log('=== STARTING SCREEN SHARE ===');
+      
+      // Get screen share stream
+      const stream = await navigator.mediaDevices.getDisplayMedia({ 
+        video: {
+          cursor: "always",
+          displaySurface: "monitor" // or "window" or "browser"
+        },
+        audio: false 
+      });
+      
+      this.screenStream = stream;
+      this.screenTrack = stream.getVideoTracks()[0];
+      
+      console.log('Screen track obtained:', this.screenTrack);
 
-          // Replace video track in ALL peer connections
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            try {
-              const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-              if (videoSender && videoSender.track) {
-                await videoSender.replaceTrack(this.screenTrack);
-              } else {
-                pc.addTrack(this.screenTrack, stream);
-                await this.renegotiateConnection(peerId);
-              }
-            } catch(err) {
-              console.warn('Error replacing/adding screen track for peer', peerId, err);
-            }
-          }
-
-          this.screenTrack.onended = () => {
-            this.stopScreenShare();
-          };
-          
-          this.isScreenSharing = true;
-          this.broadcastScreenShareStatus(true);
-        } else {
-          await this.stopScreenShare();
-        }
-      } catch (err) {
-        console.error("Error sharing screen:", err);
-        if (err?.name === 'NotAllowedError') {
-          alert("Screen sharing permission denied. Please allow screen sharing.");
-        } else if (err?.name === 'NotFoundError') {
-          alert("No screen available to share.");
-        } else {
-          alert("Could not start screen sharing: " + (err?.message || err));
-        }
-        this.isScreenSharing = false;
-      }
-    },
-
-    async stopScreenShare() {
-      try {
-        if (this.screenTrack) {
-          try { this.screenTrack.stop(); } catch(e) {}
-          this.screenTrack = null;
-        }
-        
-        if (this.screenStream) {
-          this.screenStream.getTracks().forEach(t => { try { t.stop(); } catch(e) {} });
-          this.screenStream = null;
-        }
-
-        if (this.videoon) {
-          const videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 30 }
-            }
-          });
-          const videoTrack = videoStream.getVideoTracks()[0];
-          
-          const el = this.$refs.localVideo;
-          if (el) {
-            el.srcObject = videoStream;
-            try { await el.play(); } catch(e) {}
-          }
-          
-          if (!this.localStream) this.localStream = new MediaStream();
-          // remove old video tracks
-          this.localStream.getVideoTracks().forEach(track => { try { this.localStream.removeTrack(track); } catch(e) {} });
-          this.localStream.addTrack(videoTrack);
-
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (videoSender) {
-              try { await videoSender.replaceTrack(videoTrack); } catch(e) {
-                try { pc.removeTrack(videoSender); } catch(e2) {}
-                pc.addTrack(videoTrack, this.localStream);
-                await this.renegotiateConnection(peerId);
-              }
-            } else {
-              pc.addTrack(videoTrack, this.localStream);
-              await this.renegotiateConnection(peerId);
-            }
-          }
-        } else {
-          const el = this.$refs.localVideo;
-          if (el) {
-            el.srcObject = null;
-          }
-
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (videoSender) {
-              try { await videoSender.replaceTrack(null); } catch(e) {
-                try { pc.removeTrack(videoSender); } catch(e2) {}
-              }
-            }
-          }
-        }
-        
-        this.isScreenSharing = false;
-        this.broadcastScreenShareStatus(false);
-      } catch (err) {
-        console.error("Error stopping screen share:", err);
-        this.isScreenSharing = false;
-      }
-    },
-
-    broadcastScreenShareStatus(isSharing) {
-      const data = {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isScreenSharing: isSharing
-      };
-      this.safeBroadcast('screen-share-status', data);
-    },
-
-    // IMPROVED renegotiation with better error handling
-    async renegotiateConnection(peerId) {
-      const pc = this.peers[peerId];
-      if (!pc || this.peerNegotiating[peerId]) {
-        return;
-      }
-
-      try {
-        this.peerNegotiating[peerId] = true;
-        
-        if (pc.signalingState !== 'stable') {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        
-        const offer = await pc.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: true
+      // Update local video element
+      const el = this.$refs.localVideo;
+      if (el) {
+        el.srcObject = stream;
+        await el.play().catch(err => {
+          console.error('Error playing local screen share:', err);
         });
-        
-        await pc.setLocalDescription(offer);
-        
-        if (this.isSocketConnected) {
-          this.socket.emit('signal', {
-            to: peerId,
-            signal: { type: 'offer', sdp: offer }
-          });
-        }
-      } catch (err) {
-        console.error(`Renegotiation error for ${peerId}:`, err);
-      } finally {
-        setTimeout(() => {
-          this.peerNegotiating[peerId] = false;
-        }, 2000);
       }
-    },
+
+      // Replace video track in ALL peer connections
+      let replacementCount = 0;
+      for (const peerId in this.peers) {
+        const pc = this.peers[peerId];
+        console.log(`Replacing track for peer ${peerId}`);
+        
+        const senders = pc.getSenders();
+        const videoSender = senders.find(s => s.track?.kind === 'video');
+        
+        if (videoSender && videoSender.track) {
+          // Replace existing video track with screen track
+          await videoSender.replaceTrack(this.screenTrack);
+          console.log(`✅ Replaced video track for peer ${peerId}`);
+          replacementCount++;
+        } else {
+          // No existing video sender - add screen track
+          pc.addTrack(this.screenTrack, stream);
+          console.log(`✅ Added screen track for peer ${peerId}`);
+          replacementCount++;
+          
+          // Trigger renegotiation
+          await this.renegotiateConnection(peerId);
+        }
+      }
+      
+      console.log(`Screen track sent to ${replacementCount} peers`);
+
+      // Handle when user stops sharing via browser UI
+      this.screenTrack.onended = () => {
+        console.log('Screen share ended by user');
+        this.stopScreenShare();
+      };
+      
+      this.isScreenSharing = true;
+      
+      // Broadcast status
+      this.broadcastScreenShareStatus(true);
+      
+      console.log('=== SCREEN SHARE STARTED ===');
+      
+    } else {
+      // Stop screen sharing
+      await this.stopScreenShare();
+    }
+  } catch (err) {
+    console.error("Error sharing screen:", err);
+    
+    if (err.name === 'NotAllowedError') {
+      alert("Screen sharing permission denied. Please allow screen sharing.");
+    } else if (err.name === 'NotFoundError') {
+      alert("No screen available to share.");
+    } else {
+      alert("Could not start screen sharing: " + err.message);
+    }
+    
+    this.isScreenSharing = false;
+  }
+},
+
+async stopScreenShare() {
+  try {
+    console.log('=== STOPPING SCREEN SHARE ===');
+    
+    // Stop screen track
+    if (this.screenTrack) {
+      this.screenTrack.stop();
+      this.screenTrack = null;
+    }
+    
+    // Stop screen stream
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach(t => t.stop());
+      this.screenStream = null;
+    }
+
+    // Restore camera if it was on before screen share
+    if (this.videoon) {
+      console.log('Restoring camera...');
+      
+      // Get camera stream
+      const videoStream = await navigator.mediaDevices.getUserMedia({ 
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        }
+      });
+      
+      const videoTrack = videoStream.getVideoTracks()[0];
+      
+      // Update local video element
+      const el = this.$refs.localVideo;
+      if (el) {
+        el.srcObject = videoStream;
+        await el.play().catch(() => {});
+      }
+      
+      // Add to local stream
+      if (!this.localStream) this.localStream = new MediaStream();
+      
+      // Remove old video tracks
+      this.localStream.getVideoTracks().forEach(track => {
+        this.localStream.removeTrack(track);
+      });
+      
+      // Add new video track
+      this.localStream.addTrack(videoTrack);
+      
+      // Replace in all peer connections
+      for (const peerId in this.peers) {
+        const pc = this.peers[peerId];
+        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+        
+        if (videoSender) {
+          await videoSender.replaceTrack(videoTrack);
+          console.log(`✅ Restored camera for peer ${peerId}`);
+        } else {
+          pc.addTrack(videoTrack, this.localStream);
+          await this.renegotiateConnection(peerId);
+        }
+      }
+      
+    } else {
+      // Camera was off - just clear local video
+      const el = this.$refs.localVideo;
+      if (el) {
+        el.srcObject = null;
+      }
+      
+      // Remove video track from all peers
+      for (const peerId in this.peers) {
+        const pc = this.peers[peerId];
+        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+        
+        if (videoSender) {
+          await videoSender.replaceTrack(null);
+          console.log(`✅ Removed video for peer ${peerId}`);
+        }
+      }
+    }
+    
+    this.isScreenSharing = false;
+    
+    // Broadcast status
+    this.broadcastScreenShareStatus(false);
+    
+    console.log('=== SCREEN SHARE STOPPED ===');
+    
+  } catch (err) {
+    console.error("Error stopping screen share:", err);
+    this.isScreenSharing = false;
+  }
+},
+
+// Add this method for broadcasting
+broadcastScreenShareStatus(isSharing) {
+  const data = {
+    roomId: this.roomId,
+    userId: this.userId,
+    userName: this.userName,
+    isScreenSharing: isSharing
+  };
+  
+  console.log('Broadcasting screen share status:', isSharing);
+  this.safeBroadcast('screen-share-status', data);
+},
+
+// IMPROVED renegotiation with better error handling
+async renegotiateConnection(peerId) {
+  const pc = this.peers[peerId];
+  if (!pc || this.peerNegotiating[peerId]) {
+    console.log(`Cannot renegotiate peer ${peerId} - ${!pc ? 'no connection' : 'already negotiating'}`);
+    return;
+  }
+
+  try {
+    this.peerNegotiating[peerId] = true;
+    console.log(`Renegotiating connection with ${peerId}...`);
+    
+    // Check signaling state
+    if (pc.signalingState !== 'stable') {
+      console.log(`Peer ${peerId} not in stable state: ${pc.signalingState} - waiting...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
+    // Create and set offer
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: true
+    });
+    
+    await pc.setLocalDescription(offer);
+    
+    if (this.isSocketConnected) {
+      this.socket.emit('signal', {
+        to: peerId,
+        signal: { type: 'offer', sdp: offer }
+      });
+      console.log(`✅ Renegotiation offer sent to ${peerId}`);
+    } else {
+      console.error('Socket not connected - cannot send renegotiation offer');
+    }
+  } catch (err) {
+    console.error(`Renegotiation error for ${peerId}:`, err);
+  } finally {
+    setTimeout(() => {
+      this.peerNegotiating[peerId] = false;
+    }, 2000);
+  }
+},
 
     // ============ RECORDING ============
     async recording() {
@@ -1644,14 +1653,16 @@ export default {
           
           this.mediaRecorder.start();
           this.isRecording = true;
+          console.log("Recording started");
         } catch(err) {
           console.error("Recording failed:", err);
           this.record = false;
         }
       } else {
         if(this.mediaRecorder && this.isRecording) {
-          try { this.mediaRecorder.stop(); } catch(e) {}
+          this.mediaRecorder.stop();
           this.isRecording = false;
+          console.log("Recording stopped");
         }
       }
     },
@@ -1682,7 +1693,7 @@ export default {
               const packetsLost = report.packetsLost || 0;
               
               if (packetsSent > 50) {
-                const lossRate = packetsLost / (packetsSent + packetsLost || 1);
+                const lossRate = packetsLost / (packetsSent + packetsLost);
                 if (lossRate > 0.05) {
                   poorConnection = true;
                 }
@@ -1721,19 +1732,20 @@ export default {
 
         if (final) {
           this.transcript.push(final);
+          console.log('Transcript:', final);
         }
       };
 
       this.recognition.onerror = (e) => console.error('Speech recognition error:', e);
       this.recognition.onend = () => {
-        if (this.isPoorNetwork) {
-          try { this.recognition.start(); } catch(e) {}
-        }
+        if (this.isPoorNetwork) this.recognition.start();
       };
     },
 
     // ============ CLEANUP ============
     cleanup() {
+      console.log('Cleaning up resources...');
+      
       if (this.broadcastRetryTimer) {
         clearInterval(this.broadcastRetryTimer);
         this.broadcastRetryTimer = null;
@@ -1753,24 +1765,36 @@ export default {
 
       if (this.localStream) {
         this.localStream.getTracks().forEach(track => {
-          try { track.stop(); } catch (e) {}
+          try {
+            track.stop();
+          } catch (e) {
+            console.error('Error stopping track:', e);
+          }
         });
         this.localStream = null;
       }
 
       if (this.screenStream) {
         this.screenStream.getTracks().forEach(track => {
-          try { track.stop(); } catch (e) {}
+          try {
+            track.stop();
+          } catch (e) {
+            console.error('Error stopping screen track:', e);
+          }
         });
         this.screenStream = null;
       }
 
       if (this.mediaRecorder && this.isRecording) {
-        try { this.mediaRecorder.stop(); } catch (e) {}
+        try {
+          this.mediaRecorder.stop();
+        } catch (e) {
+          console.error('Error stopping recorder:', e);
+        }
       }
 
       if (this.socket) {
-        try { this.socket.disconnect(); } catch(e) {}
+        this.socket.disconnect();
         this.socket = null;
       }
 
@@ -1785,13 +1809,21 @@ export default {
       }
 
       if (this.recognition) {
-        try { this.recognition.stop(); } catch (e) {}
+        try {
+          this.recognition.stop();
+        } catch (e) {
+          console.error('Error stopping recognition:', e);
+        }
       }
 
       if (this.$refs.participantsBox) {
         const remoteElements = this.$refs.participantsBox.querySelectorAll('[data-peer-id]');
         remoteElements.forEach(element => {
-          try { element.remove(); } catch (e) {}
+          try {
+            element.remove();
+          } catch (e) {
+            console.error('Error removing element:', e);
+          }
         });
       }
 
@@ -1827,6 +1859,13 @@ export default {
 
     this.roomId = this.computedRoomId;
     
+    console.log('Meeting room initialized:', {
+      roomId: this.roomId,
+      userName: this.userName,
+      userId: this.userId,
+      isHost: this.isHost
+    });
+    
     this.localStream = new MediaStream();
     
     this.initSocket();
@@ -1848,339 +1887,407 @@ export default {
   }
 };
 </script>
-<style scoped>
-/* ===========================================================
-   CORE LAYOUT
-   =========================================================== */
-#page {
-  width: 100vw;
-  height: 100vh;
-  background: #111;
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  flex-direction: row;
+<style>
+body {
+  background-color: #222021;
+  margin: 0;
+  font-family: Arial, sans-serif;
+  color: white;
 }
-
-/* ===========================================================
-   LEFT TRAY
-   =========================================================== */
+#page {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
 #left-tray {
-  width: 160px;
-  background: rgba(20, 20, 20, 0.9);
-  padding: 12px;
+  width: 200px;
+  background-color: #333;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 15px;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  transition: left 0.4s ease, right 0.4s ease;
+  z-index: 5;
 }
+.left-tray-left { left: 0; right: auto; }
+.left-tray-right { right: 0; left: auto; }
 
 #left-tray button {
-  padding: 10px;
-  background: #333;
+  background-color: #444;
   color: white;
   border: none;
+  padding: 10px;
   border-radius: 8px;
   cursor: pointer;
 }
+#left-tray button:hover { background-color: #555; }
 
-.left-tray-left {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
+#main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  box-sizing: border-box;
+  transition: margin 0.4s ease;
 }
 
-.left-tray-right {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
+/* Main content margins based on tray position and visibility */
+#page:not(.tray-on-right):not(.tray-hidden) #main-content {
+  margin-left: 200px;
+  margin-right: 0;
+}
+#page.tray-on-right:not(.tray-hidden) #main-content {
+  margin-right: 200px;
+  margin-left: 0;
+}
+#page.tray-hidden #main-content {
+  margin-left: 0;
+  margin-right: 0;
 }
 
-.tray-hidden {
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-/* ===========================================================
-   HOST VIDEO BOX
-   =========================================================== */
 #host {
-  width: 320px;
-  height: 180px;
+  flex: 3;
+  background-color: blue;
   border-radius: 10px;
-  background: black;
-  margin: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
   overflow: hidden;
 }
-
 #host video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.video-off-placeholder {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: black;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-/* ===========================================================
-   PARTICIPANTS GRID
-   =========================================================== */
-#participants {
-  flex-grow: 1;
-  padding: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 10px;
-  overflow-y: auto;
-}
-
-.remote-participant {
-  border-radius: 10px;
-  overflow: hidden;
-  background: #000;
-  position: relative;
-}
-
-.remote-participant video {
-  width: 280px;
-  height: 160px;
-  border-radius: 8px;
   object-fit: cover;
-  background: black;
+  background-color: transparent;
+  z-index: 1;
 }
 
-/* ===========================================================
-   NAVBAR (BOTTOM TRAY)
-   =========================================================== */
+#participants {
+  flex: 1;
+  background-color: #3a3f47;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 80px;
+  flex-wrap: wrap;
+}
+
+/* Navbar */
 #navbar {
-  width: 100%;
-  height: 70px;
-  background: rgba(25, 25, 25, 0.95);
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 0;
+  width: 100%;
+  background-color: #1f1f1f;
+  height: 60px;
+  border-top: 1px solid #444;
   display: flex;
-  padding: 0 12px;
-  align-items: center;
   justify-content: space-between;
-  z-index: 20;
+  align-items: center;
+  padding: 0 40px;
+  box-sizing: border-box;
+  z-index: 10;
 }
-
 #navbar ul {
-  list-style: none;
   display: flex;
-  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 20px;
+}
+#navbar li { position: relative; }
+#navbar li button {
+  background-color: white;
+  color: black;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  min-width: 100px;
+  text-align: center;
+  transition: background 0.3s;
+}
+#navbar li button:hover { background-color: #ddd; }
+
+#rightpane {
+  display: flex;
+  gap: 16px;
   align-items: center;
 }
-
-#navbar button {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: #222;
+#rightpane li { list-style: none; position: relative; }
+#rightpane li button {
+  background-color: #f0f0f0;
+  color: #000;
   border: none;
-  color: white;
+  border-radius: 10px;
+  padding: 10px 16px;
   cursor: pointer;
+  font-size: 14px;
+  min-width: 100px;
+  text-align: center;
+  transition: background 0.3s ease;
 }
 
-#navbar button.active {
-  background: #444;
-}
-
-/* tooltip */
-.tooltip {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 6px;
+/* Dropdowns */
+.dropdown { position: relative; }
+.dropdown-menu {
+  position: absolute;
+  bottom: 60px;
+  background-color: #1f1f1f;
   border-radius: 6px;
-  font-size: 12px;
-  position: absolute;
-  bottom: 58px;
-}
-
-/* ===========================================================
-   RIGHT PANEL (CHAT + PARTICIPANTS)
-   =========================================================== */
-#list-box,
-#chat-box {
-  position: absolute;
-  right: 10px;
-  bottom: 80px;
-  width: 300px;
-  max-height: 70%;
-  background: rgba(25, 25, 25, 0.95);
-  border-radius: 12px;
-  padding: 10px;
-  overflow: hidden;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  list-style: none;
+  min-width: 120px;
+  padding: 5px 0;
+  z-index: 15;
   display: flex;
   flex-direction: column;
 }
-
-.list-header,
-.chat-header {
-  font-size: 16px;
-  font-weight: bold;
+.dropdown-menu li {
+  margin: 0;
   color: white;
-  padding-bottom: 6px;
+  padding: 8px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.dropdown-menu li:hover { background-color: #333; }
+
+/* Transitions */
+.slide-fade-enter-active, .slide-fade-leave-active { transition: all 0.3s ease; }
+.slide-fade-enter-from, .slide-fade-leave-to { opacity: 0; transform: translateY(100%); }
+
+.slide-left-enter-active, .slide-left-leave-active { transition: all 0.4s ease; }
+.slide-left-enter-from { transform: translateX(-100%); opacity: 0; }
+.slide-left-leave-to { transform: translateX(-100%); opacity: 0; }
+.slide-left-enter-to, .slide-left-leave-from { transform: translateX(0); opacity: 1; }
+
+.extras-menu {
+  right: 0;
+  left: auto;
+  bottom: 60px;
+  background-color: #1f1f1f;
+  padding: 5px 0;
+  border-radius: 6px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  list-style: none;
+  min-width: 140px;
+  position: absolute;
+  text-align: left;
+  z-index: 15;
   display: flex;
+  flex-direction: column;
+}
+.extras-menu li {
+  margin: 0;
+  color: white;
+  text-decoration: none;
+  display: block;
+  padding: 8px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.extras-menu li:hover { background-color: #333; }
+
+/* Chat (force dark text so it isn't invisible on white bubbles) */
+#chat-box,
+#chat-box .chat-body,
+#chat-box .message { color: #202124; }
+
+#chat-box {
+  position: fixed;
+  bottom: 70px;
+  right: 0;
+  width: 320px;
+  height: calc(100vh - 70px);
+  background-color: #f8f9fa;
+  border-left: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+  font-family: 'Segoe UI', sans-serif;
+}
+.chat-header {
+  padding: 14px 16px;
+  font-size: 18px;
+  font-weight: 600;
+  background-color: #e8eaed;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  color: black;
   justify-content: space-between;
+  align-items: center;
 }
-
-.list-body,
-.chat-body {
-  flex-grow: 1;
-  overflow-y: auto;
-  padding: 6px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
-}
-
+.chat-body { flex: 1; padding: 16px; overflow-y: auto; }
 .message {
-  padding: 6px 0;
-  border-bottom: 1px solid #444;
+  background-color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #dadce0;
+  box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+  max-width: 80%;
 }
-
-.message-header {
-  font-size: 12px;
-  font-weight: bold;
-  color: #ddd;
-}
-
-.message-text {
-  font-size: 14px;
-  color: #fff;
-}
-
 .chat-input-section {
   display: flex;
-  margin-top: 8px;
-  gap: 6px;
+  padding: 12px;
+  border-top: 1px solid #ccc;
+  background-color: #e8eaed;
 }
-
 .chat-input {
-  flex-grow: 1;
-  padding: 8px;
+  flex: 1;
+  padding: 10px;
   border-radius: 8px;
-  border: none;
+  border: 1px solid #ccc;
+  outline: none;
+  background-color: white;
 }
-
 .chat-send {
-  padding: 8px 14px;
-  border-radius: 8px;
+  margin-left: 8px;
+  padding: 10px 16px;
+  background-color: #1a73e8;
+  color: black;
   border: none;
-  background: #333;
-  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.chat-send:hover { background-color: #1558d6; }
+
+/* Participants side panel (text visible) */
+#list-box,
+#list-box .list-body,
+#list-box .participant { color: #202124; }
+
+#list-box {
+  position: fixed;
+  bottom: 70px;
+  right: 0;
+  width: 320px;
+  height: calc(100vh - 70px);
+  background-color: #f8f9fa;
+  border-left: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  font-family: 'Segoe UI', sans-serif;
+  transition: transform 0.3s ease;
+}
+.list-header {
+  padding: 14px 16px;
+  font-size: 18px;
+  font-weight: 600;
+  background-color: #e8eaed;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.list-body { flex: 1; padding: 16px; overflow-y: auto; }
+.participant {
+  background-color: white;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(60,64,67,0.1);
 }
 
-/* notification badge */
-.message-badge {
-  background: red;
-  color: white;
-  padding: 3px 6px;
-  font-size: 10px;
-  border-radius: 50%;
+.tooltip {
   position: absolute;
-  top: -4px;
-  right: -4px;
-}
-
-/* ===========================================================
-   TRANSITION EFFECTS
-   =========================================================== */
-.slide-left-enter-active,
-.slide-left-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-left-enter-from {
-  transform: translateX(-100%);
-}
-
-.slide-left-leave-to {
-  transform: translateX(-100%);
-}
-
-.slide-fade-enter-active,
-.slide-fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.slide-fade-enter-from,
-.slide-fade-leave-to {
-  opacity: 0;
-}
-
-/* ===========================================================
-   MOBILE RESPONSIVE FIXES
-   =========================================================== */
-@media (max-width: 900px) {
-  #navbar {
-    height: 64px;
-    padding: 0 6px;
-  }
-
-  #navbar button {
-    width: 44px;
-    height: 44px;
-  }
-
-  #list-box,
-  #chat-box {
-    width: 260px;
-    max-height: 60%;
-    right: 8px;
-    bottom: 72px;
-  }
-
-  #participants {
-    justify-content: center;
-  }
-
-  .remote-participant video {
-    width: 240px;
-    height: 140px;
-  }
-}
-
-@media (max-width: 600px) {
-  #host {
-    width: 240px;
-    height: 140px;
-  }
-
-  #participants {
-    padding: 4px;
-    gap: 6px;
-  }
-
-  .remote-participant video {
-    width: 200px;
-    height: 120px;
-  }
-
-  #navbar {
-    height: 60px;
-  }
-}
-
-/* ===========================================================
-   EXTRA — STATUS INDICATOR ICONS
-   =========================================================== */
-.status-indicator span {
-  font-size: 16px;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: black;
   color: white;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 99;
+  pointer-events: none;
+}
+
+#info_box {
+  position: fixed;
+  right: 70px;
+  bottom: 70px;
+  width: 240px;
+  background-color: white;
+  color: black;
+  border-radius: 10px;
+  padding: 15px;
+  font-family: 'Segoe UI', sans-serif;
+  z-index: 101;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+#inside_info { width: 100%; }
+#info_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+#info_header b { font-size: 16px; font-weight: 600; }
+#info_header button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #666;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+#info_header button:hover { background-color: #f0f0f0; }
+#info_box hr { border: none; border-top: 1px solid #ddd; margin: 10px 0; }
+#info_box p { margin: 8px 0; font-size: 14px; }
+#hand_warning {
+  position: fixed;
+  right: 640px;
+  width: 200px;
+  bottom: 70px;
+  background-color: #333;
+  color: white;
+  display: flex;
+  border-radius: 5px;
+  padding-top: 10px;
+  padding-left: 10px;
+  font-family: 'Segoe UI', sans-serif;
+  flex-direction: column;
+  z-index: 101;
+}
+.transcript-box {
+  position: absolute;
+  bottom: 100px;
+  left: 20px;
+  background: rgba(0,0,0,0.7);
+  color: white;
+  padding: 10px;
+  max-width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
+  border-radius: 8px;
+  font-size: 14px;
+}
+#copylink
+{
+  background-color:black;
+  color:white;
+  border-radius:2px;
 }
 </style>
-
