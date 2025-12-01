@@ -754,8 +754,8 @@ export default {
     urls: 'turn:your-turn-server.com:3478',
     username: import.meta.env.VITE_TURN_USERNAME,
     credential: import.meta.env.VITE_TURN_PASSWORD
-  console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
-
+  //console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
+  }
   // ✅ Define ICE servers safely
   const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' }
@@ -2366,4 +2366,5 @@ body {
 }
 
 </style>
+
 
