@@ -1058,7 +1058,7 @@ export default {
                       const vid = document.createElement('video');
                       vid.autoplay = true;
                       vid.playsInline = true;
-                      vide.muted = false;
+                      vid.muted = false;
                       vid.style.cssText = `
                                  width:280px;
                                  height:160px;
@@ -2507,6 +2507,7 @@ body {
 }
 
 </style>
+
 
 
 
