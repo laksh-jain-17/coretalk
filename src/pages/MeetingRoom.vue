@@ -947,7 +947,7 @@ export default {
      let wrapper = document.querySelector(`[data-peer-id="${remoteId}"]`);
      
      // Check if stream has any active tracks
-     const hasActiveTracks = stream.getTracks().some(track => track.enabled && track.readyState === 'live');
+/*     const hasActiveTracks = stream.getTracks().some(track => track.enabled && track.readyState === 'live');
      
      if (!hasActiveTracks) {
        // Remove video box if no active tracks
@@ -1038,7 +1038,134 @@ export default {
            }
          }
        };
-     });
+     });*/
+           if(!wrapper)
+           {
+                      wrapper = document.createElement("div");
+                      wrapper.setAttribute("data-peer-id",remoteId);
+                      wrapper.className = "remote-participant";
+                      wrapper.style.cssText = `
+                                 display:inline-flex;
+                                 flex-direction:column;
+                                 align-items:center;
+                                 margin:8px;
+                                 border:2px solid #333;
+                                 border-radius:8px;
+                                 padding:8px;
+                                 background-color:rgba(0,0,0,0.5);
+                                 position:relative;
+                      `;
+                      const vid = document.createElement('video');
+                      vid.autoplay = true;
+                      vid.playsInline = true;
+                      vide.muted = false;
+                      vid.style.cssText = `
+                                 width:280px;
+                                 height:160px;
+                                 border-radius:8px;
+                                 object-fit:cover;
+                                 background-color:#000;
+                      `;
+                      const placeholder = document.createElement('div');
+                      placeholder.className = 'video-placeholder';
+                      placeholder.style.cssText = `
+                            position: absolute;
+                            top: 8px;
+                            left: 8px;
+                            width: 280px;
+                            height: 160px;
+                            background-color: #1a1a1a;
+                            border-radius: 8px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            color: #666;
+                            font-size: 48px;
+                            pointer-events: none;
+                      `;
+                      placeholder.innerHTML = '📹';
+                      placeholder.style.display = 'none';
+                      const label = document.createElement('div');
+                      const participant = this.participants.find(p => p.id === remoteId);
+                      const pName = participant?.name || `User-${remoteId.substring(0,6)}`;
+                      label.textContent = pName;
+                      label.style.cssText = `
+                                 margin-top: 6px;
+                                 font-size: 14px;
+                                 color: #eee;
+                                 font-weight: bold;
+                                 text-align: center;
+                                 word-wrap: break-word;
+                                 max-width: 280px;
+                      `;
+                      wrapper.appendChild(placeholder);
+                      wrapper.appendChild(vid);
+                      wrapper.appendChild(label);
+                      this.remoteVideos[remoteId] = vid;
+                      if(this.$refs.participantsBox)
+                      {
+                                 this.$refs.participantBox.appendChild(wrapper);
+                      }
+           }
+           const vid = wrapper.querySelector('video');
+           const placeholder = wrapper.querySelector('.video-placeholder');
+  
+           const hasActiveVideo = stream.getVideoTracks().some(track => 
+               track.enabled && track.readyState === 'live'
+           );
+           if (hasActiveVideo) 
+           {
+               vid.style.display = 'block';
+               if (placeholder) placeholder.style.display = 'none';
+               if (vid && stream) {
+                      vid.srcObject = stream;
+                      const playPromise = vid.play();
+                      if (playPromise) {
+                              playPromise.then(() => {
+                                         console.log(`Remote video playing for ${remoteId}`);
+                              }).catch(err => {
+                                           console.warn(`Video play failed for ${remoteId}:`, err.name);
+                              });
+                            }
+               }           
+           } 
+           else {
+    // Show placeholder (black screen with icon), hide video
+               vid.style.display = 'none';
+               if (placeholder) placeholder.style.display = 'flex';
+               console.log(`No active video - showing placeholder for ${remoteId}`);
+           }
+  
+  // Monitor track changes
+             stream.getTracks().forEach(track => {
+               track.onended = () => {
+                 console.log(`Track ended for ${remoteId}`);
+                 const currentStream = vid.srcObject;
+                 if (currentStream) {
+                   const remainingVideoTracks = currentStream.getVideoTracks().filter(t => 
+                     t.readyState === 'live' && t.enabled
+                   );
+                   if (remainingVideoTracks.length === 0) {
+                     console.log(`No more video tracks - showing placeholder for ${remoteId}`);
+                     vid.style.display = 'none';
+                     if (placeholder) placeholder.style.display = 'flex';
+                   }
+                 }
+               };
+    
+    // Monitor when track is muted/unmuted
+               track.onmute = () => {
+                 console.log(`Track muted for ${remoteId}`);
+                 vid.style.display = 'none';
+                 if (placeholder) placeholder.style.display = 'flex';
+               };
+    
+               track.onunmute = () => {
+                 console.log(`Track unmuted for ${remoteId}`);
+                 vid.style.display = 'block';
+                 if (placeholder) placeholder.style.display = 'none';
+               };
+             });
    },
 
    async startOffer(remoteId) {
@@ -1166,7 +1293,7 @@ export default {
      }
    },
 
-   updateParticipantStatus(userId, statusType, isEnabled) {
+/*   updateParticipantStatus(userId, statusType, isEnabled) {
  const participant = this.participants.find(p => p.id === userId);
  if (participant) {
    if (statusType === 'video') {
@@ -1217,6 +1344,66 @@ export default {
      ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
    `;
  }
+},*/
+            updateParticipantStatus(userId, statusType, isEnabled) {
+  const participant = this.participants.find(p => p.id === userId);
+  if (participant) {
+    if (statusType === 'video') {
+      participant.hasVideo = isEnabled;
+      
+      // Show/hide video element or placeholder
+      const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
+      if (wrapper) {
+        const vid = wrapper.querySelector('video');
+        const placeholder = wrapper.querySelector('.video-placeholder');
+        
+        if (isEnabled) {
+          // Show video, hide placeholder
+          if (vid) vid.style.display = 'block';
+          if (placeholder) placeholder.style.display = 'none';
+        } else {
+          // Show placeholder (black screen), hide video
+          if (vid) vid.style.display = 'none';
+          if (placeholder) placeholder.style.display = 'flex';
+        }
+      }
+    } else if (statusType === 'mic') {
+      participant.hasMic = isEnabled;
+    } else if (statusType === 'screenShare') {
+      participant.isScreenSharing = isEnabled;
+    }
+    
+    this.$forceUpdate();
+  }
+  
+  // Update status indicator
+  const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
+  if (wrapper) {
+    let indicator = wrapper.querySelector('.status-indicator');
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.className = 'status-indicator';
+      indicator.style.cssText = `
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        display: flex;
+        gap: 4px;
+        font-size: 16px;
+        background: rgba(0,0,0,0.7);
+        padding: 4px;
+        border-radius: 4px;
+        z-index: 10;
+      `;
+      wrapper.appendChild(indicator);
+    }
+    
+    indicator.innerHTML = `
+      <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
+      <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
+      ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
+    `;
+  }
 },
 
    // ============ UI CONTROLS ============
@@ -2320,6 +2507,7 @@ body {
 }
 
 </style>
+
 
 
 
