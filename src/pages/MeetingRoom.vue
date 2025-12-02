@@ -333,7 +333,7 @@ export default {
     initSocket() {
       console.log('Initializing socket connection...');
       
-      this.socket = io("http://localhost:5000", {
+      this.socket = io(`${import.meta.env.VITE_API_URL}`, {
         transports: ['websocket'],
         upgrade: true,
         timeout: 20000,
@@ -741,74 +741,88 @@ export default {
 
         // ============ WEBRTC PEER MANAGEMENT ============
     async createPeerConnection(remoteId, isInitiator = false) {
-      console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
-      
-      const pc = new RTCPeerConnection({
-       /* iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ],*/
-	iceServers: [
-  { urls: 'stun:stun.l.google.com:19302' },
-  {
-    urls: 'turn:your-turn-server.com:3478',
-    username: process.env.VITE_TURN_USERNAME,
-    credential: process.env.VITE_TURN_PASSWORD
+  console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
+
+  // ✅ Define ICE servers safely
+  const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' }
+  ];
+
+  // Only add TURN if both username and password exist
+  const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+  const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
+  const turnUrl = import.meta.env.VITE_TURN_URL || 'turn:your-turn-server.com:3478';
+
+  if (turnUsername && turnPassword) {
+    iceServers.push({
+      urls: turnUrl,
+      username: turnUsername,
+      credential: turnPassword
+    });
+  } else {
+    console.warn('⚠️ TURN credentials missing — using STUN only');
   }
-],
-        iceCandidatePoolSize: 10
-      });
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate && this.isSocketConnected) {
-          try {
-            this.socket.emit('signal', { 
-              to: remoteId, 
-              signal: { candidate: event.candidate } 
-            });
-          } catch (error) {
-            console.error('Error sending ICE candidate:', error);
-          }
-        }
-      };
+  // ✅ Create Peer Connection
+  const pc = new RTCPeerConnection({
+    iceServers,
+    iceCandidatePoolSize: 10
+  });
 
-      pc.ontrack = (event) => {
-        console.log(`Received ${event.track.kind} track from ${remoteId}`);
-        const stream = event.streams[0];
-        if (stream) {
-          this.handleRemoteStream(remoteId, stream);
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log(`ICE state for ${remoteId}: ${pc.iceConnectionState}`);
-        
-        if (pc.iceConnectionState === 'failed') {
-          console.log(`ICE failed for ${remoteId} - restarting`);
-          pc.restartIce();
-        }
-        
-        if (pc.iceConnectionState === 'disconnected') {
-          setTimeout(() => {
-            if (pc.iceConnectionState === 'disconnected') {
-              this.cleanupPeer(remoteId);
-            }
-          }, 10000);
-        }
-      };
-
-      // Add existing local tracks
-      if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          console.log(`Adding ${track.kind} track to peer ${remoteId}`);
-          pc.addTrack(track, this.localStream);
+  // ICE Candidate handler
+  pc.onicecandidate = (event) => {
+    if (event.candidate && this.isSocketConnected) {
+      try {
+        this.socket.emit('signal', {
+          to: remoteId,
+          signal: { candidate: event.candidate }
         });
+      } catch (error) {
+        console.error('Error sending ICE candidate:', error);
       }
+    }
+  };
 
-      this.peers[remoteId] = pc;
-      this.peerNegotiating[remoteId] = false;
-      return pc;
-    },
+  // Track handler
+  pc.ontrack = (event) => {
+    console.log(`Received ${event.track.kind} track from ${remoteId}`);
+    const stream = event.streams[0];
+    if (stream) {
+      this.handleRemoteStream(remoteId, stream);
+    }
+  };
+
+  // ICE connection state handler
+  pc.oniceconnectionstatechange = () => {
+    console.log(`ICE state for ${remoteId}: ${pc.iceConnectionState}`);
+
+    if (pc.iceConnectionState === 'failed') {
+      console.log(`ICE failed for ${remoteId} - restarting`);
+      pc.restartIce();
+    }
+
+    if (pc.iceConnectionState === 'disconnected') {
+      setTimeout(() => {
+        if (pc.iceConnectionState === 'disconnected') {
+          this.cleanupPeer(remoteId);
+        }
+      }, 10000);
+    }
+  };
+
+  // Add local media tracks if available
+  if (this.localStream) {
+    this.localStream.getTracks().forEach(track => {
+      console.log(`Adding ${track.kind} track to peer ${remoteId}`);
+      pc.addTrack(track, this.localStream);
+    });
+  }
+
+  this.peers[remoteId] = pc;
+  this.peerNegotiating[remoteId] = false;
+  return pc;
+},
+
 
     async handleOffer(from, offer) {
       try {
@@ -1305,7 +1319,7 @@ export default {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/end-meeting", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -1329,7 +1343,7 @@ export default {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/mute-all", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -1350,7 +1364,7 @@ export default {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/lock-meeting", {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/lock-meeting`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -2290,4 +2304,6 @@ body {
   color:white;
   border-radius:2px;
 }
+
 </style>
+
