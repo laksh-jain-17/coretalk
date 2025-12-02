@@ -1104,7 +1104,7 @@ export default {
                       this.remoteVideos[remoteId] = vid;
                       if(this.$refs.participantsBox)
                       {
-                                 this.$refs.participantBox.appendChild(wrapper);
+                                 this.$refs.participantsBox.appendChild(wrapper);
                       }
            }
            const vid = wrapper.querySelector('video');
@@ -2507,6 +2507,7 @@ body {
 }
 
 </style>
+
 
 
 
