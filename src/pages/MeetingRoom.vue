@@ -318,8 +318,11 @@ export default {
       }
       console.log('Initializing socket connection...');
       
+      // CRITICAL FIX FOR DEPLOYMENT: Use the current origin instead of localhost:5000.
+      const backendUrl = window.location.origin; // e.g., https://my-app.vercel.app
+      
       // CRITICAL FIX: Pass the persistent userId as a query parameter for the backend to track
-      this.socket = io("http://localhost:5000", {
+      this.socket = io(backendUrl, { // <-- FIXED URL
         transports: ['websocket'],
         query: { userId: this.userId }, // <-- FIX
         upgrade: true,
@@ -408,12 +411,6 @@ export default {
         }
       });
 
-      this.socket.on('user-left', (userId) => {
-        console.log('User left:', userId);
-        this.cleanupPeer(userId);
-        this.participants = this.participants.filter(p => p.id !== userId);
-      });
-      
       this.socket.on('existing-users', async (users) => {
         console.log('Existing users:', users);
         
@@ -428,6 +425,12 @@ export default {
             }, 1000 + Math.random() * 1000);
           }
         }
+      });
+
+      this.socket.on('user-left', (userId) => {
+        console.log('User left:', userId);
+        this.cleanupPeer(userId);
+        this.participants = this.participants.filter(p => p.id !== userId);
       });
 
       // ============ SIGNALING EVENTS ============
@@ -1342,7 +1345,8 @@ export default {
         return;
       }
       try {
-        const res = await fetch("http://localhost:5000/api/end-meeting", {
+        // NOTE: If your API is on Vercel, this may need to point to a specific serverless function path
+        const res = await fetch(`${window.location.origin}/api/end-meeting`, { 
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -1364,7 +1368,7 @@ export default {
         return;
       }
       try {
-        const res = await fetch("http://localhost:5000/api/mute-all", {
+        const res = await fetch(`${window.location.origin}/api/mute-all`, { // Check API path
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -1385,7 +1389,7 @@ export default {
         return;
       }
       try {
-        const res = await fetch("http://localhost:5000/api/lock-meeting", {
+        const res = await fetch(`${window.location.origin}/api/lock-meeting`, { // Check API path
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
@@ -1624,11 +1628,8 @@ export default {
     // Initialize an empty stream first
     this.localStream = new MediaStream(); 
 
-    // Initialize media streams (mic and video are off by default in data, but tracks must be ready)
-    // NOTE: This will attempt to get media but keep micon/videoon as false if not explicitly called to turn on.
-    // However, to ensure streams are available to be added to peers, we call the toggles to populate the stream.
-    // If you want media OFF by default, comment out the next two lines and manually click the buttons.
-    // To ensure the component is functional on load, I will call them, which sets micon/videoon to TRUE.
+    // To ensure the component is functional on load, we call them to populate the stream.
+    // If you want media OFF by default, remove these calls and users must manually click the buttons.
     await this.toggleMic(); 
     await this.toggleVideo();
 
