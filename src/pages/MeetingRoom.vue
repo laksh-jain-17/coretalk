@@ -479,23 +479,38 @@ export default {
     updateRemoteVideoDisplay(userId, isVideoOn) {
       const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
       
-      if (!wrapper) return;
+      if (!wrapper) {
+        console.log(`No wrapper found for ${userId}`);
+        return;
+      }
       
       const vid = wrapper.querySelector('video');
-      const placeholder = wrapper.querySelector('.video-placeholder');
+      let placeholder = wrapper.querySelector('.video-placeholder');
+      
+      console.log(`Updating display for ${userId}: video ${isVideoOn ? 'ON' : 'OFF'}`);
       
       if (isVideoOn) {
         // Show video, hide placeholder
-        if (vid) vid.style.display = 'block';
-        if (placeholder) placeholder.style.display = 'none';
+        if (vid) {
+          vid.style.display = 'block';
+          console.log(`Showing video element for ${userId}`);
+        }
+        if (placeholder) {
+          placeholder.style.display = 'none';
+          console.log(`Hiding placeholder for ${userId}`);
+        }
       } else {
         // Hide video, show placeholder
-        if (vid) vid.style.display = 'none';
+        if (vid) {
+          vid.style.display = 'none';
+          console.log(`Hiding video element for ${userId}`);
+        }
+        
         if (!placeholder) {
           // Create placeholder if it doesn't exist
-          const newPlaceholder = document.createElement('div');
-          newPlaceholder.className = 'video-placeholder';
-          newPlaceholder.style.cssText = `
+          placeholder = document.createElement('div');
+          placeholder.className = 'video-placeholder';
+          placeholder.style.cssText = `
             width: 280px;
             height: 160px;
             border-radius: 8px;
@@ -506,13 +521,15 @@ export default {
             color: #fff;
             font-size: 14px;
           `;
-          newPlaceholder.textContent = 'Video Off';
+          placeholder.textContent = 'Video Off';
           
           // Insert before label
           const label = wrapper.querySelector('div:last-child');
-          wrapper.insertBefore(newPlaceholder, label);
+          wrapper.insertBefore(placeholder, label);
+          console.log(`Created placeholder for ${userId}`);
         } else {
           placeholder.style.display = 'flex';
+          console.log(`Showing placeholder for ${userId}`);
         }
       }
     },
@@ -777,10 +794,37 @@ export default {
       };
 
       pc.ontrack = (event) => {
-        console.log(`Received ${event.track.kind} track from ${remoteId}`);
+        console.log(`Received ${event.track.kind} track from ${remoteId}`, {
+          enabled: event.track.enabled,
+          readyState: event.track.readyState,
+          muted: event.track.muted
+        });
+        
         const stream = event.streams[0];
         if (stream) {
           this.handleRemoteStream(remoteId, stream);
+          
+          // Also listen for track state changes directly
+          event.track.onended = () => {
+            console.log(`Track ended: ${event.track.kind} from ${remoteId}`);
+            if (event.track.kind === 'video') {
+              this.updateRemoteVideoDisplay(remoteId, false);
+            }
+          };
+          
+          event.track.onmute = () => {
+            console.log(`Track muted: ${event.track.kind} from ${remoteId}`);
+            if (event.track.kind === 'video') {
+              this.updateRemoteVideoDisplay(remoteId, false);
+            }
+          };
+          
+          event.track.onunmute = () => {
+            console.log(`Track unmuted: ${event.track.kind} from ${remoteId}`);
+            if (event.track.kind === 'video') {
+              this.updateRemoteVideoDisplay(remoteId, true);
+            }
+          };
         }
       };
 
@@ -990,42 +1034,58 @@ export default {
 
       const vid = wrapper.querySelector('video');
       if (vid && stream) {
+        // Always set the stream
         vid.srcObject = stream;
         
-        const playPromise = vid.play();
-        if (playPromise) {
-          playPromise.then(() => {
-            console.log(`Remote video playing for ${remoteId}`);
-          }).catch(err => {
-            console.warn(`Video play failed for ${remoteId}:`, err.name);
-          });
-        }
+        // Check if there are active video tracks
+        const videoTracks = stream.getVideoTracks();
+        const hasActiveVideoTrack = videoTracks.some(track => track.enabled && track.readyState === 'live');
+        
+        console.log(`Remote ${remoteId} has active video: ${hasActiveVideoTrack}`, {
+          tracks: videoTracks.length,
+          enabled: videoTracks.map(t => t.enabled),
+          readyState: videoTracks.map(t => t.readyState)
+        });
+        
+        // Try to play with better error handling
+        vid.play().then(() => {
+          console.log(`✅ Remote video playing for ${remoteId}`);
+          // Update display based on actual video track presence
+          this.updateRemoteVideoDisplay(remoteId, hasActiveVideoTrack);
+        }).catch(err => {
+          console.warn(`❌ Video play failed for ${remoteId}:`, err.name, err.message);
+          // Even if play fails, show placeholder if no video track
+          this.updateRemoteVideoDisplay(remoteId, hasActiveVideoTrack);
+          
+          // Try to play again with user interaction workaround
+          setTimeout(() => {
+            vid.play().catch(() => {
+              console.log(`Retry play also failed for ${remoteId}`);
+            });
+          }, 500);
+        });
       }
-      
-      // Check if there are active video tracks
-      const hasActiveVideoTrack = stream.getVideoTracks().some(track => track.enabled && track.readyState === 'live');
-      
-      // Update display based on video track presence
-      this.updateRemoteVideoDisplay(remoteId, hasActiveVideoTrack);
       
       // Monitor track changes
       stream.getTracks().forEach(track => {
+        console.log(`Monitoring track for ${remoteId}: ${track.kind}, enabled: ${track.enabled}, state: ${track.readyState}`);
+        
         track.onended = () => {
-          console.log(`Track ended for ${remoteId}`);
+          console.log(`Track ended for ${remoteId}: ${track.kind}`);
           if (track.kind === 'video') {
             this.updateRemoteVideoDisplay(remoteId, false);
           }
         };
         
         track.onmute = () => {
-          console.log(`Track muted for ${remoteId}`);
+          console.log(`Track muted for ${remoteId}: ${track.kind}`);
           if (track.kind === 'video') {
             this.updateRemoteVideoDisplay(remoteId, false);
           }
         };
         
         track.onunmute = () => {
-          console.log(`Track unmuted for ${remoteId}`);
+          console.log(`Track unmuted for ${remoteId}: ${track.kind}`);
           if (track.kind === 'video') {
             this.updateRemoteVideoDisplay(remoteId, true);
           }
