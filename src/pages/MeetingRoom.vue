@@ -390,7 +390,7 @@ export default {
       this.socket.on('user-left', (userId) => {
         console.log('User left:', userId);
         this.cleanupPeer(userId);
-        this.participants = this.participants.filter(p => p.id !== userId);
+        this.participants = this.participants.filter(p => p.id !== userId && p.socketId !== userId);
       });
 
       this.socket.on('existing-users', async (users) => {
@@ -446,8 +446,16 @@ export default {
         console.log(`${userName} video: ${isVideoOn ? 'ON' : 'OFF'}`);
         this.updateParticipantStatus(userId, 'video', isVideoOn);
         
+        // Find the participant to get their socketId
+        const participant = this.participants.find(p => p.userId === userId);
+        const socketId = participant?.socketId || participant?.id;
+        
+        console.log(`Looking for wrapper with socketId: ${socketId} (userId: ${userId})`);
+        
         // Show or hide video placeholder based on status
-        this.updateRemoteVideoDisplay(userId, isVideoOn);
+        if (socketId) {
+          this.updateRemoteVideoDisplay(socketId, isVideoOn);
+        }
       });
 
       this.socket.on('mic-status', ({ userId, userName, isMicOn }) => {
@@ -1173,7 +1181,9 @@ export default {
         }
         
         participantsMap.set(p.id, {
-          id: p.id,
+          id: p.id,  // socketId
+          socketId: p.id,  // Store socketId explicitly
+          userId: p.userId || p._id || p.id,  // Store actual userId from database
           name: displayName,
           isHost: p.isHost || false,
           hasMic: p.hasMic || false,
@@ -1190,7 +1200,7 @@ export default {
         return;
       }
       
-      const existingIndex = this.participants.findIndex(p => p.id === user.id);
+      const existingIndex = this.participants.findIndex(p => p.id === user.id || p.socketId === user.id);
       
       let displayName = user.name || user.userName || user.username || 'Anonymous';
       
@@ -1203,12 +1213,20 @@ export default {
       }
       
       const participantData = {
-        id: user.id,
+        id: user.id,  // This is the socketId
+        socketId: user.id,  // Store socketId explicitly
+        userId: user.userId || user._id || user.id,  // Store actual userId from database
         name: displayName,
         isHost: user.isHost || false,
         hasMic: user.hasMic || false,
         hasVideo: user.hasVideo || false
       };
+      
+      console.log('Adding participant with IDs:', {
+        socketId: participantData.socketId,
+        userId: participantData.userId,
+        name: participantData.name
+      });
       
       if (existingIndex >= 0) {
         this.participants[existingIndex] = participantData;
@@ -1218,7 +1236,9 @@ export default {
     },
 
     updateParticipantStatus(userId, statusType, isEnabled) {
-      const participant = this.participants.find(p => p.id === userId);
+      // Try to find by userId first, then by socketId
+      const participant = this.participants.find(p => p.userId === userId || p.id === userId || p.socketId === userId);
+      
       if (participant) {
         if (statusType === 'video') {
           participant.hasVideo = isEnabled;
@@ -1229,33 +1249,38 @@ export default {
         }
         
         this.$forceUpdate();
-      }
-      
-      const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
-      if (wrapper) {
-        let indicator = wrapper.querySelector('.status-indicator');
-        if (!indicator) {
-          indicator = document.createElement('div');
-          indicator.className = 'status-indicator';
-          indicator.style.cssText = `
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            display: flex;
-            gap: 4px;
-            font-size: 16px;
-            background: rgba(0,0,0,0.7);
-            padding: 4px;
-            border-radius: 4px;
-          `;
-          wrapper.appendChild(indicator);
-        }
         
-        indicator.innerHTML = `
-          <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
-          <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
-          ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
-        `;
+        // Update status indicator using socketId
+        const socketId = participant.socketId || participant.id;
+        const wrapper = document.querySelector(`[data-peer-id="${socketId}"]`);
+        
+        if (wrapper) {
+          let indicator = wrapper.querySelector('.status-indicator');
+          if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'status-indicator';
+            indicator.style.cssText = `
+              position: absolute;
+              top: 8px;
+              right: 8px;
+              display: flex;
+              gap: 4px;
+              font-size: 16px;
+              background: rgba(0,0,0,0.7);
+              padding: 4px;
+              border-radius: 4px;
+            `;
+            wrapper.appendChild(indicator);
+          }
+          
+          indicator.innerHTML = `
+            <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
+            <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
+            ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
+          `;
+        }
+      } else {
+        console.warn(`Participant not found for userId: ${userId}`);
       }
     },
 
