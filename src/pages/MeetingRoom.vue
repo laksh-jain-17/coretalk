@@ -10,7 +10,7 @@
     <div id="main-content">
       <div id="host">
         <video ref="localVideo" autoplay muted playsinline></video>
-        <div v-if="!videoon" class="video-off-indicator">{{ userName || 'Host' }}</div>
+        <div v-if="!videoon">{{ userName || 'Host' }}</div>
       </div>
       <div id="participants" ref="participantsBox"></div>
     </div>
@@ -169,7 +169,6 @@
     </transition>
   </div>
 </template>
-
 <script>
 import { jwtDecode } from 'jwt-decode';
 import { io } from 'socket.io-client';
@@ -207,9 +206,7 @@ export default {
       
       socket: null,
       isSocketConnected: false,
-      socketReady: false,
       participants: [],
-      participantVideoStatus: {},
       messages: [],
       newMessage: '',
       unreadMessages: 0,
@@ -224,11 +221,10 @@ export default {
       networkCheckInterval: null,
       recognition: null,
       
+      hasInitializedSocket: false,
       broadcastQueue: [],
-      broadcastRetryTimer: null,
-      statusBroadcastTimer: null,
       isInitializingMedia: false,
-      pendingBroadcasts: new Set()
+      broadcastRetryTimer: null
     };
   },
 
@@ -320,10 +316,9 @@ export default {
       });
 
       this.socket.on('connect', () => {
-        console.log('✅ Socket connected:', this.socket.id);
+        console.log('Socket connected:', this.socket.id);
         
         this.isSocketConnected = true;
-        this.socketReady = false;
         
         const joinData = { 
           roomId: this.roomId, 
@@ -335,23 +330,17 @@ export default {
         console.log('Joining room:', joinData);
         this.socket.emit('join-room', joinData);
         
-        setTimeout(() => {
-          this.socketReady = true;
-          console.log('✅ Socket marked as ready');
-          this.startBroadcastProcessing();
-        }, 1000);
+        this.startBroadcastRetry();
       });
 
       this.socket.on('connect_error', (err) => {
-        console.error('❌ Socket connect error:', err.message);
+        console.error('Socket connect error:', err.message);
         this.isSocketConnected = false;
-        this.socketReady = false;
       });
 
       this.socket.on('disconnect', (reason) => {
-        console.log('❌ Socket disconnected:', reason);
+        console.log('Socket disconnected:', reason);
         this.isSocketConnected = false;
-        this.socketReady = false;
         
         if (reason === 'io server disconnect') {
           setTimeout(() => {
@@ -363,9 +352,8 @@ export default {
       });
       
       this.socket.on('reconnect', (attemptNumber) => {
-        console.log('✅ Socket reconnected after', attemptNumber, 'attempts');
+        console.log('Socket reconnected after', attemptNumber, 'attempts');
         this.isSocketConnected = true;
-        this.socketReady = false;
         
         const joinData = { 
           roomId: this.roomId, 
@@ -375,12 +363,7 @@ export default {
         };
         this.socket.emit('join-room', joinData);
         
-        setTimeout(() => {
-          this.socketReady = true;
-          console.log('✅ Socket ready after reconnect');
-          this.broadcastCurrentStatus();
-          this.startBroadcastProcessing();
-        }, 1000);
+        this.startBroadcastRetry();
       });
 
       this.socket.on('userRole', (role) => {
@@ -400,7 +383,6 @@ export default {
           
           setTimeout(async () => {
             await this.startOffer(user.id);
-            this.broadcastCurrentStatus();
           }, 1500);
         }
       });
@@ -409,7 +391,6 @@ export default {
         console.log('User left:', userId);
         this.cleanupPeer(userId);
         this.participants = this.participants.filter(p => p.id !== userId && p.socketId !== userId);
-        delete this.participantVideoStatus[userId];
       });
 
       this.socket.on('existing-users', async (users) => {
@@ -424,10 +405,6 @@ export default {
             }, 1000 + Math.random() * 1000);
           }
         }
-        
-        setTimeout(() => {
-          this.broadcastCurrentStatus();
-        }, 2000);
       });
 
       this.socket.on('signal', async ({ from, signal }) => {
@@ -464,29 +441,30 @@ export default {
         console.log(`${userName} ${isRaised ? 'raised' : 'lowered'} hand`);
       });
 
+      // CRITICAL FIX: Handle video status changes
       this.socket.on('video-status', ({ userId, userName, isVideoOn }) => {
-        console.log(`📹 Received video-status: ${userName} -> ${isVideoOn ? 'ON' : 'OFF'}`);
-        
-        this.participantVideoStatus[userId] = isVideoOn;
+        console.log(`${userName} video: ${isVideoOn ? 'ON' : 'OFF'}`);
         this.updateParticipantStatus(userId, 'video', isVideoOn);
         
+        // Find the participant to get their socketId
         const participant = this.participants.find(p => p.userId === userId);
         const socketId = participant?.socketId || participant?.id;
         
+        console.log(`Looking for wrapper with socketId: ${socketId} (userId: ${userId})`);
+        
+        // Show or hide video placeholder based on status
         if (socketId) {
-          this.$nextTick(() => {
-            this.updateRemoteVideoDisplay(socketId, isVideoOn);
-          });
+          this.updateRemoteVideoDisplay(socketId, isVideoOn);
         }
       });
 
       this.socket.on('mic-status', ({ userId, userName, isMicOn }) => {
-        console.log(`🎤 ${userName} mic: ${isMicOn ? 'ON' : 'OFF'}`);
+        console.log(`${userName} mic: ${isMicOn ? 'ON' : 'OFF'}`);
         this.updateParticipantStatus(userId, 'mic', isMicOn);
       });
 
       this.socket.on('screen-share-status', ({ userId, userName, isScreenSharing }) => {
-        console.log(`🖥️ ${userName} ${isScreenSharing ? 'started' : 'stopped'} screen sharing`);
+        console.log(`${userName} ${isScreenSharing ? 'started' : 'stopped'} screen sharing`);
         this.updateParticipantStatus(userId, 'screenShare', isScreenSharing);
       });
 
@@ -501,42 +479,43 @@ export default {
           this.toggleMic();
         }
       });
+
+      this.hasInitializedSocket = true;
     },
 
-    updateRemoteVideoDisplay(socketId, isVideoOn) {
-      const wrapper = document.querySelector(`[data-peer-id="${socketId}"]`);
+    // NEW METHOD: Update remote video display based on video status
+    updateRemoteVideoDisplay(userId, isVideoOn) {
+      const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
       
       if (!wrapper) {
-        console.log(`⚠️ No wrapper found for ${socketId}, will retry...`);
-        setTimeout(() => {
-          const retryWrapper = document.querySelector(`[data-peer-id="${socketId}"]`);
-          if (retryWrapper) {
-            this.updateRemoteVideoDisplay(socketId, isVideoOn);
-          }
-        }, 500);
+        console.log(`No wrapper found for ${userId}`);
         return;
       }
       
       const vid = wrapper.querySelector('video');
       let placeholder = wrapper.querySelector('.video-placeholder');
       
-      console.log(`🔄 Updating display for ${socketId}: video ${isVideoOn ? 'ON' : 'OFF'}`);
+      console.log(`Updating display for ${userId}: video ${isVideoOn ? 'ON' : 'OFF'}`);
       
       if (isVideoOn) {
+        // Show video, hide placeholder
         if (vid) {
           vid.style.display = 'block';
-          console.log(`✅ Showing video for ${socketId}`);
+          console.log(`Showing video element for ${userId}`);
         }
         if (placeholder) {
           placeholder.style.display = 'none';
+          console.log(`Hiding placeholder for ${userId}`);
         }
       } else {
+        // Hide video, show placeholder
         if (vid) {
           vid.style.display = 'none';
-          console.log(`✅ Hiding video for ${socketId}`);
+          console.log(`Hiding video element for ${userId}`);
         }
         
         if (!placeholder) {
+          // Create placeholder if it doesn't exist
           placeholder = document.createElement('div');
           placeholder.className = 'video-placeholder';
           placeholder.style.cssText = `
@@ -548,53 +527,39 @@ export default {
             align-items: center;
             justify-content: center;
             color: #fff;
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 14px;
           `;
           placeholder.textContent = 'Video Off';
           
+          // Insert before label
           const label = wrapper.querySelector('div:last-child');
-          if (label && label !== vid) {
-            wrapper.insertBefore(placeholder, label);
-          } else {
-            wrapper.appendChild(placeholder);
-          }
-          console.log(`✅ Created placeholder for ${socketId}`);
+          wrapper.insertBefore(placeholder, label);
+          console.log(`Created placeholder for ${userId}`);
         } else {
           placeholder.style.display = 'flex';
-          console.log(`✅ Showing placeholder for ${socketId}`);
+          console.log(`Showing placeholder for ${userId}`);
         }
       }
     },
 
-    startBroadcastProcessing() {
+    startBroadcastRetry() {
       if (this.broadcastRetryTimer) {
         clearInterval(this.broadcastRetryTimer);
       }
       
       this.broadcastRetryTimer = setInterval(() => {
-        if (this.broadcastQueue.length > 0 && this.socketReady) {
+        if (this.broadcastQueue.length > 0 && this.isSocketConnected) {
           this.processQueuedBroadcasts();
         }
-      }, 1000);
-      
-      if (this.statusBroadcastTimer) {
-        clearInterval(this.statusBroadcastTimer);
-      }
-      
-      this.statusBroadcastTimer = setInterval(() => {
-        if (this.socketReady) {
-          this.broadcastCurrentStatus();
-        }
-      }, 5000);
+      }, 2000);
     },
 
     processQueuedBroadcasts() {
-      if (!this.socketReady || !this.socket?.connected) {
+      if (!this.isSocketConnected || !this.socket?.connected) {
         return;
       }
 
-      console.log(`📤 Processing ${this.broadcastQueue.length} queued broadcasts...`);
+      console.log(`Processing ${this.broadcastQueue.length} queued broadcasts...`);
       
       const toProcess = [...this.broadcastQueue];
       this.broadcastQueue = [];
@@ -602,59 +567,35 @@ export default {
       for (const broadcast of toProcess) {
         try {
           this.socket.emit(broadcast.event, broadcast.data);
-          console.log(`✅ QUEUED BROADCAST: ${broadcast.event}`);
-          this.pendingBroadcasts.delete(`${broadcast.event}-${JSON.stringify(broadcast.data)}`);
+          console.log(`QUEUED BROADCAST SUCCESS: ${broadcast.event}`);
         } catch (error) {
-          console.error(`❌ QUEUED BROADCAST FAILED: ${broadcast.event}`, error);
+          console.error(`QUEUED BROADCAST FAILED: ${broadcast.event}`, error);
           this.broadcastQueue.push(broadcast);
         }
       }
     },
 
     safeBroadcast(event, data) {
-      const broadcastKey = `${event}-${JSON.stringify(data)}`;
-      
-      if (this.pendingBroadcasts.has(broadcastKey)) {
-        console.log(`⏭️ Skipping duplicate broadcast: ${event}`);
-        return false;
-      }
-
-      console.log(`📡 Attempting broadcast: ${event}`, {
+      console.log(`Attempting broadcast: ${event}`, {
         socketExists: !!this.socket,
         socketConnected: this.socket?.connected,
-        socketReady: this.socketReady
+        isSocketConnected: this.isSocketConnected
       });
 
-      if (this.socket && this.socket.connected && this.socketReady) {
+      if (this.socket && this.socket.connected && this.isSocketConnected) {
         try {
           this.socket.emit(event, data);
-          console.log(`✅ BROADCAST SUCCESS: ${event}`);
+          console.log(`BROADCAST SUCCESS: ${event}`);
           return true;
         } catch (error) {
-          console.error(`❌ BROADCAST FAILED: ${event}`, error);
-          this.pendingBroadcasts.add(broadcastKey);
+          console.error(`BROADCAST FAILED: ${event}`, error);
           this.broadcastQueue.push({ event, data });
           return false;
         }
       } else {
-        console.warn(`⏸️ Socket not ready - QUEUING: ${event}`);
-        this.pendingBroadcasts.add(broadcastKey);
+        console.warn(`Socket not ready - QUEUING: ${event}`);
         this.broadcastQueue.push({ event, data });
         return false;
-      }
-    },
-
-    broadcastCurrentStatus() {
-      console.log('📢 Broadcasting current status:', {
-        video: this.videoon,
-        mic: this.micon,
-        screenShare: this.isScreenSharing
-      });
-      
-      this.broadcastVideoStatus(this.videoon);
-      this.broadcastMicStatus(this.micon);
-      if (this.isScreenSharing) {
-        this.broadcastScreenShareStatus(true);
       }
     },
 
@@ -666,7 +607,7 @@ export default {
         isVideoOn: isVideoOn
       };
       
-      console.log('📹 Broadcasting video status:', isVideoOn);
+      console.log('Broadcasting video status:', isVideoOn);
       this.safeBroadcast('video-status', data);
     },
 
@@ -678,20 +619,8 @@ export default {
         isMicOn: isMicOn
       };
       
-      console.log('🎤 Broadcasting mic status:', isMicOn);
+      console.log('Broadcasting mic status:', isMicOn);
       this.safeBroadcast('mic-status', data);
-    },
-
-    broadcastScreenShareStatus(isSharing) {
-      const data = {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isScreenSharing: isSharing
-      };
-      
-      console.log('🖥️ Broadcasting screen share status:', isSharing);
-      this.safeBroadcast('screen-share-status', data);
     },
 
     async toggleMic() {
@@ -700,7 +629,7 @@ export default {
 
       try {
         if (this.micon) {
-          console.log('🔇 Turning microphone OFF');
+          console.log('Turning microphone OFF');
           if (this.localStream) {
             this.localStream.getAudioTracks().forEach(track => {
               track.stop();
@@ -720,7 +649,7 @@ export default {
           this.broadcastMicStatus(false);
           
         } else {
-          console.log('🎤 Turning microphone ON');
+          console.log('Turning microphone ON');
           const audioStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
@@ -749,7 +678,7 @@ export default {
         this.micon = false;
         this.broadcastMicStatus(false);
       } finally {
-        this.isInitializingMedia = false;
+        this.isInitializingMedia = false;			
       }
     },
 
@@ -759,7 +688,8 @@ export default {
 
       try {
         if (this.videoon) {
-          console.log('📴 Turning camera OFF');
+          // Turn OFF - but keep sending black frames
+          console.log('Turning camera OFF');
           if (this.localStream) {
             this.localStream.getVideoTracks().forEach(track => {
               track.stop();
@@ -772,6 +702,7 @@ export default {
             videoElement.srcObject = null;
           }
           
+          // Replace video track with null (stops sending video but keeps connection)
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
             const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
@@ -784,7 +715,8 @@ export default {
           this.broadcastVideoStatus(false);
           
         } else {
-          console.log('📹 Turning camera ON');
+          // Turn ON
+          console.log('Turning camera ON');
           const videoStream = await navigator.mediaDevices.getUserMedia({ 
             video: {
               width: { ideal: 1280 },
@@ -804,6 +736,7 @@ export default {
             await videoElement.play();
           }
           
+          // Add or replace video track
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
             const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
@@ -830,7 +763,7 @@ export default {
     },
 
     async createPeerConnection(remoteId, isInitiator = false) {
-      console.log(`🔗 Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
+      console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
 
       const iceServers = [
         { urls: 'stun:stun.l.google.com:19302' }
@@ -846,6 +779,8 @@ export default {
           username: turnUsername,
           credential: turnPassword
         });
+      } else {
+        console.warn('⚠️ TURN credentials missing — using STUN only');
       }
 
       const pc = new RTCPeerConnection({
@@ -854,7 +789,7 @@ export default {
       });
 
       pc.onicecandidate = (event) => {
-        if (event.candidate && this.socketReady) {
+        if (event.candidate && this.isSocketConnected) {
           try {
             this.socket.emit('signal', {
               to: remoteId,
@@ -867,12 +802,17 @@ export default {
       };
 
       pc.ontrack = (event) => {
-        console.log(`📥 Received ${event.track.kind} track from ${remoteId}`);
+        console.log(`Received ${event.track.kind} track from ${remoteId}`, {
+          enabled: event.track.enabled,
+          readyState: event.track.readyState,
+          muted: event.track.muted
+        });
         
         const stream = event.streams[0];
         if (stream) {
           this.handleRemoteStream(remoteId, stream);
           
+          // Also listen for track state changes directly
           event.track.onended = () => {
             console.log(`Track ended: ${event.track.kind} from ${remoteId}`);
             if (event.track.kind === 'video') {
@@ -927,7 +867,7 @@ export default {
 
     async handleOffer(from, offer) {
       try {
-        console.log(`📨 Handling offer from ${from}`);
+        console.log(`Handling offer from ${from}`);
         
         let pc = this.peers[from];
         if (!pc) {
@@ -935,7 +875,7 @@ export default {
         }
 
         if (pc.signalingState !== 'stable') {
-          console.log(`Peer ${from} not stable, waiting...`);
+          console.log(`Peer ${from} not stable (${pc.signalingState}), waiting...`);
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
@@ -960,12 +900,12 @@ export default {
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         
-        if (this.socketReady) {
+        if (this.isSocketConnected) {
           this.socket.emit('signal', {
             to: from,
             signal: { type: 'answer', sdp: pc.localDescription }
           });
-          console.log(`✅ Answer sent to ${from}`);
+          console.log(`Answer sent to ${from}`);
         }
       } catch (err) {
         console.error('Error handling offer:', err);
@@ -974,7 +914,7 @@ export default {
 
     async handleAnswer(from, answer) {
       try {
-        console.log(`📨 Handling answer from ${from}`);
+        console.log(`Handling answer from ${from}`);
         const pc = this.peers[from];
         
         if (!pc) {
@@ -996,10 +936,10 @@ export default {
             delete this.pendingCandidates[from];
           }
           
-          console.log(`✅ Answer handled from ${from}`);
+          console.log(`Answer handled from ${from}`);
           this.peerNegotiating[from] = false;
         } else {
-          console.log(`Ignoring answer from ${from} - wrong state`);
+          console.log(`Ignoring answer from ${from} - wrong state: ${pc.signalingState}`);
         }
       } catch (err) {
         console.error('Error handling answer:', err);
@@ -1011,11 +951,13 @@ export default {
         const pc = this.peers[from];
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
           await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          console.log(`ICE candidate added from ${from}`);
         } else {
           if (!this.pendingCandidates[from]) {
             this.pendingCandidates[from] = [];
           }
           this.pendingCandidates[from].push(candidate);
+          console.log(`ICE candidate queued for ${from}`);
         }
       } catch (err) {
         console.error('Error adding ICE candidate:', err);
@@ -1023,10 +965,11 @@ export default {
     },
 
     handleRemoteStream(remoteId, stream) {
-      console.log(`🎬 Setting up remote stream for ${remoteId}`);
+      console.log(`Setting up remote stream for ${remoteId}`, stream.getTracks().length, 'tracks');
       
       let wrapper = document.querySelector(`[data-peer-id="${remoteId}"]`);
       
+      // Always create or maintain the video box
       if (!wrapper) {
         wrapper = document.createElement('div');
         wrapper.setAttribute('data-peer-id', remoteId);
@@ -1043,6 +986,7 @@ export default {
           position: relative;
         `;
 
+        // Create video element
         const vid = document.createElement('video');
         vid.autoplay = true;
         vid.playsInline = true;
@@ -1055,6 +999,7 @@ export default {
           background-color: #000;
         `;
 
+        // Create placeholder for when video is off
         const placeholder = document.createElement('div');
         placeholder.className = 'video-placeholder';
         placeholder.style.cssText = `
@@ -1066,11 +1011,11 @@ export default {
           align-items: center;
           justify-content: center;
           color: #fff;
-          font-size: 16px;
-          font-weight: bold;
+          font-size: 14px;
         `;
         placeholder.textContent = 'Video Off';
 
+        // Create label
         const label = document.createElement('div');
         const participant = this.participants.find(p => p.id === remoteId);
         const pName = participant?.name || `User-${remoteId.substring(0, 6)}`;
@@ -1097,34 +1042,58 @@ export default {
 
       const vid = wrapper.querySelector('video');
       if (vid && stream) {
+        // Always set the stream
         vid.srcObject = stream;
         
+        // Check if there are active video tracks
         const videoTracks = stream.getVideoTracks();
-        const hasActiveVideo = videoTracks.some(t => t.enabled && t.readyState === 'live');
+        const hasActiveVideoTrack = videoTracks.some(track => track.enabled && track.readyState === 'live');
         
+        console.log(`Remote ${remoteId} has active video: ${hasActiveVideoTrack}`, {
+          tracks: videoTracks.length,
+          enabled: videoTracks.map(t => t.enabled),
+          readyState: videoTracks.map(t => t.readyState)
+        });
+        
+        // Try to play with better error handling
         vid.play().then(() => {
-          console.log(`✅ Video playing for ${remoteId}`);
-          this.updateRemoteVideoDisplay(remoteId, hasActiveVideo);
+          console.log(`✅ Remote video playing for ${remoteId}`);
+          // Update display based on actual video track presence
+          this.updateRemoteVideoDisplay(remoteId, hasActiveVideoTrack);
         }).catch(err => {
-          console.warn(`⚠️ Video play failed for ${remoteId}:`, err.message);
-          this.updateRemoteVideoDisplay(remoteId, hasActiveVideo);
+          console.warn(`❌ Video play failed for ${remoteId}:`, err.name, err.message);
+          // Even if play fails, show placeholder if no video track
+          this.updateRemoteVideoDisplay(remoteId, hasActiveVideoTrack);
+          
+          // Try to play again with user interaction workaround
+          setTimeout(() => {
+            vid.play().catch(() => {
+              console.log(`Retry play also failed for ${remoteId}`);
+            });
+          }, 500);
         });
       }
       
+      // Monitor track changes
       stream.getTracks().forEach(track => {
+        console.log(`Monitoring track for ${remoteId}: ${track.kind}, enabled: ${track.enabled}, state: ${track.readyState}`);
+        
         track.onended = () => {
+          console.log(`Track ended for ${remoteId}: ${track.kind}`);
           if (track.kind === 'video') {
             this.updateRemoteVideoDisplay(remoteId, false);
           }
         };
         
         track.onmute = () => {
+          console.log(`Track muted for ${remoteId}: ${track.kind}`);
           if (track.kind === 'video') {
             this.updateRemoteVideoDisplay(remoteId, false);
           }
         };
         
         track.onunmute = () => {
+          console.log(`Track unmuted for ${remoteId}: ${track.kind}`);
           if (track.kind === 'video') {
             this.updateRemoteVideoDisplay(remoteId, true);
           }
@@ -1137,7 +1106,7 @@ export default {
         return;
       }
 
-      console.log(`📤 Starting offer to ${remoteId}`);
+      console.log(`Starting offer to ${remoteId}`);
       
       try {
         const pc = await this.createPeerConnection(remoteId, true);
@@ -1149,20 +1118,20 @@ export default {
         
         await pc.setLocalDescription(offer);
 
-        if (this.socketReady) {
+        if (this.isSocketConnected) {
           this.socket.emit('signal', {
             to: remoteId,
             signal: { type: 'offer', sdp: offer }
           });
-          console.log(`✅ Offer sent to ${remoteId}`);
+          console.log(`Offer sent to ${remoteId}`);
         }
       } catch (err) {
-        console.error(`Error creating offer to ${remoteId}:`, err);
+        console.error(`Error creating/sending offer to ${remoteId}:`, err);
       }
     },
 
     cleanupPeer(peerId) {
-      console.log(`🧹 Cleaning up peer: ${peerId}`);
+      console.log(`Cleaning up peer: ${peerId}`);
       
       if (this.peers[peerId]) {
         try {
@@ -1173,15 +1142,22 @@ export default {
         delete this.peers[peerId];
       }
 
-      delete this.peerNegotiating[peerId];
-      delete this.pendingCandidates[peerId];
+      if (this.peerNegotiating[peerId]) {
+        delete this.peerNegotiating[peerId];
+      }
+
+      if (this.pendingCandidates[peerId]) {
+        delete this.pendingCandidates[peerId];
+      }
 
       const wrapper = document.querySelector(`[data-peer-id="${peerId}"]`);
-      if (wrapper?.parentNode) {
+      if (wrapper && wrapper.parentNode) {
         wrapper.parentNode.removeChild(wrapper);
       }
 
-      delete this.remoteVideos[peerId];
+      if (this.remoteVideos[peerId]) {
+        delete this.remoteVideos[peerId];
+      }
     },
 
     updateParticipantsList(list) {
@@ -1196,7 +1172,7 @@ export default {
         
         let displayName = p.name || p.userName || p.username;
         
-        if (displayName?.includes('@')) {
+        if (displayName && displayName.includes('@')) {
           displayName = displayName.split('@')[0];
         }
         
@@ -1205,9 +1181,9 @@ export default {
         }
         
         participantsMap.set(p.id, {
-          id: p.id,
-          socketId: p.id,
-          userId: p.userId || p._id || p.id,
+          id: p.id,  // socketId
+          socketId: p.id,  // Store socketId explicitly
+          userId: p.userId || p._id || p.id,  // Store actual userId from database
           name: displayName,
           isHost: p.isHost || false,
           hasMic: p.hasMic || false,
@@ -1216,6 +1192,7 @@ export default {
       }
       
       this.participants = Array.from(participantsMap.values());
+      console.log('Updated participants:', this.participants);
     },
 
     addParticipant(user) {
@@ -1223,27 +1200,33 @@ export default {
         return;
       }
       
-      const existingIndex = this.participants.findIndex(p => p.id === user.id);
+      const existingIndex = this.participants.findIndex(p => p.id === user.id || p.socketId === user.id);
       
       let displayName = user.name || user.userName || user.username || 'Anonymous';
       
-      if (displayName?.includes('@')) {
+      if (displayName && displayName.includes('@')) {
         displayName = displayName.split('@')[0];
       }
       
-      if (!displayName || displayName === 'undefined') {
+      if (!displayName || displayName === 'undefined' || displayName === 'null') {
         displayName = `User-${user.id.substring(0, 8)}`;
       }
       
       const participantData = {
-        id: user.id,
-        socketId: user.id,
-        userId: user.userId || user._id || user.id,
+        id: user.id,  // This is the socketId
+        socketId: user.id,  // Store socketId explicitly
+        userId: user.userId || user._id || user.id,  // Store actual userId from database
         name: displayName,
         isHost: user.isHost || false,
         hasMic: user.hasMic || false,
         hasVideo: user.hasVideo || false
       };
+      
+      console.log('Adding participant with IDs:', {
+        socketId: participantData.socketId,
+        userId: participantData.userId,
+        name: participantData.name
+      });
       
       if (existingIndex >= 0) {
         this.participants[existingIndex] = participantData;
@@ -1253,9 +1236,8 @@ export default {
     },
 
     updateParticipantStatus(userId, statusType, isEnabled) {
-      const participant = this.participants.find(p => 
-        p.userId === userId || p.id === userId || p.socketId === userId
-      );
+      // Try to find by userId first, then by socketId
+      const participant = this.participants.find(p => p.userId === userId || p.id === userId || p.socketId === userId);
       
       if (participant) {
         if (statusType === 'video') {
@@ -1267,6 +1249,38 @@ export default {
         }
         
         this.$forceUpdate();
+        
+        // Update status indicator using socketId
+        const socketId = participant.socketId || participant.id;
+        const wrapper = document.querySelector(`[data-peer-id="${socketId}"]`);
+        
+        if (wrapper) {
+          let indicator = wrapper.querySelector('.status-indicator');
+          if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.className = 'status-indicator';
+            indicator.style.cssText = `
+              position: absolute;
+              top: 8px;
+              right: 8px;
+              display: flex;
+              gap: 4px;
+              font-size: 16px;
+              background: rgba(0,0,0,0.7);
+              padding: 4px;
+              border-radius: 4px;
+            `;
+            wrapper.appendChild(indicator);
+          }
+          
+          indicator.innerHTML = `
+            <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
+            <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
+            ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
+          `;
+        }
+      } else {
+        console.warn(`Participant not found for userId: ${userId}`);
       }
     },
 
@@ -1286,6 +1300,10 @@ export default {
     toggleDropdown(type) {
       this.activeDropdown = this.activeDropdown === type ? null : type;
       this.activePanel = null;
+    },
+
+    closeDropdown() {
+      this.activeDropdown = null;
     },
 
     resetinactivityTimer() {
@@ -1347,15 +1365,18 @@ export default {
     copystring() {
       const meetingLink = window.location.href;
       navigator.clipboard.writeText(meetingLink)
-        .then(() => alert("Meeting link copied!"))
-        .catch(() => {
+        .then(() => {
+          alert("Meeting link copied to clipboard!");
+        })
+        .catch(err => {
+          console.error("Failed to copy link:", err);
           const textArea = document.createElement('textarea');
           textArea.value = meetingLink;
           document.body.appendChild(textArea);
           textArea.select();
           document.execCommand('copy');
           document.body.removeChild(textArea);
-          alert("Meeting link copied!");
+          alert("Meeting link copied to clipboard!");
         });
     },
 
@@ -1364,53 +1385,163 @@ export default {
       this.$router.push('/Ending');
     },
 
+    async endMeeting() {
+      if (!this.isHost) {
+        alert("Only host can end the meeting");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: this.roomId })
+        });
+        
+        if (res.ok) {
+          this.cleanup();
+          this.$router.push('/Ending');
+        } else {
+          console.error('Failed to end meeting');
+        }
+      } catch(err) {
+        console.error("Error ending meeting:", err);
+      }
+    },
+
+    async muteAll() {
+      if (!this.isHost) {
+        alert("Only host can mute all participants");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: this.roomId })
+        });
+        
+        if (res.ok) {
+          console.log("All participants muted");
+        }
+      } catch(err) {
+        console.error("Error muting all participants:", err);
+      }
+    },
+
+    async lockMeeting() {
+      if (!this.isHost) {
+        alert("Only host can lock the meeting");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/lock-meeting`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ roomId: this.roomId })
+        });
+        
+        if (res.ok) {
+          console.log("Meeting locked");
+          alert("Meeting has been locked");
+        }
+      } catch(err) {
+        console.error("Error locking meeting:", err);
+      }
+    },
+
+    transfer() {
+      if (!this.isHost) {
+        alert("Only host can transfer meeting");
+        return;
+      }
+      alert("Host transfer - Work in progress");
+    },
+
     async sharescreen() {
       try {
         if (!this.isScreenSharing) {
+          console.log('=== STARTING SCREEN SHARE ===');
+          
           const stream = await navigator.mediaDevices.getDisplayMedia({ 
-            video: { cursor: "always" },
+            video: {
+              cursor: "always",
+              displaySurface: "monitor"
+            },
             audio: false 
           });
           
           this.screenStream = stream;
           this.screenTrack = stream.getVideoTracks()[0];
           
+          console.log('Screen track obtained:', this.screenTrack);
+
           const el = this.$refs.localVideo;
           if (el) {
             el.srcObject = stream;
-            await el.play().catch(() => {});
+            await el.play().catch(err => {
+              console.error('Error playing local screen share:', err);
+            });
           }
 
+          let replacementCount = 0;
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+            console.log(`Replacing track for peer ${peerId}`);
             
-            if (videoSender) {
+            const senders = pc.getSenders();
+            const videoSender = senders.find(s => s.track?.kind === 'video');
+            
+            if (videoSender && videoSender.track) {
               await videoSender.replaceTrack(this.screenTrack);
+              console.log(`✅ Replaced video track for peer ${peerId}`);
+              replacementCount++;
             } else {
               pc.addTrack(this.screenTrack, stream);
+              console.log(`✅ Added screen track for peer ${peerId}`);
+              replacementCount++;
+              
               await this.renegotiateConnection(peerId);
             }
           }
+          
+          console.log(`Screen track sent to ${replacementCount} peers`);
 
           this.screenTrack.onended = () => {
+            console.log('Screen share ended by user');
             this.stopScreenShare();
           };
           
           this.isScreenSharing = true;
+          
           this.broadcastScreenShareStatus(true);
+          
+          console.log('=== SCREEN SHARE STARTED ===');
           
         } else {
           await this.stopScreenShare();
         }
       } catch (err) {
         console.error("Error sharing screen:", err);
+        
+        if (err.name === 'NotAllowedError') {
+          alert("Screen sharing permission denied. Please allow screen sharing.");
+        } else if (err.name === 'NotFoundError') {
+          alert("No screen available to share.");
+        } else {
+          alert("Could not start screen sharing: " + err.message);
+        }
+        
         this.isScreenSharing = false;
       }
     },
 
     async stopScreenShare() {
       try {
+        console.log('=== STOPPING SCREEN SHARE ===');
+        
         if (this.screenTrack) {
           this.screenTrack.stop();
           this.screenTrack = null;
@@ -1422,8 +1553,14 @@ export default {
         }
 
         if (this.videoon) {
+          console.log('Restoring camera...');
+          
           const videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 }
+            }
           });
           
           const videoTrack = videoStream.getVideoTracks()[0];
@@ -1435,9 +1572,11 @@ export default {
           }
           
           if (!this.localStream) this.localStream = new MediaStream();
+          
           this.localStream.getVideoTracks().forEach(track => {
             this.localStream.removeTrack(track);
           });
+          
           this.localStream.addTrack(videoTrack);
           
           for (const peerId in this.peers) {
@@ -1446,48 +1585,85 @@ export default {
             
             if (videoSender) {
               await videoSender.replaceTrack(videoTrack);
+              console.log(`✅ Restored camera for peer ${peerId}`);
+            } else {
+              pc.addTrack(videoTrack, this.localStream);
+              await this.renegotiateConnection(peerId);
             }
           }
+          
         } else {
           const el = this.$refs.localVideo;
-          if (el) el.srcObject = null;
+          if (el) {
+            el.srcObject = null;
+          }
           
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
             const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+            
             if (videoSender) {
               await videoSender.replaceTrack(null);
+              console.log(`✅ Removed video for peer ${peerId}`);
             }
           }
         }
         
         this.isScreenSharing = false;
+        
         this.broadcastScreenShareStatus(false);
+        
+        console.log('=== SCREEN SHARE STOPPED ===');
+        
       } catch (err) {
         console.error("Error stopping screen share:", err);
         this.isScreenSharing = false;
       }
     },
 
+    broadcastScreenShareStatus(isSharing) {
+      const data = {
+        roomId: this.roomId,
+        userId: this.userId,
+        userName: this.userName,
+        isScreenSharing: isSharing
+      };
+      
+      console.log('Broadcasting screen share status:', isSharing);
+      this.safeBroadcast('screen-share-status', data);
+    },
+
     async renegotiateConnection(peerId) {
       const pc = this.peers[peerId];
-      if (!pc || this.peerNegotiating[peerId]) return;
+      if (!pc || this.peerNegotiating[peerId]) {
+        console.log(`Cannot renegotiate peer ${peerId}`);
+        return;
+      }
 
       try {
         this.peerNegotiating[peerId] = true;
+        console.log(`Renegotiating connection with ${peerId}...`);
         
         if (pc.signalingState !== 'stable') {
+          console.log(`Peer ${peerId} not in stable state: ${pc.signalingState} - waiting...`);
           await new Promise(resolve => setTimeout(resolve, 500));
         }
         
-        const offer = await pc.createOffer();
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true
+        });
+        
         await pc.setLocalDescription(offer);
         
-        if (this.socketReady) {
+        if (this.isSocketConnected) {
           this.socket.emit('signal', {
             to: peerId,
             signal: { type: 'offer', sdp: offer }
           });
+          console.log(`✅ Renegotiation offer sent to ${peerId}`);
+        } else {
+          console.error('Socket not connected - cannot send renegotiation offer');
         }
       } catch (err) {
         console.error(`Renegotiation error for ${peerId}:`, err);
@@ -1503,15 +1679,63 @@ export default {
         alert("Only host can start recording");
         return;
       }
-      alert("Recording feature - Work in progress");
+
+      this.record = !this.record;
+      
+      if(this.record) {
+        try {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true
+          });
+          
+          this.recordedChunks = [];
+          this.mediaRecorder = new MediaRecorder(screenStream, {mimeType: "video/webm"});
+          
+          this.mediaRecorder.ondataavailable = (e) => {
+            if(e.data && e.data.size > 0) {
+              this.recordedChunks.push(e.data);
+            }
+          };
+          
+          this.mediaRecorder.onstop = () => {
+            const blob = new Blob(this.recordedChunks, {type:"video/webm"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `meeting-${this.roomId}-${Date.now()}.webm`;
+            a.click();
+            URL.revokeObjectURL(url);
+          };
+          
+          this.mediaRecorder.start();
+          this.isRecording = true;
+          console.log("Recording started");
+        } catch(err) {
+          console.error("Recording failed:", err);
+          this.record = false;
+        }
+      } else {
+        if(this.mediaRecorder && this.isRecording) {
+          this.mediaRecorder.stop();
+          this.isRecording = false;
+          console.log("Recording stopped");
+        }
+      }
     },
 
     async silent_background() {
+      if (!this.isHost) {
+        alert("Only host can toggle silent background mode");
+        return;
+      }
       alert("Silent background mode - Work in progress");
     },
 
     async checkNetworkQuality() {
-      if (!this.localStream || Object.keys(this.peers).length === 0) return;
+      if (!this.localStream || Object.keys(this.peers).length === 0) {
+        return;
+      }
 
       let poorConnection = false;
       
@@ -1533,7 +1757,7 @@ export default {
             }
           });
         } catch(err) {
-          console.error("Error getting stats:", err);
+          console.error("Error getting stats for peer", peerId, err);
         }
       }
       
@@ -1542,82 +1766,160 @@ export default {
 
     initTranscription() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) return;
+      if (!SpeechRecognition) {
+        console.warn("Browser does not support speech recognition");
+        return;
+      }
 
       this.recognition = new SpeechRecognition();
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
+      this.recognition.lang = 'en-US';
 
       this.recognition.onresult = (event) => {
         let final = '';
+
         for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript.trim();
           if (event.results[i].isFinal) {
-            final += event.results[i][0].transcript.trim() + ' ';
+            final += transcript + ' ';
           }
         }
+
         if (final) {
           this.transcript.push(final);
+          console.log('Transcript:', final);
         }
       };
 
+      this.recognition.onerror = (e) => console.error('Speech recognition error:', e);
       this.recognition.onend = () => {
         if (this.isPoorNetwork) this.recognition.start();
       };
     },
 
     cleanup() {
-      console.log('🧹 Cleaning up resources...');
+      console.log('Cleaning up resources...');
       
       if (this.broadcastRetryTimer) {
         clearInterval(this.broadcastRetryTimer);
-      }
-      
-      if (this.statusBroadcastTimer) {
-        clearInterval(this.statusBroadcastTimer);
+        this.broadcastRetryTimer = null;
       }
       
       for (const id in this.peers) {
-        try { this.peers[id].close(); } catch (e) {}
+        try { 
+          this.peers[id].close(); 
+        } catch (e) {
+          console.error('Error closing peer connection:', e);
+        }
       }
       this.peers = {};
-      
+      this.remoteVideos = {};
+      this.pendingCandidates = {};
+      this.peerNegotiating = {};
+
       if (this.localStream) {
-        this.localStream.getTracks().forEach(t => {
-          try { t.stop(); } catch (e) {}
+        this.localStream.getTracks().forEach(track => {
+          try {
+            track.stop();
+          } catch (e) {
+            console.error('Error stopping track:', e);
+          }
         });
+        this.localStream = null;
       }
-      
+
       if (this.screenStream) {
-        this.screenStream.getTracks().forEach(t => {
-          try { t.stop(); } catch (e) {}
+        this.screenStream.getTracks().forEach(track => {
+          try {
+            track.stop();
+          } catch (e) {
+            console.error('Error stopping screen track:', e);
+          }
         });
+        this.screenStream = null;
       }
-      
+
+      if (this.mediaRecorder && this.isRecording) {
+        try {
+          this.mediaRecorder.stop();
+        } catch (e) {
+          console.error('Error stopping recorder:', e);
+        }
+      }
+
       if (this.socket) {
         this.socket.disconnect();
+        this.socket = null;
       }
-      
+
       if (this.networkCheckInterval) {
         clearInterval(this.networkCheckInterval);
+        this.networkCheckInterval = null;
       }
       
-      if (this.recognition) {
-        try { this.recognition.stop(); } catch (e) {}
+      if (this.inactivityTimer) {
+        clearTimeout(this.inactivityTimer);
+        this.inactivityTimer = null;
       }
+
+      if (this.recognition) {
+        try {
+          this.recognition.stop();
+        } catch (e) {
+          console.error('Error stopping recognition:', e);
+        }
+      }
+
+      if (this.$refs.participantsBox) {
+        const remoteElements = this.$refs.participantsBox.querySelectorAll('[data-peer-id]');
+        remoteElements.forEach(element => {
+          try {
+            element.remove();
+          } catch (e) {
+            console.error('Error removing element:', e);
+          }
+        });
+      }
+
+      this.participants = [];
+      this.messages = [];
+      this.micon = false;
+      this.videoon = false;
+      this.isScreenSharing = false;
+      this.isRecording = false;
+      this.record = false;
+      this.isSocketConnected = false;
+      this.hasInitializedSocket = false;
+      this.broadcastQueue = [];
     }
   },
 
   beforeUnmount() {
     this.cleanup();
+    
     document.removeEventListener("mousemove", this.resetinactivityTimer);
+    document.removeEventListener("keydown", this.resetinactivityTimer);
+    document.removeEventListener("click", this.resetinactivityTimer);
+    document.removeEventListener("touchstart", this.resetinactivityTimer);
   },
 
   async mounted() {
-    console.log('🚀 MEETING ROOM MOUNTING');
+    console.log('=== MEETING ROOM MOUNTING ===');
     
-    if (!this.initUserFromToken()) return;
+    if (!this.initUserFromToken()) {
+      return;
+    }
 
     this.roomId = this.computedRoomId;
+    
+    console.log('Meeting room initialized:', {
+      roomId: this.roomId,
+      userName: this.userName,
+      userId: this.userId,
+      isHost: this.isHost
+    });
+    
     this.localStream = new MediaStream();
     
     this.initSocket();
@@ -1631,10 +1933,14 @@ export default {
 
     this.resetinactivityTimer();
     document.addEventListener("mousemove", this.resetinactivityTimer);
+    document.addEventListener("keydown", this.resetinactivityTimer);
+    document.addEventListener("click", this.resetinactivityTimer);
+    document.addEventListener("touchstart", this.resetinactivityTimer);
+
+    console.log('=== COMPONENT MOUNTED SUCCESSFULLY ===');
   }
 };
 </script>
-
 <style>
 body {
   background-color: #222021;
@@ -1654,14 +1960,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.3);
   position: fixed;
   top: 0;
   bottom: 0;
   transition: left 0.4s ease, right 0.4s ease;
   z-index: 5;
 }
-.left-tray-left { left: 0; }
-.left-tray-right { right: 0; }
+.left-tray-left { left: 0; right: auto; }
+.left-tray-right { right: 0; left: auto; }
 
 #left-tray button {
   background-color: #444;
@@ -1671,47 +1978,51 @@ body {
   border-radius: 8px;
   cursor: pointer;
 }
+#left-tray button:hover { background-color: #555; }
 
 #main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   padding: 20px;
+  box-sizing: border-box;
   transition: margin 0.4s ease;
 }
 
 #page:not(.tray-on-right):not(.tray-hidden) #main-content {
   margin-left: 200px;
+  margin-right: 0;
 }
 #page.tray-on-right:not(.tray-hidden) #main-content {
   margin-right: 200px;
+  margin-left: 0;
+}
+#page.tray-hidden #main-content {
+  margin-left: 0;
+  margin-right: 0;
 }
 
 #host {
   flex: 3;
-  background-color: #1a1a1a;
+  background-color: blue;
   border-radius: 10px;
   margin-bottom: 20px;
+  padding-bottom: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
 }
-
 #host video {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.video-off-indicator {
-  position: absolute;
-  color: #fff;
-  font-size: 24px;
-  font-weight: bold;
-  z-index: 2;
+  background-color: transparent;
+  z-index: 1;
 }
 
 #participants {
@@ -1719,6 +2030,8 @@ body {
   background-color: #3a3f47;
   border-radius: 10px;
   display: flex;
+  align-items: center;
+  justify-content: flex-start;
   gap: 8px;
   padding: 10px;
   margin-bottom: 80px;
@@ -1728,83 +2041,284 @@ body {
 #navbar {
   position: fixed;
   bottom: 0;
+  left: 0;
   width: 100%;
   background-color: #1f1f1f;
   height: 60px;
+  border-top: 1px solid #444;
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 0 40px;
+  box-sizing: border-box;
   z-index: 10;
 }
-
 #navbar ul {
   display: flex;
-  gap: 20px;
+  list-style: none;
   margin: 0;
   padding: 0;
+  gap: 20px;
 }
-
-#navbar button {
+#navbar li { position: relative; }
+#navbar li button {
   background-color: white;
   color: black;
   border: none;
   border-radius: 10px;
   padding: 10px 16px;
   cursor: pointer;
+  font-size: 14px;
+  min-width: 100px;
+  text-align: center;
+  transition: background 0.3s;
+}
+#navbar li button:hover { background-color: #ddd; }
+
+#rightpane {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+#rightpane li { list-style: none; position: relative; }
+#rightpane li button {
+  background-color: #f0f0f0;
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  min-width: 100px;
+  text-align: center;
+  transition: background 0.3s ease;
 }
 
-.tooltip {
+.dropdown { position: relative; }
+.dropdown-menu {
   position: absolute;
   bottom: 60px;
-  background-color: black;
-  color: white;
-  padding: 6px 8px;
+  background-color: #1f1f1f;
   border-radius: 6px;
-  font-size: 12px;
-  z-index: 99;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  list-style: none;
+  min-width: 120px;
+  padding: 5px 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
 }
+.dropdown-menu li {
+  margin: 0;
+  color: white;
+  padding: 8px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.dropdown-menu li:hover { background-color: #333; }
 
-#chat-box, #list-box {
+.slide-fade-enter-active, .slide-fade-leave-active { transition: all 0.3s ease; }
+.slide-fade-enter-from, .slide-fade-leave-to { opacity: 0; transform: translateY(100%); }
+
+.slide-left-enter-active, .slide-left-leave-active { transition: all 0.4s ease; }
+.slide-left-enter-from { transform: translateX(-100%); opacity: 0; }
+.slide-left-leave-to { transform: translateX(-100%); opacity: 0; }
+.slide-left-enter-to, .slide-left-leave-from { transform: translateX(0); opacity: 1; }
+
+.extras-menu {
+  right: 0;
+  left: auto;
+  bottom: 60px;
+  background-color: #1f1f1f;
+  padding: 5px 0;
+  border-radius: 6px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  list-style: none;
+  min-width: 140px;
+  position: absolute;
+  text-align: left;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+}
+.extras-menu li {
+  margin: 0;
+  color: white;
+  text-decoration: none;
+  display: block;
+  padding: 8px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.extras-menu li:hover { background-color: #333; }
+
+#chat-box,
+#chat-box .chat-body,
+#chat-box .message { color: #202124; }
+
+#chat-box {
   position: fixed;
   bottom: 70px;
   right: 0;
   width: 320px;
   height: calc(100vh - 70px);
   background-color: #f8f9fa;
+  border-left: 1px solid #ccc;
   display: flex;
   flex-direction: column;
   z-index: 100;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+  font-family: 'Segoe UI', sans-serif;
 }
-
-.chat-header, .list-header {
-  padding: 14px;
-  background-color: #e8eaed;
-  display: flex;
-  justify-content: space-between;
-  color: black;
+.chat-header {
+  padding: 14px 16px;
+  font-size: 18px;
   font-weight: 600;
+  background-color: #e8eaed;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  color: black;
+  justify-content: space-between;
+  align-items: center;
 }
-
-.chat-body, .list-body {
-  flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-  color: #202124;
+.chat-body { flex: 1; padding: 16px; overflow-y: auto; }
+.message {
+  background-color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #dadce0;
+  box-shadow: 0 1px 3px rgba(60,64,67,0.08);
+  max-width: 80%;
 }
-
 .chat-input-section {
   display: flex;
   padding: 12px;
+  border-top: 1px solid #ccc;
   background-color: #e8eaed;
 }
-
 .chat-input {
   flex: 1;
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #ccc;
+  outline: none;
+  background-color: white;
+}
+.chat-send {
+  margin-left: 8px;
+  padding: 10px 16px;
+  background-color: #1a73e8;
+  color: black;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.chat-send:hover { background-color: #1558d6; }
+
+#list-box,
+#list-box .list-body,
+#list-box .participant { color: #202124; }
+
+#list-box {
+  position: fixed;
+  bottom: 70px;
+  right: 0;
+  width: 320px;
+  height: calc(100vh - 70px);
+  background-color: #f8f9fa;
+  border-left: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  font-family: 'Segoe UI', sans-serif;
+  transition: transform 0.3s ease;
+}
+.list-header {
+  padding: 14px 16px;
+  font-size: 18px;
+  font-weight: 600;
+  background-color: #e8eaed;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.list-body { flex: 1; padding: 16px; overflow-y: auto; }
+.participant {
+  background-color: white;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(60,64,67,0.1);
 }
 
+.tooltip {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: black;
+  color: white;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 99;
+  pointer-events: none;
+}
+
+#info_box {
+  position: fixed;
+  right: 70px;
+  bottom: 70px;
+  width: 240px;
+  background-color: white;
+  color: black;
+  border-radius: 10px;
+  padding: 15px;
+  font-family: 'Segoe UI', sans-serif;
+  z-index: 101;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+#inside_info { width: 100%; }
+#info_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+#info_header b { font-size: 16px; font-weight: 600; }
+#info_header button {
+  background: none;
+  border: none;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #666;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+#info_header button:hover { background-color: #f0f0f0; }
+#info_box hr { border: none; border-top: 1px solid #ddd; margin: 10px 0; }
+#info_box p { margin: 8px 0; font-size: 14px; }
+#hand_warning {
+  position: fixed;
+  right: 640px;
+  width: 200px;
+  bottom: 70px;
+  background-color: #333;
+  color: white;
+  display: flex;
+  border-radius: 5px;
+  padding-top: 10px;
+  padding-left: 10px;
+  font-family: 'Segoe UI', sans-serif;
+  flex-direction: column;
+  z-index: 101;
+}
 .transcript-box {
   position: absolute;
   bottom: 100px;
@@ -1813,14 +2327,15 @@ body {
   color: white;
   padding: 10px;
   max-width: 300px;
+  max-height: 200px;
+  overflow-y: auto;
   border-radius: 8px;
+  font-size: 14px;
 }
-
-.remote-participant video {
-  display: block;
-}
-
-.video-placeholder {
-  display: none;
+#copylink {
+  background-color: black;
+  color: white;
+  border-radius: 2px;
 }
 </style>
+
