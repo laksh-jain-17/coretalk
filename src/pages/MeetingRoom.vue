@@ -442,7 +442,7 @@ export default {
       });
 
       // CRITICAL FIX: Handle video status changes
-      this.socket.on('video-status', ({ userId, userName, isVideoOn }) => {
+   /*   this.socket.on('video-status', ({ userId, userName, isVideoOn }) => {
         console.log(`${userName} video: ${isVideoOn ? 'ON' : 'OFF'}`);
         this.updateParticipantStatus(userId, 'video', isVideoOn);
         
@@ -456,6 +456,18 @@ export default {
         if (socketId) {
           this.updateRemoteVideoDisplay(socketId, isVideoOn);
         }
+      });*/
+
+      this.socket.on('video-status', ({ userId, userName, isVideoOn }) => {
+        // 1. Update the data state
+        this.updateParticipantStatus(userId, 'video', isVideoOn);
+  
+        // 2. Find the participant by EITHER userId or socketId
+        const participant = this.participants.find(p => p.userId === userId || p.id === userId);
+        const targetId = participant?.id || userId;
+
+        // 3. Update the UI
+        this.updateRemoteVideoDisplay(targetId, isVideoOn);
       });
 
       this.socket.on('mic-status', ({ userId, userName, isMicOn }) => {
@@ -765,8 +777,21 @@ export default {
     async createPeerConnection(remoteId, isInitiator = false) {
       console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
 
-      const iceServers = [
+    /*  const iceServers = [
         { urls: 'stun:stun.l.google.com:19302' }
+      ];*/
+      const iceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        {
+          urls: 'turn:openrelay.metered.ca:443',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        },
+        {
+          urls: 'turn:openrelay.metered.ca:80',
+          username: 'openrelayproject',
+          credential: 'openrelayproject'
+        }
       ];
 
       const turnUsername = import.meta.env.VITE_TURN_USERNAME;
@@ -990,7 +1015,7 @@ export default {
         const vid = document.createElement('video');
         vid.autoplay = true;
         vid.playsInline = true;
-        vid.muted = false;
+        vid.muted = true;
         vid.style.cssText = `
           width: 280px;
           height: 160px;
@@ -2338,4 +2363,5 @@ body {
   border-radius: 2px;
 }
 </style>
+
 
