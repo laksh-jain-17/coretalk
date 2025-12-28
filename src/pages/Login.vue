@@ -191,156 +191,128 @@ export default {
   }
 };
 </script>
+* {
+  box-sizing: border-box; /* Ensures padding doesn't break width */
+  margin: 0;
+  padding: 0;
+}
 
-<style>
 #container {
   display: flex;
-  height: 100vh;
-  font-family: helvetica;
+  min-height: 100vh; /* Use min-height so it can expand on mobile */
+  font-family: helvetica, sans-serif;
+  flex-direction: row; /* Default: Side-by-side for laptops */
 }
+
+/* 2. Left Box Optimization */
 #leftbox {
-  width: 65%;
-  background-color: #1e3a8a; /* Deep blue */
+  flex: 0 0 65%; /* Width 65% on desktop */
+  background-color: #1e3a8a;
   color: white;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 60px;
-  box-sizing: border-box;
+  padding: 5vw; /* Use vw for padding so it scales with screen width */
 }
+
 #leftbox h1 {
-  font-size: 2.5rem;
+  font-size: clamp(1.8rem, 4vw, 2.5rem); /* Scales between 1.8rem and 2.5rem */
   margin-bottom: 20px;
-  letter-spacing: 1px;
 }
-#leftbox p {
-  font-family: helvetica;
-  font-size: 1.2rem;
-  line-height: 1.6;
-  word-spacing: 2px;
-}
+
+/* 3. Right Box (Login Area) */
 #rightbox {
-  width: 35%;
+  flex: 1; /* Takes remaining 35% */
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 60px;
-  box-sizing: border-box;
+  padding: 40px 20px;
   background-color: #f5f5f5;
+  position: relative;
 }
+
+/* 4. Form Styling - No more absolute positioning! */
 #rightbox form {
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
   background-color: white;
-  padding-left:50px;
-  padding-top:80px;
-  padding-bottom:50px;
-  padding-right:70px;
+  padding: 40px;
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  margin-top:30px;
+  display: flex;
+  flex-direction: column;
 }
-#rightbox h1{
-  font-family:helvetica;
-  position:absolute;
-  top:50px;
-  color:black;
+
+#rightbox h1 {
+  position: static; /* Removed Absolute Positioning */
+  margin-bottom: 30px;
+  font-size: 1.8rem;
+  color: black;
+  text-align: center;
 }
-#rightbox p{
-  color:gray;
-  font-size:12px;
-}
-#rightbox a{
-  color:black;
-  font-weight:bold;
-}
-#last{
-  text-align:center;
-}
+
 #rightbox input {
   width: 100%;
   padding: 12px;
-  margin: 10px 0;
+  margin: 8px 0;
   border: 1px solid #ccc;
   border-radius: 6px;
 }
+
 #rightbox button {
   width: 100%;
   padding: 12px;
   background-color: black;
-  margin-top:10px;
-  margin-bottom:10px;
-  position:relative;
-  left:14px;
   color: white;
   border: none;
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-#rightbox button:hover {
-  background-color:white;
-  color:black;
-  border:1px solid black;
-  border-radius:7px;
-}
-.fade-enter-active{
-  transition:opacity 1s ease;
-}
-.fade-leave-active{
-  transition:opacity 0.5s ease;
-}
-.fade-enter-from, .fade-leave-to{
-  opacity:0;
-}
-.fade-enter-to, .fade-leave-from{
-  opacity:1;
+  margin: 15px 0;
+  transition: all 0.3s ease;
 }
 
-/* Divider */
-.divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  margin: 20px 0;
-  color: #666;
-  position: relative;
-  left: 14px;
-}
-.divider::before,
-.divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid #ddd;
-}
-.divider span {
-  padding: 0 15px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-/* Google Sign-In Button Container */
-#google-signin-button {
-  display: flex;
-  justify-content: center;
-  margin: 20px 0;
-  position: relative;
-  left: 14px;
+/* 5. RESPONSIVE MEDIA QUERY (The Magic Fix) */
+@media (max-width: 1024px) {
+  #leftbox { width: 50%; } /* Equal split for smaller laptops/tablets */
 }
 
 @media (max-width: 768px) {
   #container {
-    flex-direction: column;
+    flex-direction: column; /* Stacks vertically on mobile */
   }
-  #leftbox,
+  #leftbox {
+    width: 100%;
+    min-height: 300px; /* Give it some height on mobile */
+    padding: 40px 20px;
+  }
   #rightbox {
     width: 100%;
-    padding: 40px;
+    padding: 20px;
+  }
+  #rightbox form {
+    padding: 25px; /* Less padding inside form on mobile */
   }
 }
-#new_updates p {
-  text-align:center;
+
+/* Divider & Google Button */
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  color: #666;
+}
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #ddd;
+}
+.divider span { padding: 0 10px; font-size: 14px; }
+
+#google-signin-button {
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
-</style>
