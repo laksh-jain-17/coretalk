@@ -24,7 +24,7 @@
         </div>
       </div>
       <div id="rightbox">
-        <h1>Login Page</h1>
+        <!--h1>Login Page</h1-->
         <form id="info" @submit.prevent="loginuser">
           <p>Don't have an account? <router-link to="/Registration">Create a new one.</router-link></p>
           <p>It's FREE & takes less than a minute.</p>
@@ -542,6 +542,7 @@ export default {
   }
 }
 </style>
+
 
 
 
