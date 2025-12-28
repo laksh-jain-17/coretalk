@@ -6,7 +6,7 @@
             <p>Take benefit of the our online meeting / conference platform with numerous features to the full extent.</p>
         </div>
         <div id="rightbox">
-            <h1>Registration page</h1>
+            <!--h1>Registration page</h1-->
             <form id="info" @submit.prevent="loginuser">
                 <!--p>Don't have an account? <a href="#">Create a new one.</a></p-->
                 <!--p>It's FREE & takes less than a minute.</p-->
@@ -215,3 +215,4 @@
 }
 
 </style>
+
