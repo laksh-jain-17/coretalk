@@ -281,6 +281,9 @@ export default {
   color: #1a1a1a;
   margin-bottom: 30px;
   font-weight: 600;
+  position: static;
+  width: 100%;
+  text-align: center;
 }
 
 /* Form Styling */
@@ -539,6 +542,7 @@ export default {
   }
 }
 </style>
+
 
 
 
