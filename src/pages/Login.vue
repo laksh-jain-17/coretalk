@@ -217,7 +217,7 @@ export default {
   justify-content: center;
   align-items: center;
   padding: 60px 40px;
-  text-align: center;
+  text-align: left;
 }
 
 #leftbox h1 {
@@ -539,6 +539,7 @@ export default {
   }
 }
 </style>
+
 
 
 
