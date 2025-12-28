@@ -3,7 +3,6 @@ A High-Performance Communication Interface Built with Vue 3 + Vite
 
 CoreTalk is a modern, lightweight, and lightning-fast web application designed for seamless communication. Leveraging the power of Vue 3’s Composition API and Vite’s optimized build tooling, CoreTalk provides a fluid user experience with a focus on speed and scalability.
 
-Explore the Docs • Report Bug • Request Feature
 
 Key Features
 Lightning Fast: Powered by Vite for instant Hot Module Replacement (HMR).
