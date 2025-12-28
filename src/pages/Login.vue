@@ -24,7 +24,7 @@
         </div>
       </div>
       <div id="rightbox">
-        <h1>Login</h1>
+        <h1>Login Page</h1>
         <form id="info" @submit.prevent="loginuser">
           <p>Don't have an account? <router-link to="/Registration">Create a new one.</router-link></p>
           <p>It's FREE & takes less than a minute.</p>
@@ -301,8 +301,8 @@ export default {
 }
 
 #info p a {
-  color: #1e3a8a;
-  text-decoration: none;
+  color: black;
+  text-decoration: underline;
   font-weight: 600;
 }
 
@@ -539,6 +539,7 @@ export default {
   }
 }
 </style>
+
 
 
 
