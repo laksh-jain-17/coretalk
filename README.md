@@ -1,16 +1,9 @@
-CoreTalk
-A High-Performance Communication Interface Built with Vue 3 + Vite
+CoreTalk is a Vue 3–based frontend prototype that demonstrates how a communication-style web interface can be architected using modern tooling and component-driven design.
 
-CoreTalk is a modern, lightweight, and lightning-fast web application designed for seamless communication. Leveraging the power of Vue 3’s Composition API and Vite’s optimized build tooling, CoreTalk provides a fluid user experience with a focus on speed and scalability.
+A frontend system design and UI engineering project
 
+A demonstration of Vue 3 best practices
 
-Key Features
-Lightning Fast: Powered by Vite for instant Hot Module Replacement (HMR).
+A learning-focused implementation of application structure
 
-Modern Architecture: Built using Vue 3 <script setup> SFCs for cleaner, more maintainable code.
-
-Responsive Design: Optimized for desktop, tablet, and mobile interfaces.
-
-Component-Driven: Modular design patterns for easy feature expansion.
-
-Sleek UI: Minimalist aesthetic focused on clarity and user engagement.
+A showcase of how communication-style interfaces are built, not deployed at scale
