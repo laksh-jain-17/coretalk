@@ -700,6 +700,16 @@ export default {
       try {
         if (this.videoon) {
           console.log('Turning camera OFF');
+          
+          for (const peerId in this.peers) {
+            const pc = this.peers[peerId];
+            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (videoSender) {
+              if (videoSender.track) videoSender.track.stop();
+              await videoSender.replaceTrack(null);
+            }
+          }
+          
           if (this.localStream) {
             this.localStream.getVideoTracks().forEach(track => {
               track.stop();
@@ -709,12 +719,6 @@ export default {
           
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoElement.srcObject = null;
-          
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (videoSender) await videoSender.replaceTrack(null);
-          }
           
           this.videoon = false;
           this.broadcastVideoStatus(false);
@@ -744,7 +748,6 @@ export default {
               await videoSender.replaceTrack(videoTrack);
             } else {
               pc.addTrack(videoTrack, this.localStream);
-              await this.renegotiateConnection(peerId);
             }
           }
           
@@ -759,7 +762,7 @@ export default {
         this.isInitializingMedia = false;
       }
     },
-
+    
     async createPeerConnection(remoteId, isInitiator = false) {
       console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
 
@@ -2349,6 +2352,7 @@ body {
   border-radius: 2px;
 }
 </style>
+
 
 
 
