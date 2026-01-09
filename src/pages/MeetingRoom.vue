@@ -731,9 +731,9 @@ export default {
           console.log('Turning camera ON');
           const videoStream = await navigator.mediaDevices.getUserMedia({ 
             video: {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 30 }
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: 24 }
             }
           });
           
@@ -2363,5 +2363,6 @@ body {
   border-radius: 2px;
 }
 </style>
+
 
 
