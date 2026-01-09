@@ -693,14 +693,12 @@ export default {
         this.isInitializingMedia = false;			
       }
     },
-
     async toggleVideo() {
       if (this.isInitializingMedia) return;
       this.isInitializingMedia = true;
 
       try {
         if (this.videoon) {
-          // Turn OFF - but keep sending black frames
           console.log('Turning camera OFF');
           if (this.localStream) {
             this.localStream.getVideoTracks().forEach(track => {
@@ -710,31 +708,21 @@ export default {
           }
           
           const videoElement = this.$refs.localVideo;
-          if (videoElement) {
-            videoElement.srcObject = null;
-          }
+          if (videoElement) videoElement.srcObject = null;
           
-          // Replace video track with null (stops sending video but keeps connection)
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
             const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (videoSender) {
-              await videoSender.replaceTrack(null);
-            }
+            if (videoSender) await videoSender.replaceTrack(null);
           }
           
           this.videoon = false;
           this.broadcastVideoStatus(false);
           
         } else {
-          // Turn ON
           console.log('Turning camera ON');
           const videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: {
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-              frameRate: { ideal: 24 }
-            }
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } }
           });
           
           const videoTrack = videoStream.getVideoTracks()[0];
@@ -748,7 +736,6 @@ export default {
             await videoElement.play();
           }
           
-          // Add or replace video track
           for (const peerId in this.peers) {
             const pc = this.peers[peerId];
             const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
@@ -766,7 +753,6 @@ export default {
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
-        alert('Could not access camera. Please check permissions.');
         this.videoon = false;
         this.broadcastVideoStatus(false);
       } finally {
@@ -2363,6 +2349,7 @@ body {
   border-radius: 2px;
 }
 </style>
+
 
 
 
