@@ -303,6 +303,12 @@ export default {
 
     initSocket() {
       console.log('Initializing socket connection...');
+
+      if (this.socket) {
+        this.socket.removeAllListeners();
+        this.socket.disconnect();
+        this.socket = null;
+      }
       
       this.socket = io(`${import.meta.env.VITE_API_URL}`, {
         transports: ['websocket'],
@@ -316,40 +322,46 @@ export default {
       });
 
       this.socket.on('connect', () => {
-        console.log('Socket connected:', this.socket.id);
-        
-        this.isSocketConnected = true;
-        
-        const joinData = { 
-          roomId: this.roomId, 
-          userName: this.userName,
-          userId: this.userId,
-          isHost: this.isHost
-        };
-        
-        console.log('Joining room:', joinData);
-        this.socket.emit('join-room', joinData);
-        
+    console.log('✅ Socket connected:', this.socket.id);
+    this.isSocketConnected = true;
+    
+    // CRITICAL: Wait for socket to fully stabilize
+    setTimeout(() => {
+      const joinData = { 
+        roomId: this.roomId, 
+        userName: this.userName,
+        userId: this.userId,
+        isHost: this.isHost
+      };
+      
+      console.log('🚪 Joining room:', joinData);
+      this.socket.emit('join-room', joinData);
+      
+      // Start processing queue after joining
+      setTimeout(() => {
         this.startBroadcastRetry();
-      });
+        this.processQueuedBroadcasts();
+      }, 500);
+    }, 500); // Increased from 300ms to 500ms
+  });
 
       this.socket.on('connect_error', (err) => {
-        console.error('Socket connect error:', err.message);
-        this.isSocketConnected = false;
-      });
+    console.error('❌ Socket connect error:', err.message);
+    this.isSocketConnected = false;
+  });
 
-      this.socket.on('disconnect', (reason) => {
-        console.log('Socket disconnected:', reason);
-        this.isSocketConnected = false;
-        
-        if (reason === 'io server disconnect') {
-          setTimeout(() => {
-            if (!this.socket?.connected) {
-              this.socket.connect();
-            }
-          }, 1000);
+  this.socket.on('disconnect', (reason) => {
+    console.log('🔌 Socket disconnected:', reason);
+    this.isSocketConnected = false;
+    
+    if (reason === 'io server disconnect') {
+      setTimeout(() => {
+        if (!this.socket?.connected) {
+          this.socket.connect();
         }
-      });
+      }, 1000);
+    }
+  });
       
       this.socket.on('reconnect', (attemptNumber) => {
         console.log('Socket reconnected after', attemptNumber, 'attempts');
@@ -558,81 +570,132 @@ export default {
       if (this.broadcastRetryTimer) {
         clearInterval(this.broadcastRetryTimer);
       }
-      
+  
       this.broadcastRetryTimer = setInterval(() => {
-        if (this.broadcastQueue.length > 0 && this.isSocketConnected) {
-          this.processQueuedBroadcasts();
-        }
-      }, 2000);
-    },
-
-    processQueuedBroadcasts() {
-      if (!this.isSocketConnected || !this.socket?.connected) {
-        return;
+      if (this.broadcastQueue.length > 0 && this.isSocketConnected && this.socket?.connected) {
+        this.processQueuedBroadcasts();
       }
+    }, 1000); // Faster retry (was 2000ms)
+  },
 
-      console.log(`Processing ${this.broadcastQueue.length} queued broadcasts...`);
+  processQueuedBroadcasts() {
+  if (!this.isSocketConnected || !this.socket?.connected) {
+    console.log('⏸️ Socket not ready, skipping queue processing');
+    return;
+  }
+
+  if (this.broadcastQueue.length === 0) {
+    return;
+  }
+
+  console.log(`📤 Processing ${this.broadcastQueue.length} queued broadcasts...`);
+  
+  const toProcess = [...this.broadcastQueue];
+  this.broadcastQueue = [];
+  
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const broadcast of toProcess) {
+    try {
+      this.socket.emit(broadcast.event, broadcast.data);
+      console.log(`✅ QUEUED BROADCAST SUCCESS: ${broadcast.event}`);
+      successCount++;
+    } catch (error) {
+      console.error(`❌ QUEUED BROADCAST FAILED: ${broadcast.event}`, error);
       
-      const toProcess = [...this.broadcastQueue];
-      this.broadcastQueue = [];
-
-      for (const broadcast of toProcess) {
-        try {
-          this.socket.emit(broadcast.event, broadcast.data);
-          console.log(`QUEUED BROADCAST SUCCESS: ${broadcast.event}`);
-        } catch (error) {
-          console.error(`QUEUED BROADCAST FAILED: ${broadcast.event}`, error);
-          this.broadcastQueue.push(broadcast);
-        }
-      }
-    },
-
-    safeBroadcast(event, data) {
-      console.log(`Attempting broadcast: ${event}`, {
-        socketExists: !!this.socket,
-        socketConnected: this.socket?.connected,
-        isSocketConnected: this.isSocketConnected
-      });
-
-      if (this.socket && this.socket.connected && this.isSocketConnected) {
-        try {
-          this.socket.emit(event, data);
-          console.log(`BROADCAST SUCCESS: ${event}`);
-          return true;
-        } catch (error) {
-          console.error(`BROADCAST FAILED: ${event}`, error);
-          this.broadcastQueue.push({ event, data });
-          return false;
-        }
+      // Re-queue failed broadcasts
+      if (broadcast.priority === 'high') {
+        this.broadcastQueue.unshift(broadcast);
       } else {
-        console.warn(`Socket not ready - QUEUING: ${event}`);
-        this.broadcastQueue.push({ event, data });
-        return false;
+        this.broadcastQueue.push(broadcast);
       }
-    },
+      failCount++;
+    }
+  }
+  
+  console.log(`📊 Queue processing: ${successCount} success, ${failCount} failed`);
+},
+    
+    safeBroadcast(event, data, priority = 'normal') {
+  console.log(`📡 Broadcast attempt: ${event}`, {
+    socketExists: !!this.socket,
+    socketConnected: this.socket?.connected,
+    isSocketConnected: this.isSocketConnected,
+    priority: priority
+  });
+
+  // Validate data
+  if (!data || !data.roomId || !data.userId) {
+    console.error('❌ Invalid broadcast data:', data);
+    return false;
+  }
+
+  if (this.socket && this.socket.connected && this.isSocketConnected) {
+    try {
+      this.socket.emit(event, data);
+      console.log(`✅ BROADCAST SUCCESS: ${event}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ BROADCAST FAILED: ${event}`, error);
+      
+      // Queue for retry based on priority
+      if (priority === 'high') {
+        this.broadcastQueue.unshift({ event, data, priority });
+      } else {
+        this.broadcastQueue.push({ event, data, priority });
+      }
+      return false;
+    }
+  } else {
+    console.warn(`⏳ Socket not ready - QUEUING: ${event} (priority: ${priority})`);
+    
+    // Queue based on priority
+    if (priority === 'high') {
+      this.broadcastQueue.unshift({ event, data, priority });
+    } else {
+      this.broadcastQueue.push({ event, data, priority });
+    }
+    return false;
+  }
+},
 
     broadcastVideoStatus(isVideoOn) {
-      const data = {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isVideoOn: isVideoOn
+        const data = {
+          roomId: this.roomId,
+          userId: this.userId,
+          userName: this.userName,
+          isVideoOn: isVideoOn,
+          timestamp: Date.now()
       };
-      
-      console.log('Broadcasting video status:', isVideoOn);
-      this.safeBroadcast('video-status', data);
-    },
+    console.log('📹 Broadcasting video status:', isVideoOn);
+    return this.safeBroadcast('video-status', data, 'high'); // High priority
+  },
 
     broadcastMicStatus(isMicOn) {
       const data = {
         roomId: this.roomId,
         userId: this.userId,
         userName: this.userName,
-        isMicOn: isMicOn
+        isMicOn: isMicOn,
+        timestamp: Date.now()
+    };
+  
+    console.log('🎤 Broadcasting mic status:', isMicOn);
+    return this.safeBroadcast('mic-status', data, 'high'); // High priority
+  },
+
+    broadcastScreenShareStatus(isSharing) {
+      const data = {
+        roomId: this.roomId,
+        userId: this.userId,
+        userName: this.userName,
+        isScreenSharing: isSharing,
+        timestamp: Date.now()
       };
-      
-      console.log('Broadcasting mic status:', isMicOn);
-      this.safeBroadcast('mic-status', data);
+  
+      console.log('🖥️ Broadcasting screen share status:', isSharing);
+      return this.safeBroadcast('screen-share-status', data, 'high'); // High priority
     },
 
     async toggleMic() {
@@ -693,191 +756,269 @@ export default {
         this.isInitializingMedia = false;			
       }
     },
+
     async toggleVideo() {
-      if (this.isInitializingMedia) return;
-      this.isInitializingMedia = true;
+  if (this.isInitializingMedia) {
+    console.log('⏸️ Already toggling video, please wait...');
+    return;
+  }
+  
+  this.isInitializingMedia = true;
 
-      try {
-        if (this.videoon) {
-          console.log('Turning camera OFF');
-          
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (videoSender) {
-              if (videoSender.track) videoSender.track.stop();
-              await videoSender.replaceTrack(null);
-            }
-          }
-          
-          if (this.localStream) {
-            this.localStream.getVideoTracks().forEach(track => {
-              track.stop();
-              this.localStream.removeTrack(track);
-            });
-          }
-          
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) videoElement.srcObject = null;
-          
-          this.videoon = false;
-          this.broadcastVideoStatus(false);
-          
-        } else {
-          console.log('Turning camera ON');
-          const videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } }
-          });
-          
-          const videoTrack = videoStream.getVideoTracks()[0];
-          if (!this.localStream) this.localStream = new MediaStream();
-          this.localStream.addTrack(videoTrack);
-          
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) {
-            videoElement.srcObject = this.localStream;
-            videoElement.muted = true;
-            await videoElement.play();
-          }
-          
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            
-            if (videoSender) {
-              await videoSender.replaceTrack(videoTrack);
-            } else {
-              pc.addTrack(videoTrack, this.localStream);
-            }
-          }
-          
-          this.videoon = true;
-          this.broadcastVideoStatus(true);
-        }
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        this.videoon = false;
-        this.broadcastVideoStatus(false);
-      } finally {
-        this.isInitializingMedia = false;
-      }
-    },
-    
-    async createPeerConnection(remoteId, isInitiator = false) {
-      console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
-
-    /*  const iceServers = [
-        { urls: 'stun:stun.l.google.com:19302' }
-      ];*/
-      const iceServers = [
-        { urls: 'stun:stun.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
-      ];
-
-      const turnUsername = import.meta.env.VITE_TURN_USERNAME;
-      const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
-      const turnUrl = import.meta.env.VITE_TURN_URL || 'turn:your-turn-server.com:3478';
-
-      if (turnUsername && turnPassword) {
-        iceServers.push({
-          urls: turnUrl,
-          username: turnUsername,
-          credential: turnPassword
-        });
-      } else {
-        console.warn('⚠️ TURN credentials missing — using STUN only');
-      }
-
-      const pc = new RTCPeerConnection({
-        iceServers,
-        iceCandidatePoolSize: 10
-      });
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate && this.isSocketConnected) {
-          try {
-            this.socket.emit('signal', {
-              to: remoteId,
-              signal: { candidate: event.candidate }
-            });
-          } catch (error) {
-            console.error('Error sending ICE candidate:', error);
-          }
-        }
-      };
-
-      pc.ontrack = (event) => {
-        console.log(`Received ${event.track.kind} track from ${remoteId}`, {
-          enabled: event.track.enabled,
-          readyState: event.track.readyState,
-          muted: event.track.muted
-        });
-        
-        const stream = event.streams[0];
-        if (stream) {
-          this.handleRemoteStream(remoteId, stream);
-          
-          // Also listen for track state changes directly
-          event.track.onended = () => {
-            console.log(`Track ended: ${event.track.kind} from ${remoteId}`);
-            if (event.track.kind === 'video') {
-              this.updateRemoteVideoDisplay(remoteId, false);
-            }
-          };
-          
-          event.track.onmute = () => {
-            console.log(`Track muted: ${event.track.kind} from ${remoteId}`);
-            if (event.track.kind === 'video') {
-              this.updateRemoteVideoDisplay(remoteId, false);
-            }
-          };
-          
-          event.track.onunmute = () => {
-            console.log(`Track unmuted: ${event.track.kind} from ${remoteId}`);
-            if (event.track.kind === 'video') {
-              this.updateRemoteVideoDisplay(remoteId, true);
-            }
-          };
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log(`ICE state for ${remoteId}: ${pc.iceConnectionState}`);
-
-        if (pc.iceConnectionState === 'failed') {
-          console.log(`ICE failed for ${remoteId} - restarting`);
-          pc.restartIce();
-        }
-
-        if (pc.iceConnectionState === 'disconnected') {
-          setTimeout(() => {
-            if (pc.iceConnectionState === 'disconnected') {
-              this.cleanupPeer(remoteId);
-            }
-          }, 10000);
-        }
-      };
-
+  try {
+    if (this.videoon) {
+      console.log('📹 Turning camera OFF');
+      
+      // Stop tracks first
       if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          console.log(`Adding ${track.kind} track to peer ${remoteId}`);
-          pc.addTrack(track, this.localStream);
+        this.localStream.getVideoTracks().forEach(track => {
+          track.stop();
+          this.localStream.removeTrack(track);
         });
       }
+      
+      // Update peers
+      for (const peerId in this.peers) {
+        const pc = this.peers[peerId];
+        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (videoSender) {
+          if (videoSender.track) videoSender.track.stop();
+          await videoSender.replaceTrack(null);
+        }
+      }
+      
+      // Clear local video
+      const videoElement = this.$refs.localVideo;
+      if (videoElement) videoElement.srcObject = null;
+      
+      this.videoon = false;
+      
+      // Wait before broadcasting
+      await new Promise(resolve => setTimeout(resolve, 300));
+      this.broadcastVideoStatus(false);
+      
+    } else {
+      console.log('📹 Turning camera ON');
+      
+      const videoStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 640 }, 
+          height: { ideal: 480 }, 
+          frameRate: { ideal: 24 } 
+        }
+      });
+      
+      const videoTrack = videoStream.getVideoTracks()[0];
+      if (!this.localStream) this.localStream = new MediaStream();
+      this.localStream.addTrack(videoTrack);
+      
+      const videoElement = this.$refs.localVideo;
+      if (videoElement) {
+        videoElement.srcObject = this.localStream;
+        videoElement.muted = true;
+        await videoElement.play();
+      }
+      
+      // Add to peers
+      for (const peerId in this.peers) {
+        const pc = this.peers[peerId];
+        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
+        
+        if (videoSender) {
+          await videoSender.replaceTrack(videoTrack);
+        } else {
+          pc.addTrack(videoTrack, this.localStream);
+        }
+      }
+      
+      this.videoon = true;
+      
+      // Wait before broadcasting
+      await new Promise(resolve => setTimeout(resolve, 300));
+      this.broadcastVideoStatus(true);
+    }
+    
+    console.log('✅ Video toggle complete');
+    
+  } catch (error) {
+    console.error('❌ Error toggling video:', error);
+    this.videoon = false;
+    this.broadcastVideoStatus(false);
+    alert('Could not access camera. Please check permissions.');
+  } finally {
+    this.isInitializingMedia = false;
+  }
+},
 
-      this.peers[remoteId] = pc;
-      this.peerNegotiating[remoteId] = false;
-      return pc;
+    async createPeerConnection(remoteId, isInitiator = false) {
+  console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
+
+  // Multiple TURN servers with fallbacks
+  const iceServers = [
+    // Google STUN (always works)
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    
+    // Free TURN servers (multiple providers for redundancy)
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
     },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    // Alternate free TURN
+    {
+      urls: 'turn:numb.viagenie.ca',
+      username: 'webrtc@live.com',
+      credential: 'muazkh'
+    }
+  ];
+
+  // Add your private TURN if available
+  const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+  const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+
+  if (turnUsername && turnPassword && turnUrl) {
+    iceServers.push({
+      urls: turnUrl,
+      username: turnUsername,
+      credential: turnPassword
+    });
+  }
+
+  const pc = new RTCPeerConnection({
+    iceServers,
+    iceCandidatePoolSize: 10,
+    bundlePolicy: 'max-bundle',          // Optimize connection
+    rtcpMuxPolicy: 'require',            // Reduce ports needed
+    iceTransportPolicy: 'all'            // Try direct first, then relay
+  });
+
+  // Track connection quality
+  let connectionAttempts = 0;
+  const maxAttempts = 3;
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate && this.isSocketConnected) {
+      try {
+        console.log(`Sending ICE candidate for ${remoteId}:`, event.candidate.type);
+        this.socket.emit('signal', {
+          to: remoteId,
+          signal: { candidate: event.candidate }
+        });
+      } catch (error) {
+        console.error('Error sending ICE candidate:', error);
+      }
+    }
+  };
+
+  pc.ontrack = (event) => {
+    console.log(`Received ${event.track.kind} track from ${remoteId}`, {
+      enabled: event.track.enabled,
+      readyState: event.track.readyState,
+      muted: event.track.muted
+    });
+    
+    const stream = event.streams[0];
+    if (stream) {
+      this.handleRemoteStream(remoteId, stream);
+      
+      event.track.onended = () => {
+        console.log(`Track ended: ${event.track.kind} from ${remoteId}`);
+        if (event.track.kind === 'video') {
+          this.updateRemoteVideoDisplay(remoteId, false);
+        }
+      };
+      
+      event.track.onmute = () => {
+        console.log(`Track muted: ${event.track.kind} from ${remoteId}`);
+        if (event.track.kind === 'video') {
+          this.updateRemoteVideoDisplay(remoteId, false);
+        }
+      };
+      
+      event.track.onunmute = () => {
+        console.log(`Track unmuted: ${event.track.kind} from ${remoteId}`);
+        if (event.track.kind === 'video') {
+          this.updateRemoteVideoDisplay(remoteId, true);
+        }
+      };
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    console.log(`ICE state for ${remoteId}: ${pc.iceConnectionState}`);
+
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      console.log(`✅ Connection established with ${remoteId}`);
+      connectionAttempts = 0;
+    }
+
+    if (pc.iceConnectionState === 'failed') {
+      connectionAttempts++;
+      console.warn(`❌ ICE failed for ${remoteId} (attempt ${connectionAttempts}/${maxAttempts})`);
+      
+      if (connectionAttempts < maxAttempts) {
+        console.log(`Restarting ICE for ${remoteId}...`);
+        pc.restartIce();
+      } else {
+        console.error(`Max connection attempts reached for ${remoteId}, cleaning up`);
+        this.cleanupPeer(remoteId);
+      }
+    }
+
+    if (pc.iceConnectionState === 'disconnected') {
+      console.warn(`⚠️ Connection lost with ${remoteId}, waiting 5s before cleanup`);
+      setTimeout(() => {
+        if (pc.iceConnectionState === 'disconnected') {
+          console.log(`Connection still down for ${remoteId}, cleaning up`);
+          this.cleanupPeer(remoteId);
+        }
+      }, 5000);
+    }
+  };
+
+  // Add connection state monitoring
+  pc.onconnectionstatechange = () => {
+    console.log(`Connection state for ${remoteId}: ${pc.connectionState}`);
+    
+    if (pc.connectionState === 'connected') {
+      console.log(`🎉 Peer ${remoteId} fully connected`);
+    }
+    
+    if (pc.connectionState === 'failed') {
+      console.error(`💥 Connection failed for ${remoteId}`);
+      this.cleanupPeer(remoteId);
+    }
+  };
+
+  // Add signaling state monitoring
+  pc.onsignalingstatechange = () => {
+    console.log(`Signaling state for ${remoteId}: ${pc.signalingState}`);
+  };
+
+  if (this.localStream) {
+    this.localStream.getTracks().forEach(track => {
+      console.log(`Adding ${track.kind} track to peer ${remoteId}`);
+      pc.addTrack(track, this.localStream);
+    });
+  }
+
+  this.peers[remoteId] = pc;
+  this.peerNegotiating[remoteId] = false;
+  return pc;
+},
 
     async handleOffer(from, offer) {
       try {
@@ -2352,6 +2493,7 @@ body {
   border-radius: 2px;
 }
 </style>
+
 
 
 
