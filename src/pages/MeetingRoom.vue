@@ -327,72 +327,82 @@ export default {
     },
 
     async initLivekit() {
-      console.log('=== INITIALIZING LIVEKIT ===');
-      
-      const tokenData = await this.getLivekitToken();
-      if (!tokenData) return;
+  console.log('=== INITIALIZING LIVEKIT ===');
+  
+  const tokenData = await this.getLivekitToken();
+  if (!tokenData) {
+    console.error('No tokenData received');
+    return;
+  }
 
-      this.livekitToken = tokenData.token;
-      const wsUrl = tokenData.url;
+  console.log('Token data received:', tokenData);
+  console.log('Token type:', typeof tokenData.token);
+  console.log('Token value:', tokenData.token);
 
-      this.livekitRoom = new Room({
-        adaptiveStream: true,
-        dynacast: true,
-      });
+  const token = String(tokenData.token);  // Force convert to string
+  const wsUrl = String(tokenData.url);
 
-      // Handle connection state
-      this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
-        console.log('LiveKit connection state:', state);
-        if (state === ConnectionState.Connected) {
-          console.log('✅ Connected to LiveKit room');
-        }
-      });
+  console.log('After conversion - Token type:', typeof token);
+  console.log('After conversion - Token length:', token.length);
+  console.log('After conversion - WS URL:', wsUrl);
 
-      // Handle participant joined
-      this.livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-        console.log('LiveKit participant joined:', participant.identity);
-        this.handleParticipantConnected(participant);
-      });
+  this.livekitRoom = new Room({
+    adaptiveStream: true,
+    dynacast: true,
+  });
 
-      // Handle participant left
-      this.livekitRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-        console.log('LiveKit participant left:', participant.identity);
-        this.handleParticipantDisconnected(participant);
-      });
+  // All your event handlers stay the same...
+  this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
+    console.log('LiveKit connection state:', state);
+    if (state === ConnectionState.Connected) {
+      console.log('✅ Connected to LiveKit room');
+    }
+  });
 
-      // Handle track subscribed (remote video/audio)
-      this.livekitRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        console.log('Track subscribed:', track.kind, 'from', participant.identity);
-        this.handleTrackSubscribed(track, participant);
-      });
+  this.livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+    console.log('LiveKit participant joined:', participant.identity);
+    this.handleParticipantConnected(participant);
+  });
 
-      // Handle track unsubscribed
-      this.livekitRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-        console.log('Track unsubscribed:', track.kind, 'from', participant.identity);
-        this.handleTrackUnsubscribed(track, participant);
-      });
+  this.livekitRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
+    console.log('LiveKit participant left:', participant.identity);
+    this.handleParticipantDisconnected(participant);
+  });
 
-      // Handle track muted/unmuted
-      this.livekitRoom.on(RoomEvent.TrackMuted, (publication, participant) => {
-        console.log('Track muted:', publication.kind, 'from', participant.identity);
-        this.updateRemoteTrackDisplay(participant);
-      });
+  this.livekitRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+    console.log('Track subscribed:', track.kind, 'from', participant.identity);
+    this.handleTrackSubscribed(track, participant);
+  });
 
-      this.livekitRoom.on(RoomEvent.TrackUnmuted, (publication, participant) => {
-        console.log('Track unmuted:', publication.kind, 'from', participant.identity);
-        this.updateRemoteTrackDisplay(participant);
-      });
+  this.livekitRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+    console.log('Track unsubscribed:', track.kind, 'from', participant.identity);
+    this.handleTrackUnsubscribed(track, participant);
+  });
 
-      // Connect to room
-      try {
-        await this.livekitRoom.connect(wsUrl, this.livekitToken);
-        console.log('✅ LiveKit room connected successfully');
-      } catch (error) {
-        console.error('Failed to connect to LiveKit:', error);
-        alert('Failed to join meeting room');
-      }
-    },
+  this.livekitRoom.on(RoomEvent.TrackMuted, (publication, participant) => {
+    console.log('Track muted:', publication.kind, 'from', participant.identity);
+    this.updateRemoteTrackDisplay(participant);
+  });
 
+  this.livekitRoom.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+    console.log('Track unmuted:', publication.kind, 'from', participant.identity);
+    this.updateRemoteTrackDisplay(participant);
+  });
+
+  // Connect to room
+  try {
+    console.log('Attempting to connect with token type:', typeof token);
+    await this.livekitRoom.connect(wsUrl, token);
+    console.log('✅ LiveKit room connected successfully');
+    this.livekitToken = token;  // Store after successful connection
+  } catch (error) {
+    console.error('Failed to connect to LiveKit:', error);
+    console.error('Token that failed:', token);
+    console.error('WS URL:', wsUrl);
+    alert('Failed to join meeting room');
+  }
+},
+    
     handleParticipantConnected(participant) {
       const participantData = {
         id: participant.identity,
@@ -1555,3 +1565,4 @@ body {
   border-radius: 2px;
 }
 </style>
+
