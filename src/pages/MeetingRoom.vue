@@ -169,9 +169,11 @@
     </transition>
   </div>
 </template>
+
 <script>
 import { jwtDecode } from 'jwt-decode';
 import { io } from 'socket.io-client';
+import { Room, RoomEvent, Track, ConnectionState } from 'livekit-client';
 
 export default {
   name: 'MeetingRoom',
@@ -194,16 +196,14 @@ export default {
       
       micon: false,
       videoon: false,
-      localStream: null,
       isScreenSharing: false,
-      screenTrack: null,
-      screenStream: null,
       
       mediaRecorder: null,
       recordedChunks: [],
       isRecording: false,
       record: false,
       
+      // Socket.io for chat and signaling
       socket: null,
       isSocketConnected: false,
       participants: [],
@@ -211,17 +211,16 @@ export default {
       newMessage: '',
       unreadMessages: 0,
       
-      peers: {},           
-      remoteVideos: {},    
-      pendingCandidates: {},
-      peerNegotiating: {},
+      // LiveKit
+      livekitRoom: null,
+      livekitToken: null,
+      remoteParticipants: new Map(),
       
       isPoorNetwork: false,
       transcript: [],
       networkCheckInterval: null,
       recognition: null,
       
-      hasInitializedSocket: false,
       broadcastQueue: [],
       isInitializingMedia: false,
       broadcastRetryTimer: null
@@ -301,6 +300,251 @@ export default {
       }
     },
 
+    async getLivekitToken() {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/livekit/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomName: this.roomId,
+            participantName: this.userName,
+            userId: this.userId,
+            isHost: this.isHost
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get LiveKit token');
+        }
+
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error('Error getting LiveKit token:', error);
+        alert('Failed to connect to meeting room');
+        return null;
+      }
+    },
+
+    async initLivekit() {
+      console.log('=== INITIALIZING LIVEKIT ===');
+      
+      const tokenData = await this.getLivekitToken();
+      if (!tokenData) return;
+
+      this.livekitToken = tokenData.token;
+      const wsUrl = tokenData.url;
+
+      this.livekitRoom = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+      });
+
+      // Handle connection state
+      this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
+        console.log('LiveKit connection state:', state);
+        if (state === ConnectionState.Connected) {
+          console.log('✅ Connected to LiveKit room');
+        }
+      });
+
+      // Handle participant joined
+      this.livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+        console.log('LiveKit participant joined:', participant.identity);
+        this.handleParticipantConnected(participant);
+      });
+
+      // Handle participant left
+      this.livekitRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        console.log('LiveKit participant left:', participant.identity);
+        this.handleParticipantDisconnected(participant);
+      });
+
+      // Handle track subscribed (remote video/audio)
+      this.livekitRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        console.log('Track subscribed:', track.kind, 'from', participant.identity);
+        this.handleTrackSubscribed(track, participant);
+      });
+
+      // Handle track unsubscribed
+      this.livekitRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        console.log('Track unsubscribed:', track.kind, 'from', participant.identity);
+        this.handleTrackUnsubscribed(track, participant);
+      });
+
+      // Handle track muted/unmuted
+      this.livekitRoom.on(RoomEvent.TrackMuted, (publication, participant) => {
+        console.log('Track muted:', publication.kind, 'from', participant.identity);
+        this.updateRemoteTrackDisplay(participant);
+      });
+
+      this.livekitRoom.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+        console.log('Track unmuted:', publication.kind, 'from', participant.identity);
+        this.updateRemoteTrackDisplay(participant);
+      });
+
+      // Connect to room
+      try {
+        await this.livekitRoom.connect(wsUrl, this.livekitToken);
+        console.log('✅ LiveKit room connected successfully');
+      } catch (error) {
+        console.error('Failed to connect to LiveKit:', error);
+        alert('Failed to join meeting room');
+      }
+    },
+
+    handleParticipantConnected(participant) {
+      const participantData = {
+        id: participant.identity,
+        userId: participant.identity,
+        name: participant.name || participant.identity,
+        isHost: false,
+        hasMic: false,
+        hasVideo: false
+      };
+
+      const existingIndex = this.participants.findIndex(p => p.id === participant.identity);
+      if (existingIndex >= 0) {
+        this.participants[existingIndex] = participantData;
+      } else {
+        this.participants.push(participantData);
+      }
+
+      this.remoteParticipants.set(participant.identity, participant);
+    },
+
+    handleParticipantDisconnected(participant) {
+      this.participants = this.participants.filter(p => p.id !== participant.identity);
+      this.remoteParticipants.delete(participant.identity);
+
+      // Remove video element
+      const wrapper = document.querySelector(`[data-peer-id="${participant.identity}"]`);
+      if (wrapper && wrapper.parentNode) {
+        wrapper.parentNode.removeChild(wrapper);
+      }
+    },
+
+    handleTrackSubscribed(track, participant) {
+      if (track.kind === Track.Kind.Video) {
+        this.attachVideo(track, participant);
+      } else if (track.kind === Track.Kind.Audio) {
+        this.attachAudio(track, participant);
+      }
+
+      this.updateRemoteTrackDisplay(participant);
+    },
+
+    handleTrackUnsubscribed(track, participant) {
+      this.updateRemoteTrackDisplay(participant);
+    },
+
+    attachVideo(track, participant) {
+      let wrapper = document.querySelector(`[data-peer-id="${participant.identity}"]`);
+      
+      if (!wrapper) {
+        wrapper = document.createElement('div');
+        wrapper.setAttribute('data-peer-id', participant.identity);
+        wrapper.className = 'remote-participant';
+        wrapper.style.cssText = `
+          display: inline-flex;
+          flex-direction: column;
+          align-items: center;
+          margin: 8px;
+          border: 2px solid #333;
+          border-radius: 8px;
+          padding: 8px;
+          background-color: rgba(0,0,0,0.5);
+          position: relative;
+        `;
+
+        const vid = document.createElement('video');
+        vid.autoplay = true;
+        vid.playsInline = true;
+        vid.muted = true;
+        vid.style.cssText = `
+          width: 280px;
+          height: 160px;
+          border-radius: 8px;
+          object-fit: cover;
+          background-color: #000;
+        `;
+
+        const placeholder = document.createElement('div');
+        placeholder.className = 'video-placeholder';
+        placeholder.style.cssText = `
+          width: 280px;
+          height: 160px;
+          border-radius: 8px;
+          background-color: #000;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          font-size: 14px;
+        `;
+        placeholder.textContent = 'Video Off';
+
+        const label = document.createElement('div');
+        label.textContent = participant.name || participant.identity;
+        label.style.cssText = `
+          margin-top: 6px;
+          font-size: 14px;
+          color: #eee;
+          font-weight: bold;
+          text-align: center;
+          word-wrap: break-word;
+          max-width: 280px;
+        `;
+
+        wrapper.appendChild(vid);
+        wrapper.appendChild(placeholder);
+        wrapper.appendChild(label);
+
+        if (this.$refs.participantsBox) {
+          this.$refs.participantsBox.appendChild(wrapper);
+        }
+      }
+
+      const videoElement = wrapper.querySelector('video');
+      if (videoElement) {
+        track.attach(videoElement);
+      }
+    },
+
+    attachAudio(track, participant) {
+      const audioElement = track.attach();
+      audioElement.play().catch(err => {
+        console.error('Error playing audio:', err);
+      });
+    },
+
+    updateRemoteTrackDisplay(participant) {
+      const wrapper = document.querySelector(`[data-peer-id="${participant.identity}"]`);
+      if (!wrapper) return;
+
+      const videoElement = wrapper.querySelector('video');
+      const placeholder = wrapper.querySelector('.video-placeholder');
+
+      const videoPublication = participant.getTrack(Track.Source.Camera);
+      const hasVideo = videoPublication && !videoPublication.isMuted;
+
+      if (hasVideo) {
+        if (videoElement) videoElement.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'none';
+      } else {
+        if (videoElement) videoElement.style.display = 'none';
+        if (placeholder) placeholder.style.display = 'flex';
+      }
+
+      // Update participant status
+      const p = this.participants.find(p => p.id === participant.identity);
+      if (p) {
+        const audioPublication = participant.getTrack(Track.Source.Microphone);
+        p.hasMic = audioPublication && !audioPublication.isMuted;
+        p.hasVideo = hasVideo;
+      }
+    },
+
     initSocket() {
       console.log('Initializing socket connection...');
       
@@ -317,7 +561,6 @@ export default {
 
       this.socket.on('connect', () => {
         console.log('Socket connected:', this.socket.id);
-        
         this.isSocketConnected = true;
         
         const joinData = { 
@@ -327,9 +570,7 @@ export default {
           isHost: this.isHost
         };
         
-        console.log('Joining room:', joinData);
         this.socket.emit('join-room', joinData);
-        
         this.startBroadcastRetry();
       });
 
@@ -341,80 +582,6 @@ export default {
       this.socket.on('disconnect', (reason) => {
         console.log('Socket disconnected:', reason);
         this.isSocketConnected = false;
-        
-        if (reason === 'io server disconnect') {
-          setTimeout(() => {
-            if (!this.socket?.connected) {
-              this.socket.connect();
-            }
-          }, 1000);
-        }
-      });
-      
-      this.socket.on('reconnect', (attemptNumber) => {
-        console.log('Socket reconnected after', attemptNumber, 'attempts');
-        this.isSocketConnected = true;
-        
-        const joinData = { 
-          roomId: this.roomId, 
-          userName: this.userName,
-          userId: this.userId,
-          isHost: this.isHost
-        };
-        this.socket.emit('join-room', joinData);
-        
-        this.startBroadcastRetry();
-      });
-
-      this.socket.on('userRole', (role) => {
-        console.log('Received userRole:', role);
-        this.isHost = role === 'host';
-      });
-
-      this.socket.on('participants-list', (list) => {
-        console.log('Participants list received:', list);
-        this.updateParticipantsList(list);
-      });
-
-      this.socket.on('user-joined', async (user) => {
-        console.log('User joined:', user);
-        if (user.id !== this.socket.id && user.id !== this.userId) {
-          this.addParticipant(user);
-          
-          setTimeout(async () => {
-            await this.startOffer(user.id);
-          }, 1500);
-        }
-      });
-
-      this.socket.on('user-left', (userId) => {
-        console.log('User left:', userId);
-        this.cleanupPeer(userId);
-        this.participants = this.participants.filter(p => p.id !== userId && p.socketId !== userId);
-      });
-
-      this.socket.on('existing-users', async (users) => {
-        console.log('Existing users:', users);
-        
-        for (const user of users || []) {
-          if (user?.id && user.id !== this.socket.id && user.id !== this.userId) {
-            this.addParticipant(user);
-            
-            setTimeout(async () => {
-              await this.startOffer(user.id);
-            }, 1000 + Math.random() * 1000);
-          }
-        }
-      });
-
-      this.socket.on('signal', async ({ from, signal }) => {
-        if (signal.type === 'offer') {
-          await this.handleOffer(from, signal.sdp);
-        } else if (signal.type === 'answer') {
-          await this.handleAnswer(from, signal.sdp);
-        } else if (signal.candidate) {
-          await this.handleIceCandidate(from, signal.candidate);
-        }
       });
 
       this.socket.on('chat-message', ({ sender, text, timestamp }) => {
@@ -441,117 +608,15 @@ export default {
         console.log(`${userName} ${isRaised ? 'raised' : 'lowered'} hand`);
       });
 
-      // CRITICAL FIX: Handle video status changes
-   /*   this.socket.on('video-status', ({ userId, userName, isVideoOn }) => {
-        console.log(`${userName} video: ${isVideoOn ? 'ON' : 'OFF'}`);
-        this.updateParticipantStatus(userId, 'video', isVideoOn);
-        
-        // Find the participant to get their socketId
-        const participant = this.participants.find(p => p.userId === userId);
-        const socketId = participant?.socketId || participant?.id;
-        
-        console.log(`Looking for wrapper with socketId: ${socketId} (userId: ${userId})`);
-        
-        // Show or hide video placeholder based on status
-        if (socketId) {
-          this.updateRemoteVideoDisplay(socketId, isVideoOn);
-        }
-      });*/
-
-      this.socket.on('video-status', ({ userId, userName, isVideoOn }) => {
-        // 1. Update the data state
-        this.updateParticipantStatus(userId, 'video', isVideoOn);
-  
-        // 2. Find the participant by EITHER userId or socketId
-        const participant = this.participants.find(p => p.userId === userId || p.id === userId);
-        const targetId = participant?.id || userId;
-
-        // 3. Update the UI
-        this.updateRemoteVideoDisplay(targetId, isVideoOn);
-      });
-
-      this.socket.on('mic-status', ({ userId, userName, isMicOn }) => {
-        console.log(`${userName} mic: ${isMicOn ? 'ON' : 'OFF'}`);
-        this.updateParticipantStatus(userId, 'mic', isMicOn);
-      });
-
-      this.socket.on('screen-share-status', ({ userId, userName, isScreenSharing }) => {
-        console.log(`${userName} ${isScreenSharing ? 'started' : 'stopped'} screen sharing`);
-        this.updateParticipantStatus(userId, 'screenShare', isScreenSharing);
-      });
-
       this.socket.on('meeting-locked', () => {
-        console.log('Meeting locked by host');
         alert('Meeting has been locked by the host');
       });
 
       this.socket.on('all-muted', () => {
-        console.log('All participants muted by host');
         if (!this.isHost && this.micon) {
           this.toggleMic();
         }
       });
-
-      this.hasInitializedSocket = true;
-    },
-
-    // NEW METHOD: Update remote video display based on video status
-    updateRemoteVideoDisplay(userId, isVideoOn) {
-      const wrapper = document.querySelector(`[data-peer-id="${userId}"]`);
-      
-      if (!wrapper) {
-        console.log(`No wrapper found for ${userId}`);
-        return;
-      }
-      
-      const vid = wrapper.querySelector('video');
-      let placeholder = wrapper.querySelector('.video-placeholder');
-      
-      console.log(`Updating display for ${userId}: video ${isVideoOn ? 'ON' : 'OFF'}`);
-      
-      if (isVideoOn) {
-        // Show video, hide placeholder
-        if (vid) {
-          vid.style.display = 'block';
-          console.log(`Showing video element for ${userId}`);
-        }
-        if (placeholder) {
-          placeholder.style.display = 'none';
-          console.log(`Hiding placeholder for ${userId}`);
-        }
-      } else {
-        // Hide video, show placeholder
-        if (vid) {
-          vid.style.display = 'none';
-          console.log(`Hiding video element for ${userId}`);
-        }
-        
-        if (!placeholder) {
-          // Create placeholder if it doesn't exist
-          placeholder = document.createElement('div');
-          placeholder.className = 'video-placeholder';
-          placeholder.style.cssText = `
-            width: 280px;
-            height: 160px;
-            border-radius: 8px;
-            background-color: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 14px;
-          `;
-          placeholder.textContent = 'Video Off';
-          
-          // Insert before label
-          const label = wrapper.querySelector('div:last-child');
-          wrapper.insertBefore(placeholder, label);
-          console.log(`Created placeholder for ${userId}`);
-        } else {
-          placeholder.style.display = 'flex';
-          console.log(`Showing placeholder for ${userId}`);
-        }
-      }
     },
 
     startBroadcastRetry() {
@@ -567,72 +632,33 @@ export default {
     },
 
     processQueuedBroadcasts() {
-      if (!this.isSocketConnected || !this.socket?.connected) {
-        return;
-      }
+      if (!this.isSocketConnected || !this.socket?.connected) return;
 
-      console.log(`Processing ${this.broadcastQueue.length} queued broadcasts...`);
-      
       const toProcess = [...this.broadcastQueue];
       this.broadcastQueue = [];
 
       for (const broadcast of toProcess) {
         try {
           this.socket.emit(broadcast.event, broadcast.data);
-          console.log(`QUEUED BROADCAST SUCCESS: ${broadcast.event}`);
         } catch (error) {
-          console.error(`QUEUED BROADCAST FAILED: ${broadcast.event}`, error);
           this.broadcastQueue.push(broadcast);
         }
       }
     },
 
     safeBroadcast(event, data) {
-      console.log(`Attempting broadcast: ${event}`, {
-        socketExists: !!this.socket,
-        socketConnected: this.socket?.connected,
-        isSocketConnected: this.isSocketConnected
-      });
-
       if (this.socket && this.socket.connected && this.isSocketConnected) {
         try {
           this.socket.emit(event, data);
-          console.log(`BROADCAST SUCCESS: ${event}`);
           return true;
         } catch (error) {
-          console.error(`BROADCAST FAILED: ${event}`, error);
           this.broadcastQueue.push({ event, data });
           return false;
         }
       } else {
-        console.warn(`Socket not ready - QUEUING: ${event}`);
         this.broadcastQueue.push({ event, data });
         return false;
       }
-    },
-
-    broadcastVideoStatus(isVideoOn) {
-      const data = {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isVideoOn: isVideoOn
-      };
-      
-      console.log('Broadcasting video status:', isVideoOn);
-      this.safeBroadcast('video-status', data);
-    },
-
-    broadcastMicStatus(isMicOn) {
-      const data = {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isMicOn: isMicOn
-      };
-      
-      console.log('Broadcasting mic status:', isMicOn);
-      this.safeBroadcast('mic-status', data);
     },
 
     async toggleMic() {
@@ -641,660 +667,108 @@ export default {
 
       try {
         if (this.micon) {
-          console.log('Turning microphone OFF');
-          if (this.localStream) {
-            this.localStream.getAudioTracks().forEach(track => {
-              track.stop();
-              this.localStream.removeTrack(track);
-            });
-          }
-          
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const audioSender = pc.getSenders().find(s => s.track?.kind === 'audio');
-            if (audioSender) {
-              pc.removeTrack(audioSender);
-            }
-          }
-          
+          // Mute microphone
+          await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
           this.micon = false;
-          this.broadcastMicStatus(false);
-          
         } else {
-          console.log('Turning microphone ON');
-          const audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true
-            }
-          });
-
-          const audioTrack = audioStream.getAudioTracks()[0];
-          if (!this.localStream) this.localStream = new MediaStream();
-          this.localStream.addTrack(audioTrack);
-
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            pc.addTrack(audioTrack, this.localStream);
-            
-            await this.renegotiateConnection(peerId);
-          }
-
+          // Unmute microphone
+          await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
           this.micon = true;
-          this.broadcastMicStatus(true);
         }
       } catch (error) {
-        console.error('Error accessing microphone:', error);
+        console.error('Error toggling microphone:', error);
         alert('Could not access microphone. Please check permissions.');
-        this.micon = false;
-        this.broadcastMicStatus(false);
       } finally {
-        this.isInitializingMedia = false;			
+        this.isInitializingMedia = false;
       }
     },
+
     async toggleVideo() {
       if (this.isInitializingMedia) return;
       this.isInitializingMedia = true;
 
       try {
         if (this.videoon) {
-          console.log('Turning camera OFF');
-          
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            if (videoSender) {
-              if (videoSender.track) videoSender.track.stop();
-              await videoSender.replaceTrack(null);
-            }
-          }
-          
-          if (this.localStream) {
-            this.localStream.getVideoTracks().forEach(track => {
-              track.stop();
-              this.localStream.removeTrack(track);
-            });
-          }
+          // Turn off camera
+          await this.livekitRoom.localParticipant.setCameraEnabled(false);
+          this.videoon = false;
           
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoElement.srcObject = null;
-          
-          this.videoon = false;
-          this.broadcastVideoStatus(false);
-          
         } else {
-          console.log('Turning camera ON');
-          const videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } }
-          });
+          // Turn on camera
+          await this.livekitRoom.localParticipant.setCameraEnabled(true);
+          this.videoon = true;
           
-          const videoTrack = videoStream.getVideoTracks()[0];
-          if (!this.localStream) this.localStream = new MediaStream();
-          this.localStream.addTrack(videoTrack);
-          
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) {
-            videoElement.srcObject = this.localStream;
-            videoElement.muted = true;
-            await videoElement.play();
-          }
-          
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            
-            if (videoSender) {
-              await videoSender.replaceTrack(videoTrack);
-            } else {
-              pc.addTrack(videoTrack, this.localStream);
+          // Attach local video track to video element
+          const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
+          if (videoTrack) {
+            const videoElement = this.$refs.localVideo;
+            if (videoElement) {
+              videoTrack.track.attach(videoElement);
             }
           }
-          
-          this.videoon = true;
-          this.broadcastVideoStatus(true);
         }
       } catch (error) {
-        console.error('Error accessing camera:', error);
+        console.error('Error toggling camera:', error);
         this.videoon = false;
-        this.broadcastVideoStatus(false);
       } finally {
         this.isInitializingMedia = false;
       }
     },
-    
-    async createPeerConnection(remoteId, isInitiator = false) {
-      console.log(`Creating peer connection for ${remoteId} (initiator: ${isInitiator})`);
 
-    /*  const iceServers = [
-        { urls: 'stun:stun.l.google.com:19302' }
-      ];*/
-      const iceServers = [
-        { urls: 'stun:stun.l.google.com:19302' },
-        {
-          urls: 'turn:openrelay.metered.ca:443',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        },
-        {
-          urls: 'turn:openrelay.metered.ca:80',
-          username: 'openrelayproject',
-          credential: 'openrelayproject'
-        }
-      ];
-
-      const turnUsername = import.meta.env.VITE_TURN_USERNAME;
-      const turnPassword = import.meta.env.VITE_TURN_PASSWORD;
-      const turnUrl = import.meta.env.VITE_TURN_URL || 'turn:your-turn-server.com:3478';
-
-      if (turnUsername && turnPassword) {
-        iceServers.push({
-          urls: turnUrl,
-          username: turnUsername,
-          credential: turnPassword
-        });
-      } else {
-        console.warn('⚠️ TURN credentials missing — using STUN only');
-      }
-
-      const pc = new RTCPeerConnection({
-        iceServers,
-        iceCandidatePoolSize: 10
-      });
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate && this.isSocketConnected) {
-          try {
-            this.socket.emit('signal', {
-              to: remoteId,
-              signal: { candidate: event.candidate }
-            });
-          } catch (error) {
-            console.error('Error sending ICE candidate:', error);
-          }
-        }
-      };
-
-      pc.ontrack = (event) => {
-        console.log(`Received ${event.track.kind} track from ${remoteId}`, {
-          enabled: event.track.enabled,
-          readyState: event.track.readyState,
-          muted: event.track.muted
-        });
-        
-        const stream = event.streams[0];
-        if (stream) {
-          this.handleRemoteStream(remoteId, stream);
-          
-          // Also listen for track state changes directly
-          event.track.onended = () => {
-            console.log(`Track ended: ${event.track.kind} from ${remoteId}`);
-            if (event.track.kind === 'video') {
-              this.updateRemoteVideoDisplay(remoteId, false);
-            }
-          };
-          
-          event.track.onmute = () => {
-            console.log(`Track muted: ${event.track.kind} from ${remoteId}`);
-            if (event.track.kind === 'video') {
-              this.updateRemoteVideoDisplay(remoteId, false);
-            }
-          };
-          
-          event.track.onunmute = () => {
-            console.log(`Track unmuted: ${event.track.kind} from ${remoteId}`);
-            if (event.track.kind === 'video') {
-              this.updateRemoteVideoDisplay(remoteId, true);
-            }
-          };
-        }
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        console.log(`ICE state for ${remoteId}: ${pc.iceConnectionState}`);
-
-        if (pc.iceConnectionState === 'failed') {
-          console.log(`ICE failed for ${remoteId} - restarting`);
-          pc.restartIce();
-        }
-
-        if (pc.iceConnectionState === 'disconnected') {
-          setTimeout(() => {
-            if (pc.iceConnectionState === 'disconnected') {
-              this.cleanupPeer(remoteId);
-            }
-          }, 10000);
-        }
-      };
-
-      if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          console.log(`Adding ${track.kind} track to peer ${remoteId}`);
-          pc.addTrack(track, this.localStream);
-        });
-      }
-
-      this.peers[remoteId] = pc;
-      this.peerNegotiating[remoteId] = false;
-      return pc;
-    },
-
-    async handleOffer(from, offer) {
+    async sharescreen() {
       try {
-        console.log(`Handling offer from ${from}`);
-        
-        let pc = this.peers[from];
-        if (!pc) {
-          pc = await this.createPeerConnection(from, false);
-        }
-
-        if (pc.signalingState !== 'stable') {
-          console.log(`Peer ${from} not stable (${pc.signalingState}), waiting...`);
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        if (pc.signalingState === 'have-local-offer') {
-          console.log(`Collision with ${from} - rolling back`);
-          await pc.setLocalDescription({ type: 'rollback' });
-        }
-
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        
-        if (this.pendingCandidates[from]) {
-          for (const candidate of this.pendingCandidates[from]) {
-            try {
-              await pc.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch (err) {
-              console.error('Error adding queued candidate:', err);
+        if (!this.isScreenSharing) {
+          console.log('Starting screen share...');
+          
+          await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
+          this.isScreenSharing = true;
+          
+          // Display screen share locally
+          const screenTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.ScreenShare);
+          if (screenTrack) {
+            const videoElement = this.$refs.localVideo;
+            if (videoElement) {
+              screenTrack.track.attach(videoElement);
             }
           }
-          delete this.pendingCandidates[from];
-        }
-        
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        
-        if (this.isSocketConnected) {
-          this.socket.emit('signal', {
-            to: from,
-            signal: { type: 'answer', sdp: pc.localDescription }
-          });
-          console.log(`Answer sent to ${from}`);
-        }
-      } catch (err) {
-        console.error('Error handling offer:', err);
-      }
-    },
-
-    async handleAnswer(from, answer) {
-      try {
-        console.log(`Handling answer from ${from}`);
-        const pc = this.peers[from];
-        
-        if (!pc) {
-          console.error(`No peer connection for ${from}`);
-          return;
-        }
-
-        if (pc.signalingState === 'have-local-offer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          
-          if (this.pendingCandidates[from]) {
-            for (const candidate of this.pendingCandidates[from]) {
-              try {
-                await pc.addIceCandidate(new RTCIceCandidate(candidate));
-              } catch (err) {
-                console.error('Error adding queued candidate:', err);
-              }
-            }
-            delete this.pendingCandidates[from];
-          }
-          
-          console.log(`Answer handled from ${from}`);
-          this.peerNegotiating[from] = false;
         } else {
-          console.log(`Ignoring answer from ${from} - wrong state: ${pc.signalingState}`);
+          await this.stopScreenShare();
         }
-      } catch (err) {
-        console.error('Error handling answer:', err);
-      }
-    },
-
-    async handleIceCandidate(from, candidate) {
-      try {
-        const pc = this.peers[from];
-        if (pc && pc.remoteDescription && pc.remoteDescription.type) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          console.log(`ICE candidate added from ${from}`);
+      } catch (error) {
+        console.error('Error sharing screen:', error);
+        
+        if (error.name === 'NotAllowedError') {
+          alert('Screen sharing permission denied.');
         } else {
-          if (!this.pendingCandidates[from]) {
-            this.pendingCandidates[from] = [];
-          }
-          this.pendingCandidates[from].push(candidate);
-          console.log(`ICE candidate queued for ${from}`);
+          alert('Could not start screen sharing: ' + error.message);
         }
-      } catch (err) {
-        console.error('Error adding ICE candidate:', err);
+        
+        this.isScreenSharing = false;
       }
     },
 
-    handleRemoteStream(remoteId, stream) {
-      console.log(`Setting up remote stream for ${remoteId}`, stream.getTracks().length, 'tracks');
-      
-      let wrapper = document.querySelector(`[data-peer-id="${remoteId}"]`);
-      
-      // Always create or maintain the video box
-      if (!wrapper) {
-        wrapper = document.createElement('div');
-        wrapper.setAttribute('data-peer-id', remoteId);
-        wrapper.className = 'remote-participant';
-        wrapper.style.cssText = `
-          display: inline-flex;
-          flex-direction: column;
-          align-items: center;
-          margin: 8px;
-          border: 2px solid #333;
-          border-radius: 8px;
-          padding: 8px;
-          background-color: rgba(0,0,0,0.5);
-          position: relative;
-        `;
-
-        // Create video element
-        const vid = document.createElement('video');
-        vid.autoplay = true;
-        vid.playsInline = true;
-        vid.muted = true;
-        vid.style.cssText = `
-          width: 280px;
-          height: 160px;
-          border-radius: 8px;
-          object-fit: cover;
-          background-color: #000;
-        `;
-
-        // Create placeholder for when video is off
-        const placeholder = document.createElement('div');
-        placeholder.className = 'video-placeholder';
-        placeholder.style.cssText = `
-          width: 280px;
-          height: 160px;
-          border-radius: 8px;
-          background-color: #000;
-          display: none;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          font-size: 14px;
-        `;
-        placeholder.textContent = 'Video Off';
-
-        // Create label
-        const label = document.createElement('div');
-        const participant = this.participants.find(p => p.id === remoteId);
-        const pName = participant?.name || `User-${remoteId.substring(0, 6)}`;
-        label.textContent = pName;
-        label.style.cssText = `
-          margin-top: 6px;
-          font-size: 14px;
-          color: #eee;
-          font-weight: bold;
-          text-align: center;
-          word-wrap: break-word;
-          max-width: 280px;
-        `;
-
-        wrapper.appendChild(vid);
-        wrapper.appendChild(placeholder);
-        wrapper.appendChild(label);
-        this.remoteVideos[remoteId] = vid;
-
-        if (this.$refs.participantsBox) {
-          this.$refs.participantsBox.appendChild(wrapper);
-        }
-      }
-
-      const vid = wrapper.querySelector('video');
-      if (vid && stream) {
-        // Always set the stream
-        vid.srcObject = stream;
-        
-        // Check if there are active video tracks
-        const videoTracks = stream.getVideoTracks();
-        const hasActiveVideoTrack = videoTracks.some(track => track.enabled && track.readyState === 'live');
-        
-        console.log(`Remote ${remoteId} has active video: ${hasActiveVideoTrack}`, {
-          tracks: videoTracks.length,
-          enabled: videoTracks.map(t => t.enabled),
-          readyState: videoTracks.map(t => t.readyState)
-        });
-        
-        // Try to play with better error handling
-        vid.play().then(() => {
-          console.log(`✅ Remote video playing for ${remoteId}`);
-          // Update display based on actual video track presence
-          this.updateRemoteVideoDisplay(remoteId, hasActiveVideoTrack);
-        }).catch(err => {
-          console.warn(`❌ Video play failed for ${remoteId}:`, err.name, err.message);
-          // Even if play fails, show placeholder if no video track
-          this.updateRemoteVideoDisplay(remoteId, hasActiveVideoTrack);
-          
-          // Try to play again with user interaction workaround
-          setTimeout(() => {
-            vid.play().catch(() => {
-              console.log(`Retry play also failed for ${remoteId}`);
-            });
-          }, 500);
-        });
-      }
-      
-      // Monitor track changes
-      stream.getTracks().forEach(track => {
-        console.log(`Monitoring track for ${remoteId}: ${track.kind}, enabled: ${track.enabled}, state: ${track.readyState}`);
-        
-        track.onended = () => {
-          console.log(`Track ended for ${remoteId}: ${track.kind}`);
-          if (track.kind === 'video') {
-            this.updateRemoteVideoDisplay(remoteId, false);
-          }
-        };
-        
-        track.onmute = () => {
-          console.log(`Track muted for ${remoteId}: ${track.kind}`);
-          if (track.kind === 'video') {
-            this.updateRemoteVideoDisplay(remoteId, false);
-          }
-        };
-        
-        track.onunmute = () => {
-          console.log(`Track unmuted for ${remoteId}: ${track.kind}`);
-          if (track.kind === 'video') {
-            this.updateRemoteVideoDisplay(remoteId, true);
-          }
-        };
-      });
-    },
-
-    async startOffer(remoteId) {
-      if (remoteId === this.socket?.id || remoteId === this.userId) {
-        return;
-      }
-
-      console.log(`Starting offer to ${remoteId}`);
-      
+    async stopScreenShare() {
       try {
-        const pc = await this.createPeerConnection(remoteId, true);
+        await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
+        this.isScreenSharing = false;
         
-        const offer = await pc.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: true
-        });
-        
-        await pc.setLocalDescription(offer);
-
-        if (this.isSocketConnected) {
-          this.socket.emit('signal', {
-            to: remoteId,
-            signal: { type: 'offer', sdp: offer }
-          });
-          console.log(`Offer sent to ${remoteId}`);
-        }
-      } catch (err) {
-        console.error(`Error creating/sending offer to ${remoteId}:`, err);
-      }
-    },
-
-    cleanupPeer(peerId) {
-      console.log(`Cleaning up peer: ${peerId}`);
-      
-      if (this.peers[peerId]) {
-        try {
-          this.peers[peerId].close();
-        } catch (e) {
-          console.error('Error closing peer connection:', e);
-        }
-        delete this.peers[peerId];
-      }
-
-      if (this.peerNegotiating[peerId]) {
-        delete this.peerNegotiating[peerId];
-      }
-
-      if (this.pendingCandidates[peerId]) {
-        delete this.pendingCandidates[peerId];
-      }
-
-      const wrapper = document.querySelector(`[data-peer-id="${peerId}"]`);
-      if (wrapper && wrapper.parentNode) {
-        wrapper.parentNode.removeChild(wrapper);
-      }
-
-      if (this.remoteVideos[peerId]) {
-        delete this.remoteVideos[peerId];
-      }
-    },
-
-    updateParticipantsList(list) {
-      console.log('Updating participants list:', list);
-      
-      const participantsMap = new Map();
-      
-      for (const p of list || []) {
-        if (!p || !p.id || p.id === this.socket?.id || p.id === this.userId) {
-          continue;
-        }
-        
-        let displayName = p.name || p.userName || p.username;
-        
-        if (displayName && displayName.includes('@')) {
-          displayName = displayName.split('@')[0];
-        }
-        
-        if (!displayName || displayName === 'undefined' || displayName === 'null') {
-          displayName = `User-${p.id.substring(0, 8)}`;
-        }
-        
-        participantsMap.set(p.id, {
-          id: p.id,  // socketId
-          socketId: p.id,  // Store socketId explicitly
-          userId: p.userId || p._id || p.id,  // Store actual userId from database
-          name: displayName,
-          isHost: p.isHost || false,
-          hasMic: p.hasMic || false,
-          hasVideo: p.hasVideo || false
-        });
-      }
-      
-      this.participants = Array.from(participantsMap.values());
-      console.log('Updated participants:', this.participants);
-    },
-
-    addParticipant(user) {
-      if (!user || !user.id || user.id === this.socket?.id || user.id === this.userId) {
-        return;
-      }
-      
-      const existingIndex = this.participants.findIndex(p => p.id === user.id || p.socketId === user.id);
-      
-      let displayName = user.name || user.userName || user.username || 'Anonymous';
-      
-      if (displayName && displayName.includes('@')) {
-        displayName = displayName.split('@')[0];
-      }
-      
-      if (!displayName || displayName === 'undefined' || displayName === 'null') {
-        displayName = `User-${user.id.substring(0, 8)}`;
-      }
-      
-      const participantData = {
-        id: user.id,  // This is the socketId
-        socketId: user.id,  // Store socketId explicitly
-        userId: user.userId || user._id || user.id,  // Store actual userId from database
-        name: displayName,
-        isHost: user.isHost || false,
-        hasMic: user.hasMic || false,
-        hasVideo: user.hasVideo || false
-      };
-      
-      console.log('Adding participant with IDs:', {
-        socketId: participantData.socketId,
-        userId: participantData.userId,
-        name: participantData.name
-      });
-      
-      if (existingIndex >= 0) {
-        this.participants[existingIndex] = participantData;
-      } else {
-        this.participants.push(participantData);
-      }
-    },
-
-    updateParticipantStatus(userId, statusType, isEnabled) {
-      // Try to find by userId first, then by socketId
-      const participant = this.participants.find(p => p.userId === userId || p.id === userId || p.socketId === userId);
-      
-      if (participant) {
-        if (statusType === 'video') {
-          participant.hasVideo = isEnabled;
-        } else if (statusType === 'mic') {
-          participant.hasMic = isEnabled;
-        } else if (statusType === 'screenShare') {
-          participant.isScreenSharing = isEnabled;
-        }
-        
-        this.$forceUpdate();
-        
-        // Update status indicator using socketId
-        const socketId = participant.socketId || participant.id;
-        const wrapper = document.querySelector(`[data-peer-id="${socketId}"]`);
-        
-        if (wrapper) {
-          let indicator = wrapper.querySelector('.status-indicator');
-          if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.className = 'status-indicator';
-            indicator.style.cssText = `
-              position: absolute;
-              top: 8px;
-              right: 8px;
-              display: flex;
-              gap: 4px;
-              font-size: 16px;
-              background: rgba(0,0,0,0.7);
-              padding: 4px;
-              border-radius: 4px;
-            `;
-            wrapper.appendChild(indicator);
+        // Restore camera if it was on
+        if (this.videoon) {
+          const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
+          if (videoTrack) {
+            const videoElement = this.$refs.localVideo;
+            if (videoElement) {
+              videoTrack.track.attach(videoElement);
+            }
           }
-          
-          indicator.innerHTML = `
-            <span>${participant?.hasMic ? '🎤' : '🔇'}</span>
-            <span>${participant?.hasVideo ? '📹' : '🔴'}</span>
-            ${participant?.isScreenSharing ? '<span>🖥️</span>' : ''}
-          `;
+        } else {
+          const videoElement = this.$refs.localVideo;
+          if (videoElement) videoElement.srcObject = null;
         }
-      } else {
-        console.warn(`Participant not found for userId: ${userId}`);
+      } catch (error) {
+        console.error('Error stopping screen share:', error);
       }
     },
 
@@ -1314,10 +788,6 @@ export default {
     toggleDropdown(type) {
       this.activeDropdown = this.activeDropdown === type ? null : type;
       this.activePanel = null;
-    },
-
-    closeDropdown() {
-      this.activeDropdown = null;
     },
 
     resetinactivityTimer() {
@@ -1415,8 +885,6 @@ export default {
         if (res.ok) {
           this.cleanup();
           this.$router.push('/Ending');
-        } else {
-          console.error('Failed to end meeting');
         }
       } catch(err) {
         console.error("Error ending meeting:", err);
@@ -1458,7 +926,6 @@ export default {
         });
         
         if (res.ok) {
-          console.log("Meeting locked");
           alert("Meeting has been locked");
         }
       } catch(err) {
@@ -1472,220 +939,6 @@ export default {
         return;
       }
       alert("Host transfer - Work in progress");
-    },
-
-    async sharescreen() {
-      try {
-        if (!this.isScreenSharing) {
-          console.log('=== STARTING SCREEN SHARE ===');
-          
-          const stream = await navigator.mediaDevices.getDisplayMedia({ 
-            video: {
-              cursor: "always",
-              displaySurface: "monitor"
-            },
-            audio: false 
-          });
-          
-          this.screenStream = stream;
-          this.screenTrack = stream.getVideoTracks()[0];
-          
-          console.log('Screen track obtained:', this.screenTrack);
-
-          const el = this.$refs.localVideo;
-          if (el) {
-            el.srcObject = stream;
-            await el.play().catch(err => {
-              console.error('Error playing local screen share:', err);
-            });
-          }
-
-          let replacementCount = 0;
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            console.log(`Replacing track for peer ${peerId}`);
-            
-            const senders = pc.getSenders();
-            const videoSender = senders.find(s => s.track?.kind === 'video');
-            
-            if (videoSender && videoSender.track) {
-              await videoSender.replaceTrack(this.screenTrack);
-              console.log(`✅ Replaced video track for peer ${peerId}`);
-              replacementCount++;
-            } else {
-              pc.addTrack(this.screenTrack, stream);
-              console.log(`✅ Added screen track for peer ${peerId}`);
-              replacementCount++;
-              
-              await this.renegotiateConnection(peerId);
-            }
-          }
-          
-          console.log(`Screen track sent to ${replacementCount} peers`);
-
-          this.screenTrack.onended = () => {
-            console.log('Screen share ended by user');
-            this.stopScreenShare();
-          };
-          
-          this.isScreenSharing = true;
-          
-          this.broadcastScreenShareStatus(true);
-          
-          console.log('=== SCREEN SHARE STARTED ===');
-          
-        } else {
-          await this.stopScreenShare();
-        }
-      } catch (err) {
-        console.error("Error sharing screen:", err);
-        
-        if (err.name === 'NotAllowedError') {
-          alert("Screen sharing permission denied. Please allow screen sharing.");
-        } else if (err.name === 'NotFoundError') {
-          alert("No screen available to share.");
-        } else {
-          alert("Could not start screen sharing: " + err.message);
-        }
-        
-        this.isScreenSharing = false;
-      }
-    },
-
-    async stopScreenShare() {
-      try {
-        console.log('=== STOPPING SCREEN SHARE ===');
-        
-        if (this.screenTrack) {
-          this.screenTrack.stop();
-          this.screenTrack = null;
-        }
-        
-        if (this.screenStream) {
-          this.screenStream.getTracks().forEach(t => t.stop());
-          this.screenStream = null;
-        }
-
-        if (this.videoon) {
-          console.log('Restoring camera...');
-          
-          const videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 30 }
-            }
-          });
-          
-          const videoTrack = videoStream.getVideoTracks()[0];
-          
-          const el = this.$refs.localVideo;
-          if (el) {
-            el.srcObject = videoStream;
-            await el.play().catch(() => {});
-          }
-          
-          if (!this.localStream) this.localStream = new MediaStream();
-          
-          this.localStream.getVideoTracks().forEach(track => {
-            this.localStream.removeTrack(track);
-          });
-          
-          this.localStream.addTrack(videoTrack);
-          
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            
-            if (videoSender) {
-              await videoSender.replaceTrack(videoTrack);
-              console.log(`✅ Restored camera for peer ${peerId}`);
-            } else {
-              pc.addTrack(videoTrack, this.localStream);
-              await this.renegotiateConnection(peerId);
-            }
-          }
-          
-        } else {
-          const el = this.$refs.localVideo;
-          if (el) {
-            el.srcObject = null;
-          }
-          
-          for (const peerId in this.peers) {
-            const pc = this.peers[peerId];
-            const videoSender = pc.getSenders().find(s => s.track?.kind === 'video');
-            
-            if (videoSender) {
-              await videoSender.replaceTrack(null);
-              console.log(`✅ Removed video for peer ${peerId}`);
-            }
-          }
-        }
-        
-        this.isScreenSharing = false;
-        
-        this.broadcastScreenShareStatus(false);
-        
-        console.log('=== SCREEN SHARE STOPPED ===');
-        
-      } catch (err) {
-        console.error("Error stopping screen share:", err);
-        this.isScreenSharing = false;
-      }
-    },
-
-    broadcastScreenShareStatus(isSharing) {
-      const data = {
-        roomId: this.roomId,
-        userId: this.userId,
-        userName: this.userName,
-        isScreenSharing: isSharing
-      };
-      
-      console.log('Broadcasting screen share status:', isSharing);
-      this.safeBroadcast('screen-share-status', data);
-    },
-
-    async renegotiateConnection(peerId) {
-      const pc = this.peers[peerId];
-      if (!pc || this.peerNegotiating[peerId]) {
-        console.log(`Cannot renegotiate peer ${peerId}`);
-        return;
-      }
-
-      try {
-        this.peerNegotiating[peerId] = true;
-        console.log(`Renegotiating connection with ${peerId}...`);
-        
-        if (pc.signalingState !== 'stable') {
-          console.log(`Peer ${peerId} not in stable state: ${pc.signalingState} - waiting...`);
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        
-        const offer = await pc.createOffer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: true
-        });
-        
-        await pc.setLocalDescription(offer);
-        
-        if (this.isSocketConnected) {
-          this.socket.emit('signal', {
-            to: peerId,
-            signal: { type: 'offer', sdp: offer }
-          });
-          console.log(`✅ Renegotiation offer sent to ${peerId}`);
-        } else {
-          console.error('Socket not connected - cannot send renegotiation offer');
-        }
-      } catch (err) {
-        console.error(`Renegotiation error for ${peerId}:`, err);
-      } finally {
-        setTimeout(() => {
-          this.peerNegotiating[peerId] = false;
-        }, 2000);
-      }
     },
 
     async recording() {
@@ -1747,35 +1000,11 @@ export default {
     },
 
     async checkNetworkQuality() {
-      if (!this.localStream || Object.keys(this.peers).length === 0) {
-        return;
-      }
-
-      let poorConnection = false;
+      if (!this.livekitRoom) return;
       
-      for (const peerId in this.peers) {
-        const pc = this.peers[peerId];
-        try {
-          const stats = await pc.getStats();
-          stats.forEach(report => {
-            if (report.type === "outbound-rtp" && !report.isRemote) {
-              const packetsSent = report.packetsSent || 0;
-              const packetsLost = report.packetsLost || 0;
-              
-              if (packetsSent > 50) {
-                const lossRate = packetsLost / (packetsSent + packetsLost);
-                if (lossRate > 0.05) {
-                  poorConnection = true;
-                }
-              }
-            }
-          });
-        } catch(err) {
-          console.error("Error getting stats for peer", peerId, err);
-        }
-      }
-      
-      this.isPoorNetwork = poorConnection;
+      // Monitor connection quality using LiveKit stats
+      const stats = this.livekitRoom.getActiveDevice();
+      // Implement network quality monitoring if needed
     },
 
     initTranscription() {
@@ -1802,7 +1031,6 @@ export default {
 
         if (final) {
           this.transcript.push(final);
-          console.log('Transcript:', final);
         }
       };
 
@@ -1819,39 +1047,10 @@ export default {
         clearInterval(this.broadcastRetryTimer);
         this.broadcastRetryTimer = null;
       }
-      
-      for (const id in this.peers) {
-        try { 
-          this.peers[id].close(); 
-        } catch (e) {
-          console.error('Error closing peer connection:', e);
-        }
-      }
-      this.peers = {};
-      this.remoteVideos = {};
-      this.pendingCandidates = {};
-      this.peerNegotiating = {};
 
-      if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          try {
-            track.stop();
-          } catch (e) {
-            console.error('Error stopping track:', e);
-          }
-        });
-        this.localStream = null;
-      }
-
-      if (this.screenStream) {
-        this.screenStream.getTracks().forEach(track => {
-          try {
-            track.stop();
-          } catch (e) {
-            console.error('Error stopping screen track:', e);
-          }
-        });
-        this.screenStream = null;
+      if (this.livekitRoom) {
+        this.livekitRoom.disconnect();
+        this.livekitRoom = null;
       }
 
       if (this.mediaRecorder && this.isRecording) {
@@ -1904,8 +1103,8 @@ export default {
       this.isRecording = false;
       this.record = false;
       this.isSocketConnected = false;
-      this.hasInitializedSocket = false;
       this.broadcastQueue = [];
+      this.remoteParticipants.clear();
     }
   },
 
@@ -1934,9 +1133,12 @@ export default {
       isHost: this.isHost
     });
     
-    this.localStream = new MediaStream();
-    
+    // Initialize Socket.io for chat
     this.initSocket();
+    
+    // Initialize LiveKit for video/audio
+    await this.initLivekit();
+    
     this.initTranscription();
     
     setTimeout(() => {
@@ -1955,6 +1157,7 @@ export default {
   }
 };
 </script>
+
 <style>
 body {
   background-color: #222021;
