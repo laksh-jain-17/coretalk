@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const livekitRoutes = require('./routes/livekitRoutes');
 require('dotenv').config();
 
 const app = express();
@@ -24,6 +25,8 @@ app.use('/api/admin', adminRoutes);
 app.get('/', (req, res) => {
   res.send('Backend is running');
 });
+
+app.use('/api/livekit', livekitRoutes);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URL)
@@ -257,3 +260,4 @@ app.get('/api/rooms', (req, res) => {
   }
   res.json(roomSummary);
 });
+
