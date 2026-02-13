@@ -76,14 +76,14 @@
           <li>
             <button @click="togglePanel('list')" @mouseenter="() => setHover('participants')" @mouseleave="() => setHover(null)">
               <IconMaterialSymbolsLightGroup />
-              <span class="participant-count">({{ participants.length + 1 }})</span>
+              <span class="participant-count">({{ totalParticipantCount }})</span>
             </button>
             <ul v-if="hoveredIcon === 'participants'" class="tooltip">
               <li>Participants</li>
             </ul>
             <div id="list-box" v-if="activePanel === 'list'">
               <div class="list-header">
-                Participants ({{ participants.length + 1 }})
+                Participants ({{ totalParticipantCount }})
                 <button @click="togglePanel(null)">X</button>
               </div>
               <div class="list-body">
@@ -157,7 +157,7 @@
                     <hr />
                     <p>Meeting Title: {{ title }}</p>
                     <p>Room ID: {{ roomId }}</p>
-                    <p>Participants: {{ participants.length + 1 }}</p>
+                    <p>Participants: {{ totalParticipantCount }}</p>
                     <button id="copylink" @click="copystring">Copy Link</button>
                   </div>
                 </div>
@@ -230,6 +230,15 @@ export default {
   computed: {
     computedRoomId() {
       return this.$route.params.id || 'default-room';
+    },
+    
+    // FIXED: Accurate participant count from LiveKit
+    totalParticipantCount() {
+      if (!this.livekitRoom) return 1; // Just the local user
+      
+      // Get count from LiveKit room (includes local participant)
+      const livekitCount = this.livekitRoom.remoteParticipants.size + 1;
+      return livekitCount;
     }
   },
 
@@ -318,6 +327,7 @@ export default {
         }
 
         const data = await response.json();
+        console.log('Raw token response:', data);
         return data;
       } catch (error) {
         console.error('Error getting LiveKit token:', error);
@@ -327,81 +337,135 @@ export default {
     },
 
     async initLivekit() {
-  console.log('=== INITIALIZING LIVEKIT ===');
-  
-  const tokenData = await this.getLivekitToken();
-  if (!tokenData) {
-    console.error('No tokenData received');
-    return;
-  }
+      console.log('=== INITIALIZING LIVEKIT ===');
+      
+      const tokenData = await this.getLivekitToken();
+      if (!tokenData) {
+        console.error('No tokenData received');
+        return;
+      }
 
-  console.log('Token data received:', tokenData);
-  console.log('Token type:', typeof tokenData.token);
-  console.log('Token value:', tokenData.token);
+      console.log('Token data received:', tokenData);
+      console.log('Token data type:', typeof tokenData);
+      
+      // FIXED: Properly extract the token string
+      let token;
+      let wsUrl;
+      
+      // Handle different response formats from your backend
+      if (typeof tokenData === 'string') {
+        // If the entire response is the token
+        token = tokenData;
+        wsUrl = `wss://${import.meta.env.VITE_LIVEKIT_URL || 'coretalk-e6xkfd5h.livekit.cloud'}`;
+      } else if (tokenData.token) {
+        // If tokenData has a token property
+        if (typeof tokenData.token === 'string') {
+          token = tokenData.token;
+        } else if (typeof tokenData.token === 'object') {
+          // If token is nested in an object
+          token = tokenData.token.token || tokenData.token.value || String(tokenData.token);
+        } else {
+          token = String(tokenData.token);
+        }
+        wsUrl = tokenData.url || tokenData.wsUrl || `wss://${import.meta.env.VITE_LIVEKIT_URL || 'coretalk-e6xkfd5h.livekit.cloud'}`;
+      } else {
+        console.error('Unexpected token data format:', tokenData);
+        alert('Failed to parse authentication token');
+        return;
+      }
 
-  const token = String(tokenData.token);  // Force convert to string
-  const wsUrl = String(tokenData.url);
+      console.log('Extracted token type:', typeof token);
+      console.log('Extracted token length:', token?.length);
+      console.log('Extracted token (first 50 chars):', token?.substring(0, 50));
+      console.log('WS URL:', wsUrl);
+      
+      // Validate token is actually a JWT string
+      if (typeof token !== 'string' || token.length < 20 || token === '[object Object]') {
+        console.error('❌ Invalid token format:', token);
+        alert('Failed to get valid authentication token. Token format is invalid.');
+        return;
+      }
+      
+      // Validate token has JWT structure (header.payload.signature)
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) {
+        console.error('❌ Token does not have JWT structure:', token);
+        alert('Invalid token structure. Expected JWT format.');
+        return;
+      }
 
-  console.log('After conversion - Token type:', typeof token);
-  console.log('After conversion - Token length:', token.length);
-  console.log('After conversion - WS URL:', wsUrl);
+      this.livekitRoom = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+      });
 
-  this.livekitRoom = new Room({
-    adaptiveStream: true,
-    dynacast: true,
-  });
+      // LiveKit event handlers
+      this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
+        console.log('LiveKit connection state:', state);
+        if (state === ConnectionState.Connected) {
+          console.log('✅ Connected to LiveKit room');
+          console.log('✅ Total participants:', this.livekitRoom.remoteParticipants.size + 1);
+        }
+      });
 
-  // All your event handlers stay the same...
-  this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
-    console.log('LiveKit connection state:', state);
-    if (state === ConnectionState.Connected) {
-      console.log('✅ Connected to LiveKit room');
-    }
-  });
+      this.livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+        console.log('LiveKit participant joined:', participant.identity);
+        console.log('Updated participant count:', this.livekitRoom.remoteParticipants.size + 1);
+        this.handleParticipantConnected(participant);
+      });
 
-  this.livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
-    console.log('LiveKit participant joined:', participant.identity);
-    this.handleParticipantConnected(participant);
-  });
+      this.livekitRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        console.log('LiveKit participant left:', participant.identity);
+        console.log('Updated participant count:', this.livekitRoom.remoteParticipants.size + 1);
+        this.handleParticipantDisconnected(participant);
+      });
 
-  this.livekitRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
-    console.log('LiveKit participant left:', participant.identity);
-    this.handleParticipantDisconnected(participant);
-  });
+      this.livekitRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        console.log('Track subscribed:', track.kind, 'from', participant.identity);
+        this.handleTrackSubscribed(track, participant);
+      });
 
-  this.livekitRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
-    console.log('Track subscribed:', track.kind, 'from', participant.identity);
-    this.handleTrackSubscribed(track, participant);
-  });
+      this.livekitRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        console.log('Track unsubscribed:', track.kind, 'from', participant.identity);
+        this.handleTrackUnsubscribed(track, participant);
+      });
 
-  this.livekitRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
-    console.log('Track unsubscribed:', track.kind, 'from', participant.identity);
-    this.handleTrackUnsubscribed(track, participant);
-  });
+      this.livekitRoom.on(RoomEvent.TrackMuted, (publication, participant) => {
+        console.log('Track muted:', publication.kind, 'from', participant.identity);
+        this.updateRemoteTrackDisplay(participant);
+      });
 
-  this.livekitRoom.on(RoomEvent.TrackMuted, (publication, participant) => {
-    console.log('Track muted:', publication.kind, 'from', participant.identity);
-    this.updateRemoteTrackDisplay(participant);
-  });
+      this.livekitRoom.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+        console.log('Track unmuted:', publication.kind, 'from', participant.identity);
+        this.updateRemoteTrackDisplay(participant);
+      });
 
-  this.livekitRoom.on(RoomEvent.TrackUnmuted, (publication, participant) => {
-    console.log('Track unmuted:', publication.kind, 'from', participant.identity);
-    this.updateRemoteTrackDisplay(participant);
-  });
-
-  // Connect to room
-  try {
-    console.log('Attempting to connect with token type:', typeof token);
-    await this.livekitRoom.connect(wsUrl, token);
-    console.log('✅ LiveKit room connected successfully');
-    this.livekitToken = token;  // Store after successful connection
-  } catch (error) {
-    console.error('Failed to connect to LiveKit:', error);
-    console.error('Token that failed:', token);
-    console.error('WS URL:', wsUrl);
-    alert('Failed to join meeting room');
-  }
-},
+      // FIXED: Connect to room with proper token validation
+      try {
+        console.log('Attempting to connect with:');
+        console.log('- Token type:', typeof token);
+        console.log('- Token starts with:', token.substring(0, 20));
+        console.log('- WS URL:', wsUrl);
+        
+        await this.livekitRoom.connect(wsUrl, token);
+        
+        console.log('✅ LiveKit room connected successfully');
+        console.log('✅ Room name:', this.livekitRoom.name);
+        console.log('✅ Local participant:', this.livekitRoom.localParticipant.identity);
+        
+        this.livekitToken = token;
+      } catch (error) {
+        console.error('❌ Failed to connect to LiveKit:', error);
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        });
+        console.error('Token that failed (first 50 chars):', token.substring(0, 50));
+        console.error('WS URL:', wsUrl);
+        alert('Failed to join meeting room: ' + error.message);
+      }
+    },
     
     handleParticipantConnected(participant) {
       const participantData = {
@@ -671,42 +735,69 @@ export default {
       }
     },
 
+    // FIXED: Proper async media initialization with error handling
     async toggleMic() {
-      if (this.isInitializingMedia) return;
+      if (this.isInitializingMedia) {
+        console.log('Media initialization in progress, ignoring toggle');
+        return;
+      }
+      
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+        alert('Not connected to meeting room');
+        return;
+      }
+      
       this.isInitializingMedia = true;
 
       try {
         if (this.micon) {
           // Mute microphone
+          console.log('Muting microphone...');
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
           this.micon = false;
+          console.log('✅ Microphone muted');
         } else {
           // Unmute microphone
+          console.log('Unmuting microphone...');
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
           this.micon = true;
+          console.log('✅ Microphone enabled');
         }
       } catch (error) {
-        console.error('Error toggling microphone:', error);
-        alert('Could not access microphone. Please check permissions.');
+        console.error('❌ Error toggling microphone:', error);
+        alert('Could not access microphone. Please check permissions: ' + error.message);
+        this.micon = false;
       } finally {
         this.isInitializingMedia = false;
       }
     },
 
     async toggleVideo() {
-      if (this.isInitializingMedia) return;
+      if (this.isInitializingMedia) {
+        console.log('Media initialization in progress, ignoring toggle');
+        return;
+      }
+      
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+        alert('Not connected to meeting room');
+        return;
+      }
+      
       this.isInitializingMedia = true;
 
       try {
         if (this.videoon) {
           // Turn off camera
+          console.log('Turning off camera...');
           await this.livekitRoom.localParticipant.setCameraEnabled(false);
           this.videoon = false;
           
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoElement.srcObject = null;
+          console.log('✅ Camera disabled');
         } else {
           // Turn on camera
+          console.log('Turning on camera...');
           await this.livekitRoom.localParticipant.setCameraEnabled(true);
           this.videoon = true;
           
@@ -718,9 +809,11 @@ export default {
               videoTrack.track.attach(videoElement);
             }
           }
+          console.log('✅ Camera enabled');
         }
       } catch (error) {
-        console.error('Error toggling camera:', error);
+        console.error('❌ Error toggling camera:', error);
+        alert('Could not access camera. Please check permissions: ' + error.message);
         this.videoon = false;
       } finally {
         this.isInitializingMedia = false;
@@ -728,6 +821,11 @@ export default {
     },
 
     async sharescreen() {
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+        alert('Not connected to meeting room');
+        return;
+      }
+      
       try {
         if (!this.isScreenSharing) {
           console.log('Starting screen share...');
@@ -743,11 +841,12 @@ export default {
               screenTrack.track.attach(videoElement);
             }
           }
+          console.log('✅ Screen sharing started');
         } else {
           await this.stopScreenShare();
         }
       } catch (error) {
-        console.error('Error sharing screen:', error);
+        console.error('❌ Error sharing screen:', error);
         
         if (error.name === 'NotAllowedError') {
           alert('Screen sharing permission denied.');
@@ -777,6 +876,7 @@ export default {
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoElement.srcObject = null;
         }
+        console.log('✅ Screen sharing stopped');
       } catch (error) {
         console.error('Error stopping screen share:', error);
       }
@@ -1169,6 +1269,7 @@ export default {
 </script>
 
 <style>
+/* Styles remain the same */
 body {
   background-color: #222021;
   margin: 0;
@@ -1565,4 +1666,3 @@ body {
   border-radius: 2px;
 }
 </style>
-
