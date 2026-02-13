@@ -24,7 +24,14 @@ router.post('/token', (req, res) => {
     console.error('LIVEKIT_API_KEY:', process.env.LIVEKIT_API_KEY ? 'SET' : 'MISSING');
     console.error('LIVEKIT_API_SECRET:', process.env.LIVEKIT_API_SECRET ? 'SET' : 'MISSING');
     console.error('LIVEKIT_URL:', process.env.LIVEKIT_URL ? 'SET' : 'MISSING');
-    return res.status(500).json({ error: 'Server configuration error - missing LiveKit credentials' });
+    return res.status(500).json({ 
+      error: 'Server configuration error - missing LiveKit credentials',
+      details: {
+        hasApiKey: !!process.env.LIVEKIT_API_KEY,
+        hasApiSecret: !!process.env.LIVEKIT_API_SECRET,
+        hasUrl: !!process.env.LIVEKIT_URL
+      }
+    });
   }
   
   try {
@@ -50,15 +57,47 @@ router.post('/token', (req, res) => {
     });
     
     // ========================================
-    // CRITICAL: Generate JWT TOKEN STRING
+    // CRITICAL FIX: Generate JWT TOKEN STRING
     // ========================================
-    const token = at.toJwt();
+    let token = at.toJwt();
     
-    // ========================================
-    // VALIDATION: Ensure token is a string
-    // ========================================
+    console.log('Raw token from toJwt():', typeof token, token);
+    
+    // CRITICAL: Handle case where toJwt() returns an object
+    if (typeof token === 'object' && token !== null) {
+      console.log('⚠️  Token is an object, attempting to extract string...');
+      console.log('Token object keys:', Object.keys(token));
+      
+      // Try common property names
+      if (token.token) {
+        token = token.token;
+      } else if (token.jwt) {
+        token = token.jwt;
+      } else if (token.value) {
+        token = token.value;
+      } else if (token.toString && typeof token.toString === 'function') {
+        token = token.toString();
+      } else {
+        console.error('❌ Cannot extract string from token object:', token);
+        return res.status(500).json({ 
+          error: 'Token generation failed - object returned',
+          tokenType: typeof token,
+          tokenKeys: Object.keys(token)
+        });
+      }
+      
+      console.log('Extracted token:', typeof token, token);
+    }
+    
+    // Force convert to string if needed
     if (typeof token !== 'string') {
-      console.error('❌ CRITICAL ERROR: toJwt() did not return a string!');
+      console.log('⚠️  Converting token to string...');
+      token = String(token);
+    }
+    
+    // Final validation
+    if (typeof token !== 'string') {
+      console.error('❌ CRITICAL ERROR: Token is still not a string!');
       console.error('Token type:', typeof token);
       console.error('Token value:', token);
       return res.status(500).json({ 
@@ -67,11 +106,20 @@ router.post('/token', (req, res) => {
       });
     }
     
+    // Check for [object Object] string
+    if (token === '[object Object]') {
+      console.error('❌ CRITICAL ERROR: Token is "[object Object]" string!');
+      return res.status(500).json({ 
+        error: 'Token generation failed - object serialization error'
+      });
+    }
+    
     // Validate JWT structure (should have 3 parts)
     const tokenParts = token.split('.');
     if (tokenParts.length !== 3) {
       console.error('❌ CRITICAL ERROR: Invalid JWT structure!');
       console.error('JWT parts:', tokenParts.length, '(expected 3)');
+      console.error('Token:', token.substring(0, 100));
       return res.status(500).json({ 
         error: 'Token generation failed - invalid JWT structure',
         parts: tokenParts.length
@@ -90,7 +138,7 @@ router.post('/token', (req, res) => {
     // RESPONSE: Return token as STRING
     // ========================================
     const response = {
-      token: token,  // This MUST be a string
+      token: token,
       url: process.env.LIVEKIT_URL
     };
     
@@ -110,10 +158,13 @@ router.post('/token', (req, res) => {
     
   } catch (error) {
     console.error('❌ Error generating LiveKit token:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
     console.error('Stack trace:', error.stack);
     res.status(500).json({ 
       error: 'Failed to generate token', 
-      details: error.message 
+      details: error.message,
+      name: error.name
     });
   }
 });
@@ -124,12 +175,20 @@ router.post('/token', (req, res) => {
 router.get('/test', (req, res) => {
   console.log('\n========== LIVEKIT TEST REQUEST ==========');
   
-  if (!process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_API_SECRET) {
+  // Check environment variables
+  const hasApiKey = !!process.env.LIVEKIT_API_KEY;
+  const hasApiSecret = !!process.env.LIVEKIT_API_SECRET;
+  const hasUrl = !!process.env.LIVEKIT_URL;
+  
+  if (!hasApiKey || !hasApiSecret || !hasUrl) {
     return res.json({
+      success: false,
       error: 'Missing environment variables',
-      LIVEKIT_API_KEY: process.env.LIVEKIT_API_KEY ? 'SET' : 'MISSING',
-      LIVEKIT_API_SECRET: process.env.LIVEKIT_API_SECRET ? 'SET' : 'MISSING',
-      LIVEKIT_URL: process.env.LIVEKIT_URL || 'MISSING'
+      config: {
+        LIVEKIT_API_KEY: hasApiKey ? 'SET' : 'MISSING',
+        LIVEKIT_API_SECRET: hasApiSecret ? 'SET' : 'MISSING',
+        LIVEKIT_URL: process.env.LIVEKIT_URL || 'MISSING'
+      }
     });
   }
   
@@ -150,7 +209,37 @@ router.get('/test', (req, res) => {
       canSubscribe: true
     });
     
-    const token = at.toJwt();
+    let token = at.toJwt();
+    
+    console.log('Test token type:', typeof token);
+    console.log('Test token value:', token);
+    
+    // Handle object return
+    if (typeof token === 'object' && token !== null) {
+      const originalToken = token;
+      if (token.token) token = token.token;
+      else if (token.jwt) token = token.jwt;
+      else if (token.value) token = token.value;
+      else token = String(token);
+      
+      return res.json({
+        success: false,
+        error: 'toJwt() returned an object instead of string',
+        originalType: typeof originalToken,
+        originalKeys: Object.keys(originalToken),
+        extractedToken: token,
+        extractedType: typeof token,
+        extractedLength: typeof token === 'string' ? token.length : 'N/A',
+        suggestion: 'Update livekit-server-sdk: npm install livekit-server-sdk@latest'
+      });
+    }
+    
+    // Force to string if needed
+    if (typeof token !== 'string') {
+      token = String(token);
+    }
+    
+    const parts = token.split('.');
     
     res.json({
       success: true,
@@ -159,17 +248,21 @@ router.get('/test', (req, res) => {
       tokenLength: token.length,
       isString: typeof token === 'string',
       tokenPreview: token.substring(0, 100) + '...',
-      jwtParts: token.split('.').length,
+      jwtParts: parts.length,
+      jwtValid: parts.length === 3,
       config: {
         LIVEKIT_URL: process.env.LIVEKIT_URL,
-        apiKeyConfigured: !!process.env.LIVEKIT_API_KEY,
-        apiSecretConfigured: !!process.env.LIVEKIT_API_SECRET
+        apiKeyConfigured: hasApiKey,
+        apiSecretConfigured: hasApiSecret
       }
     });
   } catch (error) {
+    console.error('Test failed:', error);
     res.status(500).json({
+      success: false,
       error: 'Test failed',
       message: error.message,
+      name: error.name,
       stack: error.stack
     });
   }
