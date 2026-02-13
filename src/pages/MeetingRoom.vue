@@ -232,11 +232,8 @@ export default {
       return this.$route.params.id || 'default-room';
     },
     
-    // FIXED: Accurate participant count from LiveKit
     totalParticipantCount() {
-      if (!this.livekitRoom) return 1; // Just the local user
-      
-      // Get count from LiveKit room (includes local participant)
+      if (!this.livekitRoom) return 1;
       const livekitCount = this.livekitRoom.remoteParticipants.size + 1;
       return livekitCount;
     }
@@ -346,23 +343,17 @@ export default {
       }
 
       console.log('Token data received:', tokenData);
-      console.log('Token data type:', typeof tokenData);
       
-      // FIXED: Properly extract the token string
       let token;
       let wsUrl;
       
-      // Handle different response formats from your backend
       if (typeof tokenData === 'string') {
-        // If the entire response is the token
         token = tokenData;
         wsUrl = `wss://${import.meta.env.VITE_LIVEKIT_URL || 'coretalk-e6xkfd5h.livekit.cloud'}`;
       } else if (tokenData.token) {
-        // If tokenData has a token property
         if (typeof tokenData.token === 'string') {
           token = tokenData.token;
         } else if (typeof tokenData.token === 'object') {
-          // If token is nested in an object
           token = tokenData.token.token || tokenData.token.value || String(tokenData.token);
         } else {
           token = String(tokenData.token);
@@ -376,21 +367,18 @@ export default {
 
       console.log('Extracted token type:', typeof token);
       console.log('Extracted token length:', token?.length);
-      console.log('Extracted token (first 50 chars):', token?.substring(0, 50));
       console.log('WS URL:', wsUrl);
       
-      // Validate token is actually a JWT string
       if (typeof token !== 'string' || token.length < 20 || token === '[object Object]') {
         console.error('❌ Invalid token format:', token);
-        alert('Failed to get valid authentication token. Token format is invalid.');
+        alert('Failed to get valid authentication token.');
         return;
       }
       
-      // Validate token has JWT structure (header.payload.signature)
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3) {
         console.error('❌ Token does not have JWT structure:', token);
-        alert('Invalid token structure. Expected JWT format.');
+        alert('Invalid token structure.');
         return;
       }
 
@@ -399,24 +387,20 @@ export default {
         dynacast: true,
       });
 
-      // LiveKit event handlers
       this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
         console.log('LiveKit connection state:', state);
         if (state === ConnectionState.Connected) {
           console.log('✅ Connected to LiveKit room');
-          console.log('✅ Total participants:', this.livekitRoom.remoteParticipants.size + 1);
         }
       });
 
       this.livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
         console.log('LiveKit participant joined:', participant.identity);
-        console.log('Updated participant count:', this.livekitRoom.remoteParticipants.size + 1);
         this.handleParticipantConnected(participant);
       });
 
       this.livekitRoom.on(RoomEvent.ParticipantDisconnected, (participant) => {
         console.log('LiveKit participant left:', participant.identity);
-        console.log('Updated participant count:', this.livekitRoom.remoteParticipants.size + 1);
         this.handleParticipantDisconnected(participant);
       });
 
@@ -440,29 +424,16 @@ export default {
         this.updateRemoteTrackDisplay(participant);
       });
 
-      // FIXED: Connect to room with proper token validation
       try {
-        console.log('Attempting to connect with:');
-        console.log('- Token type:', typeof token);
-        console.log('- Token starts with:', token.substring(0, 20));
-        console.log('- WS URL:', wsUrl);
-        
+        console.log('Attempting to connect to LiveKit...');
         await this.livekitRoom.connect(wsUrl, token);
         
         console.log('✅ LiveKit room connected successfully');
         console.log('✅ Room name:', this.livekitRoom.name);
-        console.log('✅ Local participant:', this.livekitRoom.localParticipant.identity);
         
         this.livekitToken = token;
       } catch (error) {
         console.error('❌ Failed to connect to LiveKit:', error);
-        console.error('Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack
-        });
-        console.error('Token that failed (first 50 chars):', token.substring(0, 50));
-        console.error('WS URL:', wsUrl);
         alert('Failed to join meeting room: ' + error.message);
       }
     },
@@ -491,7 +462,6 @@ export default {
       this.participants = this.participants.filter(p => p.id !== participant.identity);
       this.remoteParticipants.delete(participant.identity);
 
-      // Remove video element
       const wrapper = document.querySelector(`[data-peer-id="${participant.identity}"]`);
       if (wrapper && wrapper.parentNode) {
         wrapper.parentNode.removeChild(wrapper);
@@ -610,7 +580,6 @@ export default {
         if (placeholder) placeholder.style.display = 'flex';
       }
 
-      // Update participant status
       const p = this.participants.find(p => p.id === participant.identity);
       if (p) {
         const audioPublication = participant.getTrack(Track.Source.Microphone);
@@ -735,7 +704,7 @@ export default {
       }
     },
 
-    // FIXED: Proper async media initialization with error handling
+    // FIXED: structuredClone error fix for microphone
     async toggleMic() {
       if (this.isInitializingMedia) {
         console.log('Media initialization in progress, ignoring toggle');
@@ -757,21 +726,39 @@ export default {
           this.micon = false;
           console.log('✅ Microphone muted');
         } else {
-          // Unmute microphone
+          // Unmute microphone - FIX: Get permission first
           console.log('Unmuting microphone...');
+          
+          try {
+            // Request permission first to avoid structuredClone error
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+          } catch (permError) {
+            console.warn('Permission request failed:', permError);
+          }
+          
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
           this.micon = true;
           console.log('✅ Microphone enabled');
         }
       } catch (error) {
         console.error('❌ Error toggling microphone:', error);
-        alert('Could not access microphone. Please check permissions: ' + error.message);
+        
+        if (error.name === 'NotAllowedError') {
+          alert('Microphone permission denied. Please allow microphone access in your browser settings.');
+        } else if (error.message && error.message.includes('structuredClone')) {
+          alert('Browser compatibility issue. Please try refreshing the page or using Chrome/Edge.');
+        } else {
+          alert('Could not access microphone: ' + error.message);
+        }
+        
         this.micon = false;
       } finally {
         this.isInitializingMedia = false;
       }
     },
 
+    // FIXED: structuredClone error fix for camera
     async toggleVideo() {
       if (this.isInitializingMedia) {
         console.log('Media initialization in progress, ignoring toggle');
@@ -796,14 +783,31 @@ export default {
           if (videoElement) videoElement.srcObject = null;
           console.log('✅ Camera disabled');
         } else {
-          // Turn on camera
+          // Turn on camera - FIX: Get permission first
           console.log('Turning on camera...');
+          
+          try {
+            // Request permission first to avoid structuredClone error
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+              video: { 
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              } 
+            });
+            stream.getTracks().forEach(track => track.stop());
+          } catch (permError) {
+            console.warn('Permission request failed:', permError);
+          }
+          
           await this.livekitRoom.localParticipant.setCameraEnabled(true);
           this.videoon = true;
           
+          // Small delay to ensure track is ready
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
           // Attach local video track to video element
           const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
-          if (videoTrack) {
+          if (videoTrack && videoTrack.track) {
             const videoElement = this.$refs.localVideo;
             if (videoElement) {
               videoTrack.track.attach(videoElement);
@@ -813,7 +817,15 @@ export default {
         }
       } catch (error) {
         console.error('❌ Error toggling camera:', error);
-        alert('Could not access camera. Please check permissions: ' + error.message);
+        
+        if (error.name === 'NotAllowedError') {
+          alert('Camera permission denied. Please allow camera access in your browser settings.');
+        } else if (error.message && error.message.includes('structuredClone')) {
+          alert('Browser compatibility issue. Please try:\n1. Refreshing the page\n2. Using Chrome/Edge browser\n3. Updating your browser');
+        } else {
+          alert('Could not access camera: ' + error.message);
+        }
+        
         this.videoon = false;
       } finally {
         this.isInitializingMedia = false;
@@ -833,7 +845,6 @@ export default {
           await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
           this.isScreenSharing = true;
           
-          // Display screen share locally
           const screenTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.ScreenShare);
           if (screenTrack) {
             const videoElement = this.$refs.localVideo;
@@ -863,7 +874,6 @@ export default {
         await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
         this.isScreenSharing = false;
         
-        // Restore camera if it was on
         if (this.videoon) {
           const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
           if (videoTrack) {
@@ -1111,10 +1121,6 @@ export default {
 
     async checkNetworkQuality() {
       if (!this.livekitRoom) return;
-      
-      // Monitor connection quality using LiveKit stats
-      const stats = this.livekitRoom.getActiveDevice();
-      // Implement network quality monitoring if needed
     },
 
     initTranscription() {
@@ -1243,12 +1249,8 @@ export default {
       isHost: this.isHost
     });
     
-    // Initialize Socket.io for chat
     this.initSocket();
-    
-    // Initialize LiveKit for video/audio
     await this.initLivekit();
-    
     this.initTranscription();
     
     setTimeout(() => {
@@ -1269,7 +1271,6 @@ export default {
 </script>
 
 <style>
-/* Styles remain the same */
 body {
   background-color: #222021;
   margin: 0;
