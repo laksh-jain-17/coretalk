@@ -5,6 +5,15 @@ const livekitRoutes = require('./routes/livekitRoutes');
 require('dotenv').config();
 
 const app = express();
+const helmet = require('helmet'); 
+
+// Add this right after const app = express();
+app.use(
+  helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // Middleware
 app.use(cors());
@@ -260,4 +269,5 @@ app.get('/api/rooms', (req, res) => {
   }
   res.json(roomSummary);
 });
+
 
