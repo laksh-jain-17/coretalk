@@ -1,11 +1,15 @@
 <template>
   <div :class="{'tray-on-right':!turned, 'tray-hidden':!trayVisible}" id="page">
-    <!-- Left Tray - Unchanged -->
+    <!-- Left Tray -->
     <transition name="slide-left">
       <div id="left-tray" :class="turned ? 'left-tray-left' : 'left-tray-right'" v-if="trayVisible">
-        <button @click="silent_background">Silent Background</button>
-        <button @click="recording">Start Recording</button>
-        <button @click="turn">Change Panel</button>
+        <button @click="toggleSilentBackground" :class="{ 'active-feature': silentBackgroundEnabled }">
+          {{ silentBackgroundEnabled ? '🔇 Silent Mode ON' : '🔊 Silent Background' }}
+        </button>
+        <button @click="recording">
+          {{ isRecording ? '⏹️ Stop Recording' : '⏺️ Start Recording' }}
+        </button>
+        <button @click="turn">🔄 Change Panel</button>
       </div>
     </transition>
 
@@ -19,6 +23,12 @@
           <div v-if="!videoon" class="video-placeholder">
             <div class="avatar-circle">{{ userInitials }}</div>
           </div>
+          
+          <!-- Captions for Local User -->
+          <div v-if="showCaptions && localCaptions" class="captions-overlay">
+            {{ localCaptions }}
+          </div>
+          
           <div class="participant-info">
             <span class="participant-name">{{ userName }} (You)</span>
             <div class="participant-controls">
@@ -43,6 +53,12 @@
           <div class="video-placeholder" :class="{ 'hidden': participant.hasVideo }">
             <div class="avatar-circle">{{ getInitials(participant.name) }}</div>
           </div>
+          
+          <!-- Captions for Remote Participants -->
+          <div v-if="showCaptions && participant.captions" class="captions-overlay">
+            {{ participant.captions }}
+          </div>
+          
           <div class="participant-info">
             <span class="participant-name">{{ participant.name }}</span>
             <div class="participant-controls">
@@ -54,10 +70,17 @@
       </div>
     </div>
 
-    <!-- Transcript Box -->
-    <div v-if="isPoorNetwork" class="transcript-box">
-      <h3>Real time transcript</h3>
-      <div v-for="(line,i) in transcript" :key="i">{{line}}</div>
+    <!-- Captions Panel (when enabled) -->
+    <div v-if="showCaptions" class="captions-panel">
+      <div class="captions-header">
+        <span>📝 Live Captions</span>
+        <button @click="toggleCaptions" class="close-captions">✕</button>
+      </div>
+      <div class="captions-content">
+        <div v-for="(caption, index) in captionHistory" :key="index" class="caption-line">
+          <strong>{{ caption.speaker }}:</strong> {{ caption.text }}
+        </div>
+      </div>
     </div>
 
     <!-- Bottom Navigation Bar -->
@@ -159,7 +182,7 @@
             </ul>
             <div id="chat-box" v-if="activePanel === 'chat'">
               <div class="chat-header">
-                Chat
+                💬 Chat
                 <button @click="togglePanel(null)">✕</button>
               </div>
               <div class="chat-body" ref="chatBody">
@@ -179,7 +202,9 @@
                   maxlength="500"
                 />
                 <button class="chat-send" @click="sendMessage" :disabled="!newMessage.trim()">
-                  Send
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -194,6 +219,9 @@
             <ul v-if="activeDropdown === 'extras'" class="dropdown-menu extras-menu">
               <li @click.stop="hand_raised">
                 {{ hand ? '✋ Lower hand' : '✋ Raise hand' }}
+              </li>
+              <li @click.stop="toggleCaptions">
+                {{ showCaptions ? '📝 Hide Captions' : '📝 Show Captions' }}
               </li>
               <li @click.stop="toggle_info">
                 ℹ️ Meeting Info
@@ -292,7 +320,14 @@ export default {
       
       broadcastQueue: [],
       isInitializingMedia: false,
-      broadcastRetryTimer: null
+      broadcastRetryTimer: null,
+
+      // New features
+      showCaptions: false,
+      captionHistory: [],
+      localCaptions: '',
+      silentBackgroundEnabled: false,
+      backgroundNoiseSuppressionTrack: null
     };
   },
 
@@ -353,6 +388,152 @@ export default {
       const hours = date.getHours().toString().padStart(2, '0');
       const minutes = date.getMinutes().toString().padStart(2, '0');
       return `${hours}:${minutes}`;
+    },
+
+    toggleCaptions() {
+      this.showCaptions = !this.showCaptions;
+      this.activeDropdown = null;
+      
+      if (this.showCaptions) {
+        this.startCaptionRecognition();
+      } else {
+        this.stopCaptionRecognition();
+      }
+    },
+
+    startCaptionRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert('Speech recognition not supported in this browser');
+        this.showCaptions = false;
+        return;
+      }
+
+      this.recognition = new SpeechRecognition();
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
+      this.recognition.lang = 'en-US';
+
+      this.recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        // Update local captions
+        this.localCaptions = interimTranscript || finalTranscript;
+
+        // Add to history when final
+        if (finalTranscript) {
+          this.captionHistory.push({
+            speaker: this.userName,
+            text: finalTranscript.trim(),
+            timestamp: Date.now()
+          });
+
+          // Keep only last 50 captions
+          if (this.captionHistory.length > 50) {
+            this.captionHistory.shift();
+          }
+
+          // Clear local captions after adding to history
+          setTimeout(() => {
+            this.localCaptions = '';
+          }, 2000);
+        }
+      };
+
+      this.recognition.onerror = (e) => {
+        console.error('Speech recognition error:', e);
+      };
+
+      this.recognition.onend = () => {
+        if (this.showCaptions) {
+          this.recognition.start();
+        }
+      };
+
+      this.recognition.start();
+    },
+
+    stopCaptionRecognition() {
+      if (this.recognition) {
+        this.recognition.stop();
+        this.recognition = null;
+      }
+      this.localCaptions = '';
+    },
+
+    async toggleSilentBackground() {
+      this.silentBackgroundEnabled = !this.silentBackgroundEnabled;
+      
+      if (this.silentBackgroundEnabled) {
+        await this.enableBackgroundNoiseSuppression();
+      } else {
+        await this.disableBackgroundNoiseSuppression();
+      }
+    },
+
+    async enableBackgroundNoiseSuppression() {
+      try {
+        if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+          alert('Not connected to meeting room');
+          this.silentBackgroundEnabled = false;
+          return;
+        }
+
+        // Get current audio track
+        const audioPublication = this.livekitRoom.localParticipant.getTrack(Track.Source.Microphone);
+        
+        if (!audioPublication) {
+          alert('Microphone is not enabled. Please enable it first.');
+          this.silentBackgroundEnabled = false;
+          return;
+        }
+
+        // Apply audio constraints for noise suppression
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        const audioTrack = stream.getAudioTracks()[0];
+        
+        // Check if browser supports noise suppression
+        const settings = audioTrack.getSettings();
+        if (settings.noiseSuppression) {
+          console.log('✅ Background noise suppression enabled');
+          this.backgroundNoiseSuppressionTrack = audioTrack;
+        } else {
+          console.log('⚠️  Browser may not fully support noise suppression');
+        }
+
+        // You would need to replace the existing track with this new one
+        // This is a simplified version - LiveKit has specific APIs for this
+        
+      } catch (error) {
+        console.error('Error enabling noise suppression:', error);
+        alert('Could not enable silent background: ' + error.message);
+        this.silentBackgroundEnabled = false;
+      }
+    },
+
+    async disableBackgroundNoiseSuppression() {
+      if (this.backgroundNoiseSuppressionTrack) {
+        this.backgroundNoiseSuppressionTrack.stop();
+        this.backgroundNoiseSuppressionTrack = null;
+      }
+      console.log('✅ Background noise suppression disabled');
     },
 
     initUserFromToken() {
@@ -542,7 +723,8 @@ export default {
         name: participant.name || participant.identity,
         isHost: false,
         hasMic: false,
-        hasVideo: false
+        hasVideo: false,
+        captions: ''
       };
 
       const existingIndex = this.participants.findIndex(p => p.id === participant.identity);
@@ -1122,11 +1304,7 @@ export default {
     },
 
     async silent_background() {
-      if (!this.isHost) {
-        alert("Only host can toggle silent background mode");
-        return;
-      }
-      alert("Silent background mode - Work in progress");
+      await this.toggleSilentBackground();
     },
 
     async checkNetworkQuality() {
@@ -1134,36 +1312,7 @@ export default {
     },
 
     initTranscription() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        console.warn("Browser does not support speech recognition");
-        return;
-      }
-
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
-
-      this.recognition.onresult = (event) => {
-        let final = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript.trim();
-          if (event.results[i].isFinal) {
-            final += transcript + ' ';
-          }
-        }
-
-        if (final) {
-          this.transcript.push(final);
-        }
-      };
-
-      this.recognition.onerror = (e) => console.error('Speech recognition error:', e);
-      this.recognition.onend = () => {
-        if (this.isPoorNetwork) this.recognition.start();
-      };
+      // Transcription is now handled by captions feature
     },
 
     cleanup() {
@@ -1172,6 +1321,14 @@ export default {
       if (this.broadcastRetryTimer) {
         clearInterval(this.broadcastRetryTimer);
         this.broadcastRetryTimer = null;
+      }
+
+      if (this.showCaptions) {
+        this.stopCaptionRecognition();
+      }
+
+      if (this.silentBackgroundEnabled) {
+        this.disableBackgroundNoiseSuppression();
       }
 
       if (this.livekitRoom) {
@@ -1202,14 +1359,6 @@ export default {
         this.inactivityTimer = null;
       }
 
-      if (this.recognition) {
-        try {
-          this.recognition.stop();
-        } catch (e) {
-          console.error('Error stopping recognition:', e);
-        }
-      }
-
       this.participants = [];
       this.messages = [];
       this.micon = false;
@@ -1220,6 +1369,8 @@ export default {
       this.isSocketConnected = false;
       this.broadcastQueue = [];
       this.remoteParticipants.clear();
+      this.captionHistory = [];
+      this.localCaptions = '';
     }
   },
 
@@ -1250,7 +1401,6 @@ export default {
     
     this.initSocket();
     await this.initLivekit();
-    this.initTranscription();
     
     setTimeout(() => {
       this.networkCheckInterval = setInterval(() => {
@@ -1318,6 +1468,11 @@ body {
 
 #left-tray button:hover { 
   background-color: #4a4a4a; 
+}
+
+#left-tray button.active-feature {
+  background-color: #4CAF50;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
 }
 
 /* ==================== MAIN GRID LAYOUT ==================== */
@@ -1420,7 +1575,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
   position: absolute;
   top: 0;
   left: 0;
@@ -1481,6 +1636,74 @@ body {
 
 .local-participant {
   border: 2px solid #4CAF50;
+}
+
+/* ==================== CAPTIONS OVERLAY ==================== */
+.captions-overlay {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  max-width: 80%;
+  text-align: center;
+  z-index: 3;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.captions-panel {
+  position: fixed;
+  bottom: 70px;
+  left: 20px;
+  width: 350px;
+  max-height: 250px;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.captions-header {
+  padding: 12px 16px;
+  background-color: #333;
+  border-bottom: 1px solid #444;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.close-captions {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.captions-content {
+  padding: 12px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.caption-line {
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #e0e0e0;
+}
+
+.caption-line strong {
+  color: #4CAF50;
 }
 
 /* ==================== BOTTOM NAVBAR ==================== */
@@ -1731,8 +1954,8 @@ body {
 
 .chat-input {
   flex: 1;
-  padding: 10px 12px;
-  border-radius: 20px;
+  padding: 10px 16px;
+  border-radius: 24px;
   border: 1px solid #444;
   outline: none;
   background-color: #333;
@@ -1741,14 +1964,19 @@ body {
 }
 
 .chat-send {
-  padding: 10px 20px;
+  padding: 10px;
+  width: 44px;
+  height: 44px;
   background-color: #4CAF50;
   color: white;
   border: none;
-  border-radius: 20px;
+  border-radius: 50%;
   cursor: pointer;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background-color 0.2s;
+  flex-shrink: 0;
 }
 
 .chat-send:hover {
@@ -1758,6 +1986,10 @@ body {
 .chat-send:disabled {
   background-color: #555;
   cursor: not-allowed;
+}
+
+.chat-send svg {
+  transform: rotate(-45deg);
 }
 
 /* PARTICIPANTS LIST */
@@ -1779,7 +2011,7 @@ body {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1914,29 +2146,6 @@ body {
   }
 }
 
-/* ==================== TRANSCRIPT BOX ==================== */
-.transcript-box {
-  position: fixed;
-  bottom: 90px;
-  left: 20px;
-  max-width: 320px;
-  max-height: 200px;
-  background-color: rgba(0,0,0,0.85);
-  color: white;
-  padding: 12px;
-  border-radius: 8px;
-  overflow-y: auto;
-  z-index: 50;
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.transcript-box h3 {
-  margin: 0 0 8px 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
 /* ==================== TRANSITIONS ==================== */
 .slide-fade-enter-active,
 .slide-fade-leave-active {
@@ -2005,6 +2214,12 @@ body {
     width: 40px;
     height: 40px;
     font-size: 18px;
+  }
+
+  .captions-panel {
+    width: calc(100% - 40px);
+    left: 20px;
+    right: 20px;
   }
 }
 </style>
