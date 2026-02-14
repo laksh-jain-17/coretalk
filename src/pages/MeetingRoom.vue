@@ -1,5 +1,6 @@
 <template>
   <div :class="{'tray-on-right':!turned, 'tray-hidden':!trayVisible}" id="page">
+    <!-- Left Tray - Unchanged -->
     <transition name="slide-left">
       <div id="left-tray" :class="turned ? 'left-tray-left' : 'left-tray-right'" v-if="trayVisible">
         <button @click="silent_background">Silent Background</button>
@@ -7,17 +8,59 @@
         <button @click="turn">Change Panel</button>
       </div>
     </transition>
+
+    <!-- Main Grid View -->
     <div id="main-content">
-      <div id="host">
-        <video ref="localVideo" autoplay muted playsinline></video>
-        <div v-if="!videoon">{{ userName || 'Host' }}</div>
+      <!-- Grid Container for All Participants -->
+      <div id="grid-container" :class="gridClass">
+        <!-- Local User (You) -->
+        <div class="participant-tile local-participant">
+          <video ref="localVideo" autoplay muted playsinline></video>
+          <div v-if="!videoon" class="video-placeholder">
+            <div class="avatar-circle">{{ userInitials }}</div>
+          </div>
+          <div class="participant-info">
+            <span class="participant-name">{{ userName }} (You)</span>
+            <div class="participant-controls">
+              <span v-if="!micon" class="control-icon muted">🎤</span>
+              <span v-if="!videoon" class="control-icon muted">📹</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Remote Participants -->
+        <div 
+          v-for="participant in participants" 
+          :key="participant.id"
+          class="participant-tile"
+          :data-peer-id="participant.id"
+        >
+          <video 
+            :ref="`remoteVideo-${participant.id}`"
+            autoplay 
+            playsinline
+          ></video>
+          <div class="video-placeholder" :class="{ 'hidden': participant.hasVideo }">
+            <div class="avatar-circle">{{ getInitials(participant.name) }}</div>
+          </div>
+          <div class="participant-info">
+            <span class="participant-name">{{ participant.name }}</span>
+            <div class="participant-controls">
+              <span v-if="!participant.hasMic" class="control-icon muted">🎤</span>
+              <span v-if="!participant.hasVideo" class="control-icon muted">📹</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div id="participants" ref="participantsBox"></div>
     </div>
+
+    <!-- Transcript Box -->
     <div v-if="isPoorNetwork" class="transcript-box">
       <h3>Real time transcript</h3>
       <div v-for="(line,i) in transcript" :key="i">{{line}}</div>
     </div>
+
+    <!-- Bottom Navigation Bar -->
     <transition name="slide-fade">
       <div id="navbar" v-show="trayVisible">
         <ul>
@@ -26,7 +69,7 @@
               @mouseenter="() => setHover('mic')"
               @mouseleave="() => setHover(null)"
               @click="toggleMic"
-              :class="{ 'active': micon }"
+              :class="{ 'active': micon, 'inactive': !micon }"
             >
               <IconMaterialSymbolsHeadsetMic />
             </button>
@@ -39,7 +82,7 @@
               @mouseenter="() => setHover('video')"
               @mouseleave="() => setHover(null)"
               @click="toggleVideo"
-              :class="{ 'active': videoon }"
+              :class="{ 'active': videoon, 'inactive': !videoon }"
             >
               <IconMaterialSymbolsVideocam />
             </button>
@@ -52,11 +95,12 @@
               @mouseenter="() => setHover('share')"
               @mouseleave="() => setHover(null)"
               @click="sharescreen"
+              :class="{ 'active': isScreenSharing }"
             >
               <IconMaterialSymbolsScreenShare />
             </button>
             <ul v-if="hoveredIcon === 'share'" class="tooltip">
-              <li>Share screen</li>
+              <li>{{ isScreenSharing ? 'Stop Sharing' : 'Share Screen' }}</li>
             </ul>
           </li>
           <li>
@@ -64,6 +108,7 @@
               @click="leave"
               @mouseenter="() => setHover('leave')"
               @mouseleave="() => setHover(null)"
+              class="leave-button"
             >
               <IconMaterialSymbolsLightCallEnd />
             </button>
@@ -76,7 +121,7 @@
           <li>
             <button @click="togglePanel('list')" @mouseenter="() => setHover('participants')" @mouseleave="() => setHover(null)">
               <IconMaterialSymbolsLightGroup />
-              <span class="participant-count">({{ totalParticipantCount }})</span>
+              <span class="participant-count">{{ totalParticipantCount }}</span>
             </button>
             <ul v-if="hoveredIcon === 'participants'" class="tooltip">
               <li>Participants</li>
@@ -84,18 +129,22 @@
             <div id="list-box" v-if="activePanel === 'list'">
               <div class="list-header">
                 Participants ({{ totalParticipantCount }})
-                <button @click="togglePanel(null)">X</button>
+                <button @click="togglePanel(null)">✕</button>
               </div>
               <div class="list-body">
                 <div class="participant self">
-                  <ul>
-                    <li>{{ userName }} (You) {{ isHost ? '(Host)' : '' }}</li>
-                  </ul>
+                  <div class="participant-avatar">{{ userInitials }}</div>
+                  <div class="participant-details">
+                    <div class="participant-name-text">{{ userName }} (You)</div>
+                    <div class="participant-status">{{ isHost ? 'Host' : 'Participant' }}</div>
+                  </div>
                 </div>
                 <div class="participant" v-for="p in participants" :key="p.id">
-                  <ul>
-                    <li>{{ p.name }} {{ p.isHost ? '(Host)' : '' }}</li>
-                  </ul>
+                  <div class="participant-avatar">{{ getInitials(p.name) }}</div>
+                  <div class="participant-details">
+                    <div class="participant-name-text">{{ p.name }}</div>
+                    <div class="participant-status">{{ p.isHost ? 'Host' : 'Participant' }}</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -111,12 +160,13 @@
             <div id="chat-box" v-if="activePanel === 'chat'">
               <div class="chat-header">
                 Chat
-                <button @click="togglePanel(null)">X</button>
+                <button @click="togglePanel(null)">✕</button>
               </div>
               <div class="chat-body" ref="chatBody">
                 <div v-for="(msg, index) in messages" :key="index" class="message">
-                  <div class="message-header">{{ msg.sender }}</div>
+                  <div class="message-sender">{{ msg.sender }}</div>
                   <div class="message-text">{{ msg.text }}</div>
+                  <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
                 </div>
               </div>
               <div class="chat-input-section">
@@ -128,7 +178,9 @@
                   @keyup.enter="sendMessage" 
                   maxlength="500"
                 />
-                <button class="chat-send" @click="sendMessage" :disabled="!newMessage.trim()">Send</button>
+                <button class="chat-send" @click="sendMessage" :disabled="!newMessage.trim()">
+                  Send
+                </button>
               </div>
             </div>
           </li>
@@ -141,32 +193,51 @@
             </ul>
             <ul v-if="activeDropdown === 'extras'" class="dropdown-menu extras-menu">
               <li @click.stop="hand_raised">
-                {{ hand ? 'Lower hand' : 'Raise hand' }}
-                <div id="hand_warning" v-if="hand">
-                  <p>Hand was raised.</p>
-                </div>
+                {{ hand ? '✋ Lower hand' : '✋ Raise hand' }}
               </li>
               <li @click.stop="toggle_info">
-                Info
-                <div id="info_box" v-if="show_info">
-                  <div id="inside_info">
-                    <div id="info_header">
-                      <b>Meeting Info</b>
-                      <button @click.stop="close_info">X</button>
-                    </div>
-                    <hr />
-                    <p>Meeting Title: {{ title }}</p>
-                    <p>Room ID: {{ roomId }}</p>
-                    <p>Participants: {{ totalParticipantCount }}</p>
-                    <button id="copylink" @click="copystring">Copy Link</button>
-                  </div>
-                </div>
+                ℹ️ Meeting Info
+              </li>
+              <li v-if="isHost" @click.stop="muteAll">
+                🔇 Mute All
+              </li>
+              <li v-if="isHost" @click.stop="endMeeting">
+                🛑 End Meeting
               </li>
             </ul>
           </li>
         </ul>
       </div>
     </transition>
+
+    <!-- Meeting Info Modal -->
+    <div id="info_box" v-if="show_info" @click.stop>
+      <div id="inside_info">
+        <div id="info_header">
+          <b>Meeting Info</b>
+          <button @click.stop="close_info">✕</button>
+        </div>
+        <hr />
+        <div class="info-row">
+          <span class="info-label">Meeting Title:</span>
+          <span class="info-value">{{ title }}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Room ID:</span>
+          <span class="info-value">{{ roomId.substring(0, 20) }}...</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Participants:</span>
+          <span class="info-value">{{ totalParticipantCount }}</span>
+        </div>
+        <button id="copylink" @click="copystring">📋 Copy Meeting Link</button>
+      </div>
+    </div>
+
+    <!-- Hand Raised Notification -->
+    <div id="hand_warning" v-if="hand">
+      <p>✋ Your hand is raised</p>
+    </div>
   </div>
 </template>
 
@@ -203,7 +274,6 @@ export default {
       isRecording: false,
       record: false,
       
-      // Socket.io for chat and signaling
       socket: null,
       isSocketConnected: false,
       participants: [],
@@ -211,7 +281,6 @@ export default {
       newMessage: '',
       unreadMessages: 0,
       
-      // LiveKit
       livekitRoom: null,
       livekitToken: null,
       remoteParticipants: new Map(),
@@ -236,6 +305,20 @@ export default {
       if (!this.livekitRoom) return 1;
       const livekitCount = this.livekitRoom.remoteParticipants.size + 1;
       return livekitCount;
+    },
+
+    userInitials() {
+      return this.getInitials(this.userName);
+    },
+
+    gridClass() {
+      const total = this.totalParticipantCount;
+      if (total === 1) return 'grid-1';
+      if (total === 2) return 'grid-2';
+      if (total <= 4) return 'grid-4';
+      if (total <= 6) return 'grid-6';
+      if (total <= 9) return 'grid-9';
+      return 'grid-many';
     }
   },
 
@@ -258,6 +341,20 @@ export default {
   },
 
   methods: {
+    getInitials(name) {
+      if (!name) return '?';
+      const parts = name.trim().split(' ');
+      if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    },
+
+    formatTime(timestamp) {
+      const date = new Date(timestamp);
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    },
+
     initUserFromToken() {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -461,16 +558,11 @@ export default {
     handleParticipantDisconnected(participant) {
       this.participants = this.participants.filter(p => p.id !== participant.identity);
       this.remoteParticipants.delete(participant.identity);
-
-      const wrapper = document.querySelector(`[data-peer-id="${participant.identity}"]`);
-      if (wrapper && wrapper.parentNode) {
-        wrapper.parentNode.removeChild(wrapper);
-      }
     },
 
     handleTrackSubscribed(track, participant) {
       if (track.kind === Track.Kind.Video) {
-        this.attachVideo(track, participant);
+        this.attachVideoToGrid(track, participant);
       } else if (track.kind === Track.Kind.Audio) {
         this.attachAudio(track, participant);
       }
@@ -482,77 +574,16 @@ export default {
       this.updateRemoteTrackDisplay(participant);
     },
 
-    attachVideo(track, participant) {
-      let wrapper = document.querySelector(`[data-peer-id="${participant.identity}"]`);
-      
-      if (!wrapper) {
-        wrapper = document.createElement('div');
-        wrapper.setAttribute('data-peer-id', participant.identity);
-        wrapper.className = 'remote-participant';
-        wrapper.style.cssText = `
-          display: inline-flex;
-          flex-direction: column;
-          align-items: center;
-          margin: 8px;
-          border: 2px solid #333;
-          border-radius: 8px;
-          padding: 8px;
-          background-color: rgba(0,0,0,0.5);
-          position: relative;
-        `;
-
-        const vid = document.createElement('video');
-        vid.autoplay = true;
-        vid.playsInline = true;
-        vid.muted = true;
-        vid.style.cssText = `
-          width: 280px;
-          height: 160px;
-          border-radius: 8px;
-          object-fit: cover;
-          background-color: #000;
-        `;
-
-        const placeholder = document.createElement('div');
-        placeholder.className = 'video-placeholder';
-        placeholder.style.cssText = `
-          width: 280px;
-          height: 160px;
-          border-radius: 8px;
-          background-color: #000;
-          display: none;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          font-size: 14px;
-        `;
-        placeholder.textContent = 'Video Off';
-
-        const label = document.createElement('div');
-        label.textContent = participant.name || participant.identity;
-        label.style.cssText = `
-          margin-top: 6px;
-          font-size: 14px;
-          color: #eee;
-          font-weight: bold;
-          text-align: center;
-          word-wrap: break-word;
-          max-width: 280px;
-        `;
-
-        wrapper.appendChild(vid);
-        wrapper.appendChild(placeholder);
-        wrapper.appendChild(label);
-
-        if (this.$refs.participantsBox) {
-          this.$refs.participantsBox.appendChild(wrapper);
+    attachVideoToGrid(track, participant) {
+      this.$nextTick(() => {
+        const tile = document.querySelector(`[data-peer-id="${participant.identity}"]`);
+        if (tile) {
+          const videoElement = tile.querySelector('video');
+          if (videoElement) {
+            track.attach(videoElement);
+          }
         }
-      }
-
-      const videoElement = wrapper.querySelector('video');
-      if (videoElement) {
-        track.attach(videoElement);
-      }
+      });
     },
 
     attachAudio(track, participant) {
@@ -563,27 +594,15 @@ export default {
     },
 
     updateRemoteTrackDisplay(participant) {
-      const wrapper = document.querySelector(`[data-peer-id="${participant.identity}"]`);
-      if (!wrapper) return;
-
-      const videoElement = wrapper.querySelector('video');
-      const placeholder = wrapper.querySelector('.video-placeholder');
-
       const videoPublication = participant.getTrack(Track.Source.Camera);
       const hasVideo = videoPublication && !videoPublication.isMuted;
 
-      if (hasVideo) {
-        if (videoElement) videoElement.style.display = 'block';
-        if (placeholder) placeholder.style.display = 'none';
-      } else {
-        if (videoElement) videoElement.style.display = 'none';
-        if (placeholder) placeholder.style.display = 'flex';
-      }
+      const audioPublication = participant.getTrack(Track.Source.Microphone);
+      const hasMic = audioPublication && !audioPublication.isMuted;
 
       const p = this.participants.find(p => p.id === participant.identity);
       if (p) {
-        const audioPublication = participant.getTrack(Track.Source.Microphone);
-        p.hasMic = audioPublication && !audioPublication.isMuted;
+        p.hasMic = hasMic;
         p.hasVideo = hasVideo;
       }
     },
@@ -704,7 +723,6 @@ export default {
       }
     },
 
-    // FIXED: structuredClone error fix for microphone
     async toggleMic() {
       if (this.isInitializingMedia) {
         console.log('Media initialization in progress, ignoring toggle');
@@ -720,17 +738,14 @@ export default {
 
       try {
         if (this.micon) {
-          // Mute microphone
           console.log('Muting microphone...');
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
           this.micon = false;
           console.log('✅ Microphone muted');
         } else {
-          // Unmute microphone - FIX: Get permission first
           console.log('Unmuting microphone...');
           
           try {
-            // Request permission first to avoid structuredClone error
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             stream.getTracks().forEach(track => track.stop());
           } catch (permError) {
@@ -758,7 +773,6 @@ export default {
       }
     },
 
-    // FIXED: structuredClone error fix for camera
     async toggleVideo() {
       if (this.isInitializingMedia) {
         console.log('Media initialization in progress, ignoring toggle');
@@ -774,7 +788,6 @@ export default {
 
       try {
         if (this.videoon) {
-          // Turn off camera
           console.log('Turning off camera...');
           await this.livekitRoom.localParticipant.setCameraEnabled(false);
           this.videoon = false;
@@ -783,11 +796,9 @@ export default {
           if (videoElement) videoElement.srcObject = null;
           console.log('✅ Camera disabled');
         } else {
-          // Turn on camera - FIX: Get permission first
           console.log('Turning on camera...');
           
           try {
-            // Request permission first to avoid structuredClone error
             const stream = await navigator.mediaDevices.getUserMedia({ 
               video: { 
                 width: { ideal: 1280 },
@@ -802,10 +813,8 @@ export default {
           await this.livekitRoom.localParticipant.setCameraEnabled(true);
           this.videoon = true;
           
-          // Small delay to ensure track is ready
           await new Promise(resolve => setTimeout(resolve, 100));
           
-          // Attach local video track to video element
           const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
           if (videoTrack && videoTrack.track) {
             const videoElement = this.$refs.localVideo;
@@ -960,6 +969,7 @@ export default {
 
     toggle_info() {
       this.show_info = !this.show_info;
+      this.activeDropdown = null;
     },
 
     close_info() {
@@ -1200,17 +1210,6 @@ export default {
         }
       }
 
-      if (this.$refs.participantsBox) {
-        const remoteElements = this.$refs.participantsBox.querySelectorAll('[data-peer-id]');
-        remoteElements.forEach(element => {
-          try {
-            element.remove();
-          } catch (e) {
-            console.error('Error removing element:', e);
-          }
-        });
-      }
-
       this.participants = [];
       this.messages = [];
       this.micon = false;
@@ -1271,59 +1270,74 @@ export default {
 </script>
 
 <style>
+/* ==================== GLOBAL STYLES ==================== */
 body {
-  background-color: #222021;
+  background-color: #1c1c1c;
   margin: 0;
-  font-family: Arial, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   color: white;
+  overflow: hidden;
 }
+
 #page {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  background-color: #1c1c1c;
 }
+
+/* ==================== LEFT TRAY ==================== */
 #left-tray {
-  width: 200px;
-  background-color: #333;
+  width: 220px;
+  background-color: #2d2d2d;
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+  gap: 12px;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.3);
   position: fixed;
   top: 0;
   bottom: 0;
-  transition: left 0.4s ease, right 0.4s ease;
+  transition: left 0.3s ease, right 0.3s ease;
   z-index: 5;
 }
+
 .left-tray-left { left: 0; right: auto; }
 .left-tray-right { right: 0; left: auto; }
 
 #left-tray button {
-  background-color: #444;
+  background-color: #3a3a3a;
   color: white;
   border: none;
-  padding: 10px;
+  padding: 12px;
   border-radius: 8px;
   cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
 }
-#left-tray button:hover { background-color: #555; }
 
+#left-tray button:hover { 
+  background-color: #4a4a4a; 
+}
+
+/* ==================== MAIN GRID LAYOUT ==================== */
 #main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 16px;
+  padding-bottom: 80px;
   box-sizing: border-box;
-  transition: margin 0.4s ease;
+  transition: margin 0.3s ease;
+  overflow: hidden;
 }
 
 #page:not(.tray-on-right):not(.tray-hidden) #main-content {
-  margin-left: 200px;
+  margin-left: 220px;
   margin-right: 0;
 }
 #page.tray-on-right:not(.tray-hidden) #main-content {
-  margin-right: 200px;
+  margin-right: 220px;
   margin-left: 0;
 }
 #page.tray-hidden #main-content {
@@ -1331,339 +1345,666 @@ body {
   margin-right: 0;
 }
 
-#host {
-  flex: 3;
-  background-color: blue;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  padding-bottom: 40px;
+/* ==================== GRID CONTAINER ==================== */
+#grid-container {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+
+/* Dynamic Grid Layouts */
+.grid-1 {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: 1fr;
+}
+
+.grid-4 {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.grid-6 {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.grid-9 {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.grid-many {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-rows: minmax(200px, 1fr);
+  overflow-y: auto;
+}
+
+/* ==================== PARTICIPANT TILES ==================== */
+.participant-tile {
+  position: relative;
+  background-color: #2a2a2a;
+  border-radius: 12px;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  overflow: hidden;
+  min-height: 200px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transition: transform 0.2s;
 }
-#host video {
-  position: absolute;
-  top: 0;
-  left: 0;
+
+.participant-tile:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.participant-tile video {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  background-color: transparent;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.video-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: absolute;
+  top: 0;
+  left: 0;
   z-index: 1;
 }
 
-#participants {
-  flex: 1;
-  background-color: #3a3f47;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 10px;
-  margin-bottom: 80px;
-  flex-wrap: wrap;
+.video-placeholder.hidden {
+  display: none;
 }
 
+.avatar-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: bold;
+  color: white;
+  border: 3px solid rgba(255,255,255,0.3);
+}
+
+.participant-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 2;
+}
+
+.participant-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+.participant-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.control-icon {
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+.control-icon.muted {
+  opacity: 0.5;
+}
+
+.local-participant {
+  border: 2px solid #4CAF50;
+}
+
+/* ==================== BOTTOM NAVBAR ==================== */
 #navbar {
   position: fixed;
   bottom: 0;
   left: 0;
-  width: 100%;
-  background-color: #1f1f1f;
-  height: 60px;
-  border-top: 1px solid #444;
+  right: 0;
+  height: 70px;
+  background-color: #202020;
+  border-top: 1px solid #333;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 40px;
   box-sizing: border-box;
   z-index: 10;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
 }
+
 #navbar ul {
   display: flex;
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 20px;
+  gap: 12px;
 }
-#navbar li { position: relative; }
-#navbar li button {
-  background-color: white;
-  color: black;
+
+#navbar li {
+  position: relative;
+}
+
+#navbar button {
+  background-color: #3a3a3a;
+  color: white;
   border: none;
-  border-radius: 10px;
-  padding: 10px 16px;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
   cursor: pointer;
-  font-size: 14px;
-  min-width: 100px;
-  text-align: center;
-  transition: background 0.3s;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
 }
-#navbar li button:hover { background-color: #ddd; }
+
+#navbar button:hover {
+  background-color: #4a4a4a;
+  transform: scale(1.1);
+}
+
+#navbar button.active {
+  background-color: #4CAF50;
+}
+
+#navbar button.inactive {
+  background-color: #d32f2f;
+}
+
+#navbar button.leave-button {
+  background-color: #d32f2f;
+}
+
+#navbar button.leave-button:hover {
+  background-color: #b71c1c;
+}
 
 #rightpane {
   display: flex;
-  gap: 16px;
-  align-items: center;
-}
-#rightpane li { list-style: none; position: relative; }
-#rightpane li button {
-  background-color: #f0f0f0;
-  color: #000;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  min-width: 100px;
-  text-align: center;
-  transition: background 0.3s ease;
+  gap: 12px;
 }
 
-.dropdown { position: relative; }
-.dropdown-menu {
+.participant-count {
   position: absolute;
-  bottom: 60px;
-  background-color: #1f1f1f;
-  border-radius: 6px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.3);
-  list-style: none;
-  min-width: 120px;
-  padding: 5px 0;
-  z-index: 15;
-  display: flex;
-  flex-direction: column;
-}
-.dropdown-menu li {
-  margin: 0;
+  top: -4px;
+  right: -4px;
+  background-color: #4CAF50;
   color: white;
-  padding: 8px 15px;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
 }
-.dropdown-menu li:hover { background-color: #333; }
 
-.slide-fade-enter-active, .slide-fade-leave-active { transition: all 0.3s ease; }
-.slide-fade-enter-from, .slide-fade-leave-to { opacity: 0; transform: translateY(100%); }
-
-.slide-left-enter-active, .slide-left-leave-active { transition: all 0.4s ease; }
-.slide-left-enter-from { transform: translateX(-100%); opacity: 0; }
-.slide-left-leave-to { transform: translateX(-100%); opacity: 0; }
-.slide-left-enter-to, .slide-left-leave-from { transform: translateX(0); opacity: 1; }
-
-.extras-menu {
-  right: 0;
-  left: auto;
-  bottom: 60px;
-  background-color: #1f1f1f;
-  padding: 5px 0;
-  border-radius: 6px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.3);
-  list-style: none;
-  min-width: 140px;
+.message-badge {
   position: absolute;
-  text-align: left;
-  z-index: 15;
-  display: flex;
-  flex-direction: column;
-}
-.extras-menu li {
-  margin: 0;
+  top: -4px;
+  right: -4px;
+  background-color: #f44336;
   color: white;
-  text-decoration: none;
-  display: block;
-  padding: 8px 15px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-.extras-menu li:hover { background-color: #333; }
-
-#chat-box,
-#chat-box .chat-body,
-#chat-box .message { color: #202124; }
-
-#chat-box {
-  position: fixed;
-  bottom: 70px;
-  right: 0;
-  width: 320px;
-  height: calc(100vh - 70px);
-  background-color: #f8f9fa;
-  border-left: 1px solid #ccc;
+  border-radius: 50%;
+  min-width: 20px;
+  height: 20px;
+  font-size: 11px;
   display: flex;
-  flex-direction: column;
-  z-index: 100;
-  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
-  font-family: 'Segoe UI', sans-serif;
-}
-.chat-header {
-  padding: 14px 16px;
-  font-size: 18px;
-  font-weight: 600;
-  background-color: #e8eaed;
-  border-bottom: 1px solid #ccc;
-  display: flex;
-  color: black;
-  justify-content: space-between;
   align-items: center;
-}
-.chat-body { flex: 1; padding: 16px; overflow-y: auto; }
-.message {
-  background-color: white;
-  padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  border: 1px solid #dadce0;
-  box-shadow: 0 1px 3px rgba(60,64,67,0.08);
-  max-width: 80%;
-}
-.chat-input-section {
-  display: flex;
-  padding: 12px;
-  border-top: 1px solid #ccc;
-  background-color: #e8eaed;
-}
-.chat-input {
-  flex: 1;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  outline: none;
-  background-color: white;
-}
-.chat-send {
-  margin-left: 8px;
-  padding: 10px 16px;
-  background-color: #1a73e8;
-  color: black;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.chat-send:hover { background-color: #1558d6; }
-
-#list-box,
-#list-box .list-body,
-#list-box .participant { color: #202124; }
-
-#list-box {
-  position: fixed;
-  bottom: 70px;
-  right: 0;
-  width: 320px;
-  height: calc(100vh - 70px);
-  background-color: #f8f9fa;
-  border-left: 1px solid #ccc;
-  display: flex;
-  flex-direction: column;
-  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  font-family: 'Segoe UI', sans-serif;
-  transition: transform 0.3s ease;
-}
-.list-header {
-  padding: 14px 16px;
-  font-size: 18px;
-  font-weight: 600;
-  background-color: #e8eaed;
-  border-bottom: 1px solid #ccc;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.list-body { flex: 1; padding: 16px; overflow-y: auto; }
-.participant {
-  background-color: white;
-  border: 1px solid #dadce0;
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-bottom: 10px;
-  box-shadow: 0 1px 3px rgba(60,64,67,0.1);
+  justify-content: center;
+  font-weight: bold;
+  padding: 0 4px;
 }
 
+/* ==================== TOOLTIPS ==================== */
 .tooltip {
   position: absolute;
   bottom: 60px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: black;
+  background-color: rgba(0,0,0,0.9);
   color: white;
-  padding: 6px 8px;
+  padding: 6px 12px;
   border-radius: 6px;
   font-size: 12px;
   white-space: nowrap;
   z-index: 99;
   pointer-events: none;
+  list-style: none;
+  margin: 0;
 }
 
+.tooltip li {
+  margin: 0;
+  padding: 0;
+}
+
+/* ==================== DROPDOWNS ==================== */
+.dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  bottom: 60px;
+  right: 0;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  list-style: none;
+  min-width: 180px;
+  padding: 8px 0;
+  z-index: 15;
+}
+
+.dropdown-menu li {
+  margin: 0;
+  color: white;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 14px;
+}
+
+.dropdown-menu li:hover {
+  background-color: #3a3a3a;
+}
+
+/* ==================== PANELS (CHAT & PARTICIPANTS) ==================== */
+#chat-box,
+#list-box {
+  position: fixed;
+  bottom: 70px;
+  right: 0;
+  width: 340px;
+  height: calc(100vh - 70px);
+  background-color: #2a2a2a;
+  border-left: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.3);
+}
+
+.chat-header,
+.list-header {
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  background-color: #333;
+  border-bottom: 1px solid #444;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-header button,
+.list-header button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.chat-header button:hover,
+.list-header button:hover {
+  background-color: #444;
+}
+
+.chat-body,
+.list-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+/* CHAT MESSAGES */
+.message {
+  background-color: #333;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.message-sender {
+  font-weight: 600;
+  font-size: 13px;
+  color: #4CAF50;
+  margin-bottom: 4px;
+}
+
+.message-text {
+  font-size: 14px;
+  color: #e0e0e0;
+  word-wrap: break-word;
+}
+
+.message-time {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.chat-input-section {
+  display: flex;
+  padding: 12px;
+  border-top: 1px solid #444;
+  background-color: #2a2a2a;
+  gap: 8px;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 20px;
+  border: 1px solid #444;
+  outline: none;
+  background-color: #333;
+  color: white;
+  font-size: 14px;
+}
+
+.chat-send {
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.chat-send:hover {
+  background-color: #45a049;
+}
+
+.chat-send:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+
+/* PARTICIPANTS LIST */
+.participant {
+  background-color: #333;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.participant.self {
+  border: 2px solid #4CAF50;
+}
+
+.participant-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.participant-details {
+  flex: 1;
+}
+
+.participant-name-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 2px;
+}
+
+.participant-status {
+  font-size: 12px;
+  color: #888;
+}
+
+/* ==================== MEETING INFO MODAL ==================== */
 #info_box {
   position: fixed;
-  right: 70px;
-  bottom: 70px;
-  width: 240px;
-  background-color: white;
-  color: black;
-  border-radius: 10px;
-  padding: 15px;
-  font-family: 'Segoe UI', sans-serif;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  max-width: 90vw;
+  background-color: #2a2a2a;
+  color: white;
+  border-radius: 12px;
+  padding: 24px;
   z-index: 101;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
-#inside_info { width: 100%; }
+
 #info_header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
 }
-#info_header b { font-size: 16px; font-weight: 600; }
+
+#info_header b {
+  font-size: 18px;
+  font-weight: 600;
+}
+
 #info_header button {
   background: none;
   border: none;
-  font-size: 16px;
-  font-weight: bold;
+  font-size: 20px;
+  color: white;
   cursor: pointer;
-  color: #666;
-  padding: 2px 6px;
-  border-radius: 3px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
 }
-#info_header button:hover { background-color: #f0f0f0; }
-#info_box hr { border: none; border-top: 1px solid #ddd; margin: 10px 0; }
-#info_box p { margin: 8px 0; font-size: 14px; }
-#hand_warning {
-  position: fixed;
-  right: 640px;
-  width: 200px;
-  bottom: 70px;
-  background-color: #333;
-  color: white;
+
+#info_header button:hover {
+  background-color: #3a3a3a;
+}
+
+#info_box hr {
+  border: none;
+  border-top: 1px solid #444;
+  margin: 16px 0;
+}
+
+.info-row {
   display: flex;
-  border-radius: 5px;
-  padding-top: 10px;
-  padding-left: 10px;
-  font-family: 'Segoe UI', sans-serif;
-  flex-direction: column;
-  z-index: 101;
-}
-.transcript-box {
-  position: absolute;
-  bottom: 100px;
-  left: 20px;
-  background: rgba(0,0,0,0.7);
-  color: white;
-  padding: 10px;
-  max-width: 300px;
-  max-height: 200px;
-  overflow-y: auto;
-  border-radius: 8px;
+  justify-content: space-between;
+  margin-bottom: 12px;
   font-size: 14px;
 }
-#copylink {
-  background-color: black;
+
+.info-label {
+  color: #888;
+}
+
+.info-value {
   color: white;
-  border-radius: 2px;
+  font-weight: 500;
+}
+
+#copylink {
+  width: 100%;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 16px;
+  transition: background-color 0.2s;
+}
+
+#copylink:hover {
+  background-color: #45a049;
+}
+
+/* ==================== HAND RAISED NOTIFICATION ==================== */
+#hand_warning {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: #FFA726;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 101;
+  font-weight: 600;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* ==================== TRANSCRIPT BOX ==================== */
+.transcript-box {
+  position: fixed;
+  bottom: 90px;
+  left: 20px;
+  max-width: 320px;
+  max-height: 200px;
+  background-color: rgba(0,0,0,0.85);
+  color: white;
+  padding: 12px;
+  border-radius: 8px;
+  overflow-y: auto;
+  z-index: 50;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.transcript-box h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ==================== TRANSITIONS ==================== */
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.slide-left-enter-active,
+.slide-left-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-left-enter-from {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+.slide-left-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+/* ==================== SCROLLBAR STYLING ==================== */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* ==================== RESPONSIVE DESIGN ==================== */
+@media (max-width: 768px) {
+  #left-tray {
+    width: 180px;
+  }
+  
+  #chat-box,
+  #list-box {
+    width: 100%;
+  }
+  
+  .grid-many {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+  
+  #navbar {
+    padding: 0 16px;
+  }
+  
+  #navbar button {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
 }
 </style>
