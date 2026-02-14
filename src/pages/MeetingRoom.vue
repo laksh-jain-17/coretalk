@@ -337,8 +337,8 @@ export default {
     },
     
     totalParticipantCount() {
-      if (!this.livekitRoom) return 1;
-      const livekitCount = this.livekitRoom.remoteParticipants.size + 1;
+      if (!this.livekitRoom || !this.livekitRoom.remoteParticipants) return 1;
+      const livekitCount = (this.livekitRoom.remoteParticipants?.size || 0) + 1;
       return livekitCount;
     },
 
@@ -2223,3 +2223,4 @@ body {
   }
 }
 </style>
+
