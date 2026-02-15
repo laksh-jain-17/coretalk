@@ -21,9 +21,9 @@ onMounted(async() => {
       user.value = res.data.user;
       
       //  PROFESSIONAL TOUCH: If user is on Login but has a valid session, move them!
-      if (window.location.pathname === '/Login' || window.location.pathname === '/') {
+      /*if (window.location.pathname === '/Login' || window.location.pathname === '/') {
          window.location.href = '/Schedule';
-      }
+      }*/
     }
     catch(err) {
       console.error("Session expired or invalid");
