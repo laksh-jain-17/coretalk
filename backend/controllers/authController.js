@@ -82,7 +82,7 @@ exports.login = async (req, res) => {
     const token = jwt.sign(
       { id: user._id, isAdmin: isAdmin },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '1h' }
     );
     
     return res.status(200).json({
@@ -99,4 +99,3 @@ exports.login = async (req, res) => {
     return res.status(500).json({ msg: 'Server error' });
   }
 };
-
