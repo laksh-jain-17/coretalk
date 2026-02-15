@@ -31,12 +31,18 @@ const router = createRouter({
     ],
 });
 
-router.beforeEach((to,from,next) => {
-    if(to.meta.requiresAuth && !isLoggedIn())
-    {
+router.beforeEach((to, from, next) => {
+    const loggedIn = isLoggedIn();
+
+    // 1. Protect private pages
+    if (to.meta.requiresAuth && !loggedIn) {
         next('/Login');
+    } 
+    // 2. Prevent logged-in users from going back to Login/Registration
+    else if ((to.path === '/Login' || to.path === '/Registration') && loggedIn) {
+        next('/Schedule');
     }
-    else{
+    else {
         next();
     }
 });
