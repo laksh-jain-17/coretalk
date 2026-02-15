@@ -14,13 +14,13 @@ onMounted(async() => {
   const token = getToken();
   if(token) {
     try {
-      // ✅ Fixed the template literal and used the axios instance
+      //  Fixed the template literal and used the axios instance
       const res = await axios.get('/api/auth/profile', {
         headers: { Authorization: `Bearer ${token}` }
       });
       user.value = res.data.user;
       
-      // ✅ PROFESSIONAL TOUCH: If user is on Login but has a valid session, move them!
+      //  PROFESSIONAL TOUCH: If user is on Login but has a valid session, move them!
       if (window.location.pathname === '/Login' || window.location.pathname === '/') {
          window.location.href = '/Schedule';
       }
