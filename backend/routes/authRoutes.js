@@ -190,7 +190,7 @@ router.post('/google-login', async (req, res) => {
     const token = jwt.sign(
       { id: user._id, isAdmin: user.isAdmin || false },
       process.env.JWT_SECRET,
-      { expiresIn: '2h' }
+      { expiresIn: '7d' }
     );
 
     return res.status(200).json({
@@ -247,3 +247,4 @@ router.delete('/delete-account',authMiddleware,async(req,res) => {
 });	
 
 module.exports = router;
+
