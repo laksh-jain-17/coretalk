@@ -31,8 +31,20 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', login);
 
-router.get('/profile', authMiddleware, (req, res) => {
+/*router.get('/profile', authMiddleware, (req, res) => {
   res.json({ msg: 'Protected user', user: req.user });
+});*/
+
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    // Fetch full user details from DB excluding password
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+    
+    res.json({ user }); // This matches what your App.vue expects (res.data.user)
+  } catch (err) {
+    res.status(500).json({ msg: 'Server error' });
+  }
 });
 
 router.get('/public', (req, res) => {
@@ -247,4 +259,5 @@ router.delete('/delete-account',authMiddleware,async(req,res) => {
 });	
 
 module.exports = router;
+
 
