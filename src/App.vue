@@ -12,28 +12,21 @@ import { getToken, logout } from './auth'
 const user = ref(null);
 onMounted(async() => {
   const token = getToken();
-  if(token) {
-    try {
-      //  Fixed the template literal and used the axios instance
-      const res = await axios.get('/api/auth/profile', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      user.value = res.data.user;
-      
-      //  PROFESSIONAL TOUCH: If user is on Login but has a valid session, move them!
-      /*if (window.location.pathname === '/Login' || window.location.pathname === '/') {
-         window.location.href = '/Schedule';
-      }*/
+  if(token)
+  {
+    try{
+      const res = await axios.get('http://localhost:5000/api/auth/profile',{
+        headers: {Authorization: `Bearer {$token}`}
+      })
+      user.value = res.data.user
     }
-    catch(err) {
-      console.error("Session expired or invalid");
+    catch(err)
+    {
       logout();
-      if (window.location.pathname !== '/Login') {
-        window.location.href = '/Login';
-      }
+      window.location.href = '/Login'
     }
   }
-});
+})
 </script>
 
 <template>
