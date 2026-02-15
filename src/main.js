@@ -35,11 +35,11 @@ router.beforeEach((to, from, next) => {
     const loggedIn = isLoggedIn();
 
     // 1. Protect private pages
-    if (to.meta.requiresAuth && !loggedIn && !token) {
+    if (to.meta.requiresAuth && !loggedIn) {
         next('/Login');
     } 
     // 2. Prevent logged-in users from going back to Login/Registration
-    else if ((to.path === '/Login' || to.path === '/Registration') && loggedIn && token) {
+    else if ((to.path === '/Login' || to.path === '/Registration') && loggedIn) {
         next('/Schedule');
     }
     else {
