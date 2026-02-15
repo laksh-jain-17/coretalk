@@ -6,7 +6,4 @@ export function getToken(){
 }
 export function logout(){
     localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    localStorage.removeItem('isHost');
-    window.location.href = '/Login';
 }
