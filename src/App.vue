@@ -1,4 +1,4 @@
-<script setup>
+<script>
 import Login from './pages/Login.vue'
 import Ending from './pages/Ending.vue'
 import Registration from './pages/Registration.vue'
