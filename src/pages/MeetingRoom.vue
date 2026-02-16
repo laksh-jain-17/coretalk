@@ -4,12 +4,15 @@
     <transition name="slide-left">
       <div id="left-tray" :class="turned ? 'left-tray-left' : 'left-tray-right'" v-if="trayVisible">
         <button @click="toggleSilentBackground" :class="{ 'active-feature': silentBackgroundEnabled }">
-          {{ silentBackgroundEnabled ? '🔇 Silent Mode ON' : '🔊 Silent Background' }}
+          {{ silentBackgroundEnabled ? '🔇 Silent Mode ON' : '🔇 Silent Background' }}
         </button>
         <button @click="recording">
           {{ isRecording ? '⏹️ Stop Recording' : '⏺️ Start Recording' }}
         </button>
         <button @click="turn">🔄 Change Panel</button>
+        <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
+          {{ isFullscreen ? '⛶ Exit Fullscreen' : '⛶ Fullscreen' }}
+        </button>
       </div>
     </transition>
 
@@ -238,7 +241,7 @@
       </div>
     </transition>
 
-    <!-- Meeting Info Modal -->
+    <!-- Meeting Info Modal - REPOSITIONED TO BOTTOM RIGHT -->
     <div id="info_box" v-if="show_info" @click.stop>
       <div id="inside_info">
         <div id="info_header">
@@ -296,6 +299,7 @@ export default {
       micon: false,
       videoon: false,
       isScreenSharing: false,
+      isFullscreen: false,
       
       mediaRecorder: null,
       recordedChunks: [],
@@ -390,6 +394,51 @@ export default {
       return `${hours}:${minutes}`;
     },
 
+    toggleFullscreen() {
+      if (!this.isFullscreen) {
+        this.enterFullscreen();
+      } else {
+        this.exitFullscreen();
+      }
+    },
+
+    enterFullscreen() {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+      this.isFullscreen = true;
+    },
+
+    exitFullscreen() {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      this.isFullscreen = false;
+    },
+
+    handleFullscreenChange() {
+      this.isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement
+      );
+    },
+
+    handleEscKey(e) {
+      if (e.key === 'Escape' && this.isFullscreen) {
+        this.exitFullscreen();
+      }
+    },
+
     toggleCaptions() {
       this.showCaptions = !this.showCaptions;
       this.activeDropdown = null;
@@ -427,10 +476,8 @@ export default {
           }
         }
 
-        // Update local captions
         this.localCaptions = interimTranscript || finalTranscript;
 
-        // Add to history when final
         if (finalTranscript) {
           this.captionHistory.push({
             speaker: this.userName,
@@ -438,12 +485,10 @@ export default {
             timestamp: Date.now()
           });
 
-          // Keep only last 50 captions
           if (this.captionHistory.length > 50) {
             this.captionHistory.shift();
           }
 
-          // Clear local captions after adding to history
           setTimeout(() => {
             this.localCaptions = '';
           }, 2000);
@@ -489,7 +534,6 @@ export default {
           return;
         }
 
-        // Get current audio track
         const audioPublication = this.livekitRoom.localParticipant.getTrack(Track.Source.Microphone);
         
         if (!audioPublication) {
@@ -498,7 +542,6 @@ export default {
           return;
         }
 
-        // Apply audio constraints for noise suppression
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
@@ -509,7 +552,6 @@ export default {
 
         const audioTrack = stream.getAudioTracks()[0];
         
-        // Check if browser supports noise suppression
         const settings = audioTrack.getSettings();
         if (settings.noiseSuppression) {
           console.log('✅ Background noise suppression enabled');
@@ -517,9 +559,6 @@ export default {
         } else {
           console.log('⚠️  Browser may not fully support noise suppression');
         }
-
-        // You would need to replace the existing track with this new one
-        // This is a simplified version - LiveKit has specific APIs for this
         
       } catch (error) {
         console.error('Error enabling noise suppression:', error);
@@ -1224,35 +1263,6 @@ export default {
       }
     },
 
-    async lockMeeting() {
-      if (!this.isHost) {
-        alert("Only host can lock the meeting");
-        return;
-      }
-
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/lock-meeting`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId: this.roomId })
-        });
-        
-        if (res.ok) {
-          alert("Meeting has been locked");
-        }
-      } catch(err) {
-        console.error("Error locking meeting:", err);
-      }
-    },
-
-    transfer() {
-      if (!this.isHost) {
-        alert("Only host can transfer meeting");
-        return;
-      }
-      alert("Host transfer - Work in progress");
-    },
-
     async recording() {
       if (!this.isHost) {
         alert("Only host can start recording");
@@ -1303,16 +1313,8 @@ export default {
       }
     },
 
-    async silent_background() {
-      await this.toggleSilentBackground();
-    },
-
     async checkNetworkQuality() {
       if (!this.livekitRoom) return;
-    },
-
-    initTranscription() {
-      // Transcription is now handled by captions feature
     },
 
     cleanup() {
@@ -1381,6 +1383,10 @@ export default {
     document.removeEventListener("keydown", this.resetinactivityTimer);
     document.removeEventListener("click", this.resetinactivityTimer);
     document.removeEventListener("touchstart", this.resetinactivityTimer);
+    document.removeEventListener("fullscreenchange", this.handleFullscreenChange);
+    document.removeEventListener("webkitfullscreenchange", this.handleFullscreenChange);
+    document.removeEventListener("msfullscreenchange", this.handleFullscreenChange);
+    document.removeEventListener("keydown", this.handleEscKey);
   },
 
   async mounted() {
@@ -1413,6 +1419,12 @@ export default {
     document.addEventListener("keydown", this.resetinactivityTimer);
     document.addEventListener("click", this.resetinactivityTimer);
     document.addEventListener("touchstart", this.resetinactivityTimer);
+
+    // Fullscreen event listeners
+    document.addEventListener("fullscreenchange", this.handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", this.handleFullscreenChange);
+    document.addEventListener("msfullscreenchange", this.handleFullscreenChange);
+    document.addEventListener("keydown", this.handleEscKey);
 
     console.log('=== COMPONENT MOUNTED SUCCESSFULLY ===');
   }
@@ -1864,7 +1876,7 @@ body {
   background-color: #3a3a3a;
 }
 
-/* ==================== PANELS (CHAT & PARTICIPANTS) ==================== */
+/* ==================== PANELS (CHAT & PARTICIPANTS) - WHITE THEME ==================== */
 #chat-box,
 #list-box {
   position: fixed;
@@ -1872,12 +1884,12 @@ body {
   right: 0;
   width: 340px;
   height: calc(100vh - 70px);
-  background-color: #2a2a2a;
-  border-left: 1px solid #333;
+  background-color: #ffffff;
+  border-left: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
   z-index: 100;
-  box-shadow: -4px 0 12px rgba(0,0,0,0.3);
+  box-shadow: -4px 0 12px rgba(0,0,0,0.1);
 }
 
 .chat-header,
@@ -1885,9 +1897,9 @@ body {
   padding: 16px;
   font-size: 16px;
   font-weight: 600;
-  background-color: #333;
-  border-bottom: 1px solid #444;
-  color: white;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  color: #000000;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1897,7 +1909,7 @@ body {
 .list-header button {
   background: none;
   border: none;
-  color: white;
+  color: #000000;
   font-size: 20px;
   cursor: pointer;
   padding: 4px 8px;
@@ -1907,7 +1919,7 @@ body {
 
 .chat-header button:hover,
 .list-header button:hover {
-  background-color: #444;
+  background-color: #e0e0e0;
 }
 
 .chat-body,
@@ -1915,14 +1927,16 @@ body {
   flex: 1;
   padding: 16px;
   overflow-y: auto;
+  background-color: #ffffff;
 }
 
 /* CHAT MESSAGES */
 .message {
-  background-color: #333;
+  background-color: #f5f5f5;
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 12px;
+  border: 1px solid #e0e0e0;
 }
 
 .message-sender {
@@ -1934,21 +1948,21 @@ body {
 
 .message-text {
   font-size: 14px;
-  color: #e0e0e0;
+  color: #333333;
   word-wrap: break-word;
 }
 
 .message-time {
   font-size: 11px;
-  color: #888;
+  color: #888888;
   margin-top: 4px;
 }
 
 .chat-input-section {
   display: flex;
   padding: 12px;
-  border-top: 1px solid #444;
-  background-color: #2a2a2a;
+  border-top: 1px solid #e0e0e0;
+  background-color: #ffffff;
   gap: 8px;
 }
 
@@ -1956,11 +1970,15 @@ body {
   flex: 1;
   padding: 10px 16px;
   border-radius: 24px;
-  border: 1px solid #444;
+  border: 1px solid #e0e0e0;
   outline: none;
-  background-color: #333;
-  color: white;
+  background-color: #f5f5f5;
+  color: #000000;
   font-size: 14px;
+}
+
+.chat-input::placeholder {
+  color: #888888;
 }
 
 .chat-send {
@@ -1984,7 +2002,7 @@ body {
 }
 
 .chat-send:disabled {
-  background-color: #555;
+  background-color: #cccccc;
   cursor: not-allowed;
 }
 
@@ -1994,17 +2012,19 @@ body {
 
 /* PARTICIPANTS LIST */
 .participant {
-  background-color: #333;
+  background-color: #f5f5f5;
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 8px;
   display: flex;
   align-items: center;
   gap: 12px;
+  border: 1px solid #e0e0e0;
 }
 
 .participant.self {
   border: 2px solid #4CAF50;
+  background-color: #e8f5e9;
 }
 
 .participant-avatar {
@@ -2028,29 +2048,29 @@ body {
 .participant-name-text {
   font-size: 14px;
   font-weight: 600;
-  color: white;
+  color: #000000;
   margin-bottom: 2px;
 }
 
 .participant-status {
   font-size: 12px;
-  color: #888;
+  color: #666666;
 }
 
-/* ==================== MEETING INFO MODAL ==================== */
+/* ==================== MEETING INFO MODAL - WHITE THEME & BOTTOM RIGHT ==================== */
 #info_box {
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  bottom: 80px;
+  right: 20px;
   width: 360px;
   max-width: 90vw;
-  background-color: #2a2a2a;
-  color: white;
+  background-color: #ffffff;
+  color: #000000;
   border-radius: 12px;
   padding: 24px;
   z-index: 101;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  border: 1px solid #e0e0e0;
 }
 
 #info_header {
@@ -2063,13 +2083,14 @@ body {
 #info_header b {
   font-size: 18px;
   font-weight: 600;
+  color: #000000;
 }
 
 #info_header button {
   background: none;
   border: none;
   font-size: 20px;
-  color: white;
+  color: #000000;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
@@ -2077,12 +2098,12 @@ body {
 }
 
 #info_header button:hover {
-  background-color: #3a3a3a;
+  background-color: #f5f5f5;
 }
 
 #info_box hr {
   border: none;
-  border-top: 1px solid #444;
+  border-top: 1px solid #e0e0e0;
   margin: 16px 0;
 }
 
@@ -2094,11 +2115,11 @@ body {
 }
 
 .info-label {
-  color: #888;
+  color: #666666;
 }
 
 .info-value {
-  color: white;
+  color: #000000;
   font-weight: 500;
 }
 
@@ -2179,15 +2200,28 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #2a2a2a;
+  background: #f5f5f5;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #555;
+  background: #cccccc;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: #aaaaaa;
+}
+
+/* Dark scrollbars for dark panels */
+.captions-content::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.captions-content::-webkit-scrollbar-thumb {
+  background: #555;
+}
+
+.captions-content::-webkit-scrollbar-thumb:hover {
   background: #666;
 }
 
@@ -2221,6 +2255,11 @@ body {
     left: 20px;
     right: 20px;
   }
+
+  #info_box {
+    width: calc(100% - 40px);
+    right: 20px;
+    left: 20px;
+  }
 }
 </style>
-
