@@ -28,7 +28,7 @@ CoreTalk is a working, deployed communication web app built entirely with the ME
 
 | Layer | Technology |
 |---|---|
-| Frontend | Vue 3, Vue Router, Pinia |
+| Frontend | Vue 3 |
 | Backend | Node.js, Express.js |
 | Database | MongoDB (Mongoose) |
 | Real-Time | Socket.io |
