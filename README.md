@@ -79,9 +79,3 @@ Frontend deployed on **Vercel** with SPA routing configured so all paths resolve
 Backend deployed separately with environment variables managed securely via the hosting platform — **never committed to version control.**
 
 ---
-
-## ⚠️ Note on Environment Variables
-
-This project uses sensitive credentials (OAuth secrets, database URIs, media server keys). These are **never stored in the repository**. All secrets are managed through the deployment platform's environment variable settings.
-
----
