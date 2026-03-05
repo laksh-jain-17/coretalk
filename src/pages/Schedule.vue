@@ -3,7 +3,7 @@
     <div id="container">
       <div id="leftbox">
         <h1>Welcome to CoreTalk</h1>
-        <p>Take benefit of our online meeting / conference platform with numerous features to the full extent.</p>
+        <p>Take benefit of our online meeting platform with numerous features to the full extent.</p>
       </div>
       <div id="rightbox">
         <p id="admin-link" v-if="isAdmin"><router-link to="/Admin">Check Admin Dashboard</router-link></p>
@@ -230,4 +230,5 @@ export default {
   }
 }
 </style>
+
 
