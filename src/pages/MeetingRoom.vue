@@ -13,6 +13,9 @@
         <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
           {{ isFullscreen ? '⛶ Exit Fullscreen' : '⛶ Fullscreen' }}
         </button>
+        <button @click="">
+          Enact Email
+        </button>
       </div>
     </transition>
 
@@ -185,7 +188,7 @@
             </ul>
             <div id="chat-box" v-if="activePanel === 'chat'">
               <div class="chat-header">
-                💬 Chat
+                 Chat
                 <button @click="togglePanel(null)">✕</button>
               </div>
               <div class="chat-body" ref="chatBody">
@@ -2263,3 +2266,4 @@ body {
   }
 }
 </style>
+
