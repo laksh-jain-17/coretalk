@@ -557,10 +557,10 @@ export default {
         
         const settings = audioTrack.getSettings();
         if (settings.noiseSuppression) {
-          console.log('✅ Background noise suppression enabled');
+          console.log('Background noise suppression enabled');
           this.backgroundNoiseSuppressionTrack = audioTrack;
         } else {
-          console.log('⚠️  Browser may not fully support noise suppression');
+          console.log('Browser may not fully support noise suppression');
         }
         
       } catch (error) {
@@ -575,7 +575,7 @@ export default {
         this.backgroundNoiseSuppressionTrack.stop();
         this.backgroundNoiseSuppressionTrack = null;
       }
-      console.log('✅ Background noise suppression disabled');
+      console.log('Background noise suppression disabled');
     },
 
     initUserFromToken() {
@@ -690,14 +690,14 @@ export default {
       console.log('WS URL:', wsUrl);
       
       if (typeof token !== 'string' || token.length < 20 || token === '[object Object]') {
-        console.error('❌ Invalid token format:', token);
+        console.error('Invalid token format:', token);
         alert('Failed to get valid authentication token.');
         return;
       }
       
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3) {
-        console.error('❌ Token does not have JWT structure:', token);
+        console.error('Token does not have JWT structure:', token);
         alert('Invalid token structure.');
         return;
       }
@@ -710,7 +710,7 @@ export default {
       this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
         console.log('LiveKit connection state:', state);
         if (state === ConnectionState.Connected) {
-          console.log('✅ Connected to LiveKit room');
+          console.log('Connected to LiveKit room');
         }
       });
 
@@ -748,12 +748,12 @@ export default {
         console.log('Attempting to connect to LiveKit...');
         await this.livekitRoom.connect(wsUrl, token);
         
-        console.log('✅ LiveKit room connected successfully');
-        console.log('✅ Room name:', this.livekitRoom.name);
+        console.log('LiveKit room connected successfully');
+        console.log('Room name:', this.livekitRoom.name);
         
         this.livekitToken = token;
       } catch (error) {
-        console.error('❌ Failed to connect to LiveKit:', error);
+        console.error('Failed to connect to LiveKit:', error);
         alert('Failed to join meeting room: ' + error.message);
       }
     },
@@ -965,7 +965,7 @@ export default {
           console.log('Muting microphone...');
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
           this.micon = false;
-          console.log('✅ Microphone muted');
+          console.log('Microphone muted');
         } else {
           console.log('Unmuting microphone...');
           
@@ -978,10 +978,10 @@ export default {
           
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
           this.micon = true;
-          console.log('✅ Microphone enabled');
+          console.log('Microphone enabled');
         }
       } catch (error) {
-        console.error('❌ Error toggling microphone:', error);
+        console.error('Error toggling microphone:', error);
         
         if (error.name === 'NotAllowedError') {
           alert('Microphone permission denied. Please allow microphone access in your browser settings.');
@@ -1018,7 +1018,7 @@ export default {
           
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoElement.srcObject = null;
-          console.log('✅ Camera disabled');
+          console.log('Camera disabled');
         } else {
           console.log('Turning on camera...');
           
@@ -1046,10 +1046,10 @@ export default {
               videoTrack.track.attach(videoElement);
             }
           }
-          console.log('✅ Camera enabled');
+          console.log('Camera enabled');
         }
       } catch (error) {
-        console.error('❌ Error toggling camera:', error);
+        console.error('Error toggling camera:', error);
         
         if (error.name === 'NotAllowedError') {
           alert('Camera permission denied. Please allow camera access in your browser settings.');
@@ -1085,12 +1085,12 @@ export default {
               screenTrack.track.attach(videoElement);
             }
           }
-          console.log('✅ Screen sharing started');
+          console.log('Screen sharing started');
         } else {
           await this.stopScreenShare();
         }
       } catch (error) {
-        console.error('❌ Error sharing screen:', error);
+        console.error('Error sharing screen:', error);
         
         if (error.name === 'NotAllowedError') {
           alert('Screen sharing permission denied.');
@@ -1119,7 +1119,7 @@ export default {
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoElement.srcObject = null;
         }
-        console.log('✅ Screen sharing stopped');
+        console.log('Screen sharing stopped');
       } catch (error) {
         console.error('Error stopping screen share:', error);
       }
@@ -2266,4 +2266,5 @@ body {
   }
 }
 </style>
+
 
