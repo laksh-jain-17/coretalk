@@ -4,7 +4,7 @@
       <div id="leftbox">
         <div v-if="welcomeText">
           <h1>Welcome to CoreTalk</h1>
-          <p>Take benefit of the our online meeting / conference platform with numerous features.</p>
+          <p>Take benefit of the our online meeting platform with numerous features.</p>
         </div>
         <div v-else>
           <div id="new_updates">
@@ -540,6 +540,7 @@ export default {
   }
 }
 </style>
+
 
 
 
