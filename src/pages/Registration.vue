@@ -3,7 +3,7 @@
     <div id="container" v-if="show">
         <div id="leftbox">
             <h1>Welcome to CoreTalk</h1>
-            <p>Take benefit of the our online meeting / conference platform with numerous features to the full extent.</p>
+            <p>Take benefit of the our online meeting platform with numerous features to the full extent.</p>
         </div>
         <div id="rightbox">
             <!--h1>Registration page</h1-->
@@ -215,4 +215,5 @@
 }
 
 </style>
+
 
