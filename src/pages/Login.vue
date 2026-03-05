@@ -14,12 +14,10 @@
             <ol>
               <li>Auto-closing trays while inactive.</li>
               <li>Wider video feed.</li>
-              <li>Silent Background feature.</li>
+              <li>Lightweight and reliable application.</li>
               <li>User customization allowed.</li>
-              <li>Real time transcript (improved offline handling).</li>
-              <li>Improved UX for unstable connection.</li>
             </ol>
-            <p>Version v1.</p>
+            <p>Version v2.</p>
           </div>
         </div>
       </div>
@@ -542,6 +540,7 @@ export default {
   }
 }
 </style>
+
 
 
 
