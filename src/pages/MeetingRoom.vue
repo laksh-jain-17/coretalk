@@ -13,9 +13,6 @@
         <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
           {{ isFullscreen ? '⛶ Exit Fullscreen' : '⛶ Fullscreen' }}
         </button>
-        <button @click="">
-          Enact Email
-        </button>
       </div>
     </transition>
 
@@ -2266,5 +2263,6 @@ body {
   }
 }
 </style>
+
 
 
