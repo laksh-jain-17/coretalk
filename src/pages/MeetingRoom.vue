@@ -13,9 +13,8 @@
         <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
           {{ isFullscreen ? '⛶ Exit Fullscreen' : '⛶ Fullscreen' }}
         </button>
-        <button @click="emailEnact">Email Enact
+        <button @click="emailEnact">Gmail Enact
         </button>
-        <button @click="whatsappEnact">Whatsapp Enact</button>
       </div>
     </transition>
 
@@ -336,7 +335,16 @@ export default {
       captionHistory: [],
       localCaptions: '',
       silentBackgroundEnabled: false,
-      backgroundNoiseSuppressionTrack: null
+      backgroundNoiseSuppressionTrack: null,
+
+      showEmailPanel: false,
+      showEmailPermissionDialog: false,
+      emailPermissionGranted: false,
+      gmailAccessToken: null,
+      emailTo: '',
+      emailSubject: '',
+      emailBody: '',
+      emailSending: false,
     };
   },
 
@@ -1322,15 +1330,89 @@ export default {
       if (!this.livekitRoom) return;
     },
 
-    
     emailEnact() {
-      alert("Email enact work in progress");
+      //alert("Email enact work in progress");//
+      const permission = localStorage.getItem('emailEnactPermission');
+      if(permission === 'always')
+      {
+        this.showEmailPanel = !this.showEmailPanel;
+        return;
+      }
+      if(permission === 'once' && this.emailPermissionGranted) {
+          this.showEmailPanel = !this.showEmailPanel;
+          return;
+      }
+      this.showEmailPermissionDialog = true;
     },
 
-    whatsappEnact() {
-      alert("Whatsapp enact work in progress");
+    emailPermissionResponse(choice) {
+        this.showEmailPermissionDialog = false;
+        if(choice === 'deny')
+        {
+          return;
+        }
+        if(choice === 'always')
+        {
+          localStorage.setItem('emailEnactPermission','always');
+        }
+        if(choice === 'once')
+        {
+          this.emailPermissionGranted = true;
+        }
+      this.initiateGmailOAuth();
     },
 
+    initiateGmailOAuth() {
+      const clientId = import.mete.env.VITE_GMAIL_CLIENT_ID;
+      const redirectUrl = import.meta.env.VITE_GMAIL_REDIRECT_URI;
+      const scope = 'https://www.googleapis.com/auth/gmail.send';
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
+      const popup = window.open(authUrl,'gmail-oauth','width=500,height=600');
+      window.addEventListener('message',(event) => {
+        if(event.data?.type === 'gmail-oauth-success') {
+          this.gmailAccessToken = event.data.token;
+          this.showEmailPanel = true;
+          popup?.close();
+        }
+      }, { once: true });
+    },
+
+    async sendEmail() {
+      if(!this.emailTo || !this.emailSubject || !this.emailBody) {
+        alert('Please fill in all fields');
+        return;
+      }
+      this.emailSending = true;
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/send-email`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json' },
+          body: JSON.stringify({
+            accessToken: this.gmailAccessToken,
+            to: this.emailTo,
+            subject: this.emailSubject,
+            body: this.emailBody
+          })
+        });
+        if(response.ok) {
+          this.emailTo = '';
+          this.emailSubject = '';
+          this.emailBody = '';
+          this.showEmailPanel = false;
+        }
+        else{
+          throw new Error('Failed to send');
+        }
+      }
+      catch(err) 
+      {
+        alert('Failed to send email: ' + err.message);
+      }
+      finally {
+        this.emailSending = false;
+      }
+    },
+    
     cleanup() {
       console.log('Cleaning up resources...');
       
@@ -1387,6 +1469,12 @@ export default {
       this.remoteParticipants.clear();
       this.captionHistory = [];
       this.localCaptions = '';
+
+      this.showEmailPanel = false;
+      this.gmailAccessToken = null;
+      this.emailTo = '';
+      this.emailSubject = '',
+      this.emailBody = '';
     }
   },
 
@@ -2277,6 +2365,7 @@ body {
   }
 }
 </style>
+
 
 
 
