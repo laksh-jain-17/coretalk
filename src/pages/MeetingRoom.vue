@@ -273,7 +273,38 @@
     <div id="hand_warning" v-if="hand">
       <p>✋ Your hand is raised</p>
     </div>
+
+    <!-- Email Permission Dialog -->
+    <div v-if="showEmailPermissionDialog" class="email-permission-overlay">
+    <div class="email-permission-box">
+      <h3>Gmail Access</h3>
+      <p>Allow Coretalk to send emails on your behalf via Gmail?</p>
+      <div class="email-permission-buttons">
+        <button @click="emailPermissionResponse('deny')" class="perm-deny">Deny</button>
+        <button @click="emailPermissionResponse('once')" class="perm-once">Allow Once</button>
+        <button @click="emailPermissionResponse('always')" class="perm-always">Always Allow</button>
+      </div>
+    </div>
   </div>
+
+  <!-- Email Panel -->
+  <div v-if="showEmailPanel" id="email-box">
+    <div class="email-header">
+      <span>New Email</span>
+      <button @click="showEmailPanel = false">✕</button>
+    </div>
+    <div class="email-body-panel">
+      <input v-model="emailTo" type="email" placeholder="To" class="email-field" />
+      <input v-model="emailSubject" type="text" placeholder="Subject" class="email-field" />
+      <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
+    </div>
+    <div class="email-footer">
+      <button @click="sendEmail" :disabled="emailSending" class="email-send-btn">
+        {{ emailSending ? 'Sending...' : 'Send' }}
+      </button>
+    </div>
+  </div>
+</div>
 </template>
 
 <script>
@@ -1364,7 +1395,7 @@ export default {
 
     initiateGmailOAuth() {
       const clientId = import.meta.env.VITE_GMAIL_CLIENT_ID;
-      const redirectUrl = import.meta.env.VITE_GMAIL_REDIRECT_URI;
+      const redirectUri = import.meta.env.VITE_GMAIL_REDIRECT_URI;
       const scope = 'https://www.googleapis.com/auth/gmail.send';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
       const popup = window.open(authUrl,'gmail-oauth','width=500,height=600');
@@ -2327,6 +2358,137 @@ body {
   background: #666;
 }
 
+/* ==================== EMAIL PANEL ==================== */
+#email-box {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 340px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  border: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  z-index: 101;
+}
+
+.email-header {
+  padding: 14px 16px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  border-radius: 12px 12px 0 0;
+  font-weight: 600;
+  font-size: 15px;
+  color: #000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.email-header button {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #000;
+}
+
+.email-body-panel {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.email-field {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #000;
+  background: #f9f9f9;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.email-textarea {
+  width: 100%;
+  height: 120px;
+  padding: 9px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #000;
+  background: #f9f9f9;
+  outline: none;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.email-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.email-send-btn {
+  width: 100%;
+  padding: 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.email-send-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.email-permission-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.email-permission-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px;
+  width: 340px;
+  text-align: center;
+  color: #000;
+}
+
+.email-permission-box h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.email-permission-box p {
+  font-size: 14px;
+  color: #555;
+  margin-bottom: 20px;
+}
+
+.email-permission-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.perm-deny { background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+.perm-once { background: #FF9800; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+.perm-always { background: #4CAF50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+
 /* ==================== RESPONSIVE DESIGN ==================== */
 @media (max-width: 768px) {
   #left-tray {
@@ -2365,6 +2527,7 @@ body {
   }
 }
 </style>
+
 
 
 
