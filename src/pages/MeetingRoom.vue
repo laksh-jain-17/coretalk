@@ -1399,6 +1399,7 @@ export default {
       const scope = 'https://www.googleapis.com/auth/gmail.send';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
       const popup = window.open(authUrl,'gmail-oauth','width=500,height=600');
+      console.log('Auth URL:', authUrl);
       window.addEventListener('message',(event) => {
         if(event.data?.type === 'gmail-oauth-success') {
           this.gmailAccessToken = event.data.token;
@@ -2528,6 +2529,7 @@ body {
   }
 }
 </style>
+
 
 
 
