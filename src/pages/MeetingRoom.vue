@@ -1420,6 +1420,7 @@ export default {
           headers: {'Content-Type':'application/json' },
           body: JSON.stringify({
             accessToken: this.gmailAccessToken,
+            senderEmail: localStorage.getItem('username'),
             to: this.emailTo,
             subject: this.emailSubject,
             body: this.emailBody
@@ -2527,6 +2528,7 @@ body {
   }
 }
 </style>
+
 
 
 
