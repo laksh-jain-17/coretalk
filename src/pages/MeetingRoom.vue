@@ -13,6 +13,9 @@
         <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
           {{ isFullscreen ? '⛶ Exit Fullscreen' : '⛶ Fullscreen' }}
         </button>
+        <button @click="emailEnact">Email Enact
+        </button>
+        <button @click="whatsappEnact">Whatsapp Enact</button>
       </div>
     </transition>
 
@@ -237,6 +240,8 @@
               </li>
             </ul>
           </li>
+
+          <!--Add extras option-->
         </ul>
       </div>
     </transition>
@@ -1376,6 +1381,14 @@ export default {
     }
   },
 
+  emailEnact() {
+    alert("Email enact work in progress");
+  },
+
+  whatsappEnact() {
+    alert("Whatsapp enact work in progress");
+  },
+
   beforeUnmount() {
     this.cleanup();
     
@@ -2263,6 +2276,7 @@ body {
   }
 }
 </style>
+
 
 
 
