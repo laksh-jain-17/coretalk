@@ -1363,7 +1363,7 @@ export default {
     },
 
     initiateGmailOAuth() {
-      const clientId = import.mete.env.VITE_GMAIL_CLIENT_ID;
+      const clientId = import.meta.env.VITE_GMAIL_CLIENT_ID;
       const redirectUrl = import.meta.env.VITE_GMAIL_REDIRECT_URI;
       const scope = 'https://www.googleapis.com/auth/gmail.send';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
@@ -2365,6 +2365,7 @@ body {
   }
 }
 </style>
+
 
 
 
