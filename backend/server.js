@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const livekitRoutes = require('./routes/livekitRoutes');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
@@ -270,4 +271,34 @@ app.get('/api/rooms', (req, res) => {
   res.json(roomSummary);
 });
 
+app.post('/api/send-email', async (req, res) => {
+  const { accessToken, to, subject, body } = req.body;
+
+  if (!accessToken || !to || !subject || !body) {
+    return res.status(400).json({ success: false, message: 'Missing required fields' });
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: req.body.senderEmail,
+        accessToken: accessToken,
+      },
+    });
+
+    await transporter.sendMail({
+      from: req.body.senderEmail,
+      to: to,
+      subject: subject,
+      text: body,
+    });
+
+    res.json({ success: true, message: 'Email sent successfully' });
+  } catch (error) {
+    console.error('Email send error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
