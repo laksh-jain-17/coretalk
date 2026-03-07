@@ -1322,6 +1322,15 @@ export default {
       if (!this.livekitRoom) return;
     },
 
+    
+    emailEnact() {
+      alert("Email enact work in progress");
+    },
+
+    whatsappEnact() {
+      alert("Whatsapp enact work in progress");
+    },
+
     cleanup() {
       console.log('Cleaning up resources...');
       
@@ -1379,14 +1388,6 @@ export default {
       this.captionHistory = [];
       this.localCaptions = '';
     }
-  },
-
-  emailEnact() {
-    alert("Email enact work in progress");
-  },
-
-  whatsappEnact() {
-    alert("Whatsapp enact work in progress");
   },
 
   beforeUnmount() {
@@ -2276,6 +2277,7 @@ body {
   }
 }
 </style>
+
 
 
 
