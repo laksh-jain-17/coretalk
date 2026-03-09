@@ -279,23 +279,34 @@ app.post('/api/send-email', async (req, res) => {
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        type: 'OAuth2',
-        user: senderEmail,
-        clientId: process.env.GMAIL_CLIENT_ID,      // ← add this
-        clientSecret: process.env.GMAIL_CLIENT_SECRET, // ← add this
-        accessToken: accessToken,
+    // Build raw email
+    const emailLines = [
+      `To: ${to}`,
+      `From: ${senderEmail}`,
+      `Subject: ${subject}`,
+      '',
+      body
+    ];
+    const raw = Buffer.from(emailLines.join('\n'))
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    // Call Gmail API directly — no SMTP, no blocked ports
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ raw })
     });
 
-    await transporter.sendMail({
-      from: senderEmail,
-      to,
-      subject,
-      text: body,
-    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || 'Gmail API error');
+    }
 
     res.json({ success: true, message: 'Email sent successfully' });
   } catch (error) {
