@@ -1404,7 +1404,7 @@ export default {
         if(event.data?.type === 'gmail-oauth-success') {
           this.gmailAccessToken = event.data.token;
           this.showEmailPanel = true;
-          popup?.close();
+          //popup?.close();
         }
       }, { once: true });
     },
@@ -2529,6 +2529,7 @@ body {
   }
 }
 </style>
+
 
 
 
