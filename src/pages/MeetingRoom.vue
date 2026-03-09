@@ -1242,7 +1242,7 @@ export default {
     },
 
     copystring() {
-      const meetingLink = window.location.href;
+      const meetingLink = this.roomId;
       navigator.clipboard.writeText(meetingLink)
         .then(() => {
           alert("Meeting link copied to clipboard!");
@@ -1362,34 +1362,6 @@ export default {
     },
 
     emailEnact() {
-      //alert("Email enact work in progress");//
-      const permission = localStorage.getItem('emailEnactPermission');
-      if(permission === 'always')
-      {
-        this.showEmailPanel = !this.showEmailPanel;
-        return;
-      }
-      if(permission === 'once' && this.emailPermissionGranted) {
-          this.showEmailPanel = !this.showEmailPanel;
-          return;
-      }
-      this.showEmailPermissionDialog = true;
-    },
-
-    emailPermissionResponse(choice) {
-        this.showEmailPermissionDialog = false;
-        if(choice === 'deny')
-        {
-          return;
-        }
-        if(choice === 'always')
-        {
-          localStorage.setItem('emailEnactPermission','always');
-        }
-        if(choice === 'once')
-        {
-          this.emailPermissionGranted = true;
-        }
       this.initiateGmailOAuth();
     },
 
@@ -2529,6 +2501,7 @@ body {
   }
 }
 </style>
+
 
 
 
