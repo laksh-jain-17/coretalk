@@ -272,7 +272,7 @@ app.get('/api/rooms', (req, res) => {
 });
 
 app.post('/api/send-email', async (req, res) => {
-  const { accessToken, to, subject, body } = req.body;
+  const { accessToken, to, subject, body, senderEmail } = req.body;
 
   if (!accessToken || !to || !subject || !body) {
     return res.status(400).json({ success: false, message: 'Missing required fields' });
@@ -283,15 +283,17 @@ app.post('/api/send-email', async (req, res) => {
       service: 'gmail',
       auth: {
         type: 'OAuth2',
-        user: req.body.senderEmail,
+        user: senderEmail,
+        clientId: process.env.GMAIL_CLIENT_ID,      // ← add this
+        clientSecret: process.env.GMAIL_CLIENT_SECRET, // ← add this
         accessToken: accessToken,
       },
     });
 
     await transporter.sendMail({
-      from: req.body.senderEmail,
-      to: to,
-      subject: subject,
+      from: senderEmail,
+      to,
+      subject,
       text: body,
     });
 
@@ -301,4 +303,3 @@ app.post('/api/send-email', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
