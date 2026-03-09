@@ -366,6 +366,7 @@ export default {
       captionHistory: [],
       localCaptions: '',
       silentBackgroundEnabled: false,
+      backgroundNoiseSuppressionStream: null,
       backgroundNoiseSuppressionTrack: null,
 
       showEmailPanel: false,
@@ -560,65 +561,140 @@ export default {
       this.localCaptions = '';
     },
 
-    async toggleSilentBackground() {
-      this.silentBackgroundEnabled = !this.silentBackgroundEnabled;
-      
-      if (this.silentBackgroundEnabled) {
-        await this.enableBackgroundNoiseSuppression();
-      } else {
-        await this.disableBackgroundNoiseSuppression();
-      }
-    },
+    // ==================== SILENT BACKGROUND (FIXED) ====================
 
-    async enableBackgroundNoiseSuppression() {
-      try {
-        if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-          alert('Not connected to meeting room');
-          this.silentBackgroundEnabled = false;
-          return;
-        }
+async toggleSilentBackground() {
+  this.silentBackgroundEnabled = !this.silentBackgroundEnabled;
 
-        const audioPublication = this.livekitRoom.localParticipant.getTrack(Track.Source.Microphone);
-        
-        if (!audioPublication) {
-          alert('Microphone is not enabled. Please enable it first.');
-          this.silentBackgroundEnabled = false;
-          return;
-        }
+  if (this.silentBackgroundEnabled) {
+    await this.enableBackgroundNoiseSuppression();
+  } else {
+    await this.disableBackgroundNoiseSuppression();
+  }
+},
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
-        });
+async enableBackgroundNoiseSuppression() {
+  try {
+    // Guard: must be connected to LiveKit
+    if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+      alert('Not connected to meeting room. Please join first.');
+      this.silentBackgroundEnabled = false;
+      return;
+    }
 
-        const audioTrack = stream.getAudioTracks()[0];
-        
-        const settings = audioTrack.getSettings();
-        if (settings.noiseSuppression) {
-          console.log('Background noise suppression enabled');
-          this.backgroundNoiseSuppressionTrack = audioTrack;
-        } else {
-          console.log('Browser may not fully support noise suppression');
-        }
-        
-      } catch (error) {
-        console.error('Error enabling noise suppression:', error);
-        alert('Could not enable silent background: ' + error.message);
-        this.silentBackgroundEnabled = false;
-      }
-    },
+    // Request a new stream with maximum noise suppression constraints
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // Additional suppression hints (Chrome/Edge support)
+          googNoiseSuppression: true,
+          googHighpassFilter: true,
+          googNoiseSuppression2: true,
+          googEchoCancellation: true,
+          googAutoGainControl: true,
+        },
+        video: false,
+      });
+    } catch (permError) {
+      console.error('Microphone permission denied:', permError);
+      alert('Microphone permission denied. Please allow microphone access.');
+      this.silentBackgroundEnabled = false;
+      return;
+    }
 
-    async disableBackgroundNoiseSuppression() {
-      if (this.backgroundNoiseSuppressionTrack) {
-        this.backgroundNoiseSuppressionTrack.stop();
-        this.backgroundNoiseSuppressionTrack = null;
-      }
-      console.log('Background noise suppression disabled');
-    },
+    const rawAudioTrack = stream.getAudioTracks()[0];
 
+    if (!rawAudioTrack) {
+      alert('Could not get audio track for noise suppression.');
+      this.silentBackgroundEnabled = false;
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+
+    // Confirm the browser actually honoured noiseSuppression
+    const settings = rawAudioTrack.getSettings();
+    console.log('Audio track settings after constraint apply:', settings);
+
+    if (settings.noiseSuppression === false) {
+      console.warn('Browser did not honour noiseSuppression constraint.');
+    }
+
+    // Unpublish the current mic track from LiveKit
+    const existingPub = this.livekitRoom.localParticipant.getTrack(
+      Track.Source.Microphone
+    );
+    if (existingPub && existingPub.track) {
+      await this.livekitRoom.localParticipant.unpublishTrack(
+        existingPub.track
+      );
+    }
+
+    // Wrap raw MediaStreamTrack in a LiveKit LocalAudioTrack and publish
+    const { LocalAudioTrack } = await import('livekit-client');
+    const livekitAudioTrack = new LocalAudioTrack(rawAudioTrack, undefined, false);
+
+    await this.livekitRoom.localParticipant.publishTrack(livekitAudioTrack, {
+      source: Track.Source.Microphone,
+    });
+
+    // Store both so we can clean up properly on disable
+    this.backgroundNoiseSuppressionTrack = livekitAudioTrack;
+    this.backgroundNoiseSuppressionStream = stream;
+
+    // Keep micon state in sync
+    this.micon = true;
+
+    console.log('✅ Background noise suppression enabled and published to LiveKit.');
+  } catch (error) {
+    console.error('Error enabling noise suppression:', error);
+    alert('Could not enable Silent Background: ' + error.message);
+    this.silentBackgroundEnabled = false;
+
+    // Clean up any partial state
+    if (this.backgroundNoiseSuppressionStream) {
+      this.backgroundNoiseSuppressionStream.getTracks().forEach(t => t.stop());
+      this.backgroundNoiseSuppressionStream = null;
+    }
+    this.backgroundNoiseSuppressionTrack = null;
+  }
+},
+
+async disableBackgroundNoiseSuppression() {
+  try {
+    if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+      return;
+    }
+
+    // Unpublish the noise-suppressed track
+    if (this.backgroundNoiseSuppressionTrack) {
+      await this.livekitRoom.localParticipant.unpublishTrack(
+        this.backgroundNoiseSuppressionTrack
+      );
+      this.backgroundNoiseSuppressionTrack = null;
+    }
+
+    // Stop the underlying MediaStream
+    if (this.backgroundNoiseSuppressionStream) {
+      this.backgroundNoiseSuppressionStream.getTracks().forEach(t => t.stop());
+      this.backgroundNoiseSuppressionStream = null;
+    }
+
+    // Re-publish a standard mic track so audio continues working
+    if (this.micon) {
+      await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
+      await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
+    }
+
+    console.log('✅ Background noise suppression disabled. Standard mic restored.');
+  } catch (error) {
+    console.error('Error disabling noise suppression:', error);
+  }
+},
+    
     initUserFromToken() {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -1431,7 +1507,8 @@ export default {
       }
 
       if (this.silentBackgroundEnabled) {
-        this.disableBackgroundNoiseSuppression();
+        await this.disableBackgroundNoiseSuppression();
+        this.silentBackgroundEnabled = false;
       }
 
       if (this.livekitRoom) {
@@ -2501,6 +2578,7 @@ body {
   }
 }
 </style>
+
 
 
 
