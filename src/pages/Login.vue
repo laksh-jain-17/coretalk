@@ -16,6 +16,7 @@
               <li>Wider video feed.</li>
               <li>Lightweight and reliable application.</li>
               <li>User customization allowed.</li>
+              <li>Email Enact feature.</li>
             </ol>
             <p>Version v2.</p>
           </div>
@@ -540,6 +541,7 @@ export default {
   }
 }
 </style>
+
 
 
 
