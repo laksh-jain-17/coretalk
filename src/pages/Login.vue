@@ -61,13 +61,16 @@ export default {
   },
   mounted() {
     this.show = true;
-    setInterval(() => {
+    this.interval = setInterval(() => {
       this.welcomeText = !this.welcomeText;
     }, 10000);
-    
-    // Initialize Google Sign-In
     this.initGoogleSignIn();
   },
+  
+  beforeUnmount() {
+    clearInterval(this.interval); // Clean up!
+  },
+  
   methods: {
     initGoogleSignIn() {
   // Check if Client ID is configured
@@ -532,6 +535,7 @@ export default {
   }
 }
 </style>
+
 
 
 
