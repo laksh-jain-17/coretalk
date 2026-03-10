@@ -4,14 +4,14 @@
     <transition name="slide-left">
       <div id="left-tray" :class="turned ? 'left-tray-left' : 'left-tray-right'" v-if="trayVisible">
         <button @click="toggleSilentBackground" :class="{ 'active-feature': silentBackgroundEnabled }">
-          {{ silentBackgroundEnabled ? '🔇 Silent Mode ON' : '🔇 Silent Background' }}
+          {{ silentBackgroundEnabled ? 'Silent Mode ON' : 'Silent Background' }}
         </button>
         <button @click="recording">
-          {{ isRecording ? '⏹️ Stop Recording' : '⏺️ Start Recording' }}
+          {{ isRecording ? 'Stop Recording' : 'Start Recording' }}
         </button>
-        <button @click="turn">🔄 Change Panel</button>
+        <button @click="turn">Change Panel</button>
         <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
-          {{ isFullscreen ? '⛶ Exit Fullscreen' : '⛶ Fullscreen' }}
+          {{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
         </button>
         <button @click="emailEnact">Gmail Enact
         </button>
@@ -2578,3 +2578,4 @@ body {
   }
 }
 </style>
+
