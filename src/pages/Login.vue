@@ -75,9 +75,11 @@ export default {
   methods: {
     waitForGoogle() {
       if (window.google) {
-        this.initGoogleSignIn();
+    // ✅ Wait for Vue to render the DOM first
+        this.$nextTick(() => {
+          this.initGoogleSignIn();
+        });
       } else {
-      // Retry every 100ms until google loads
         setTimeout(() => this.waitForGoogle(), 100);
       }
     },
@@ -90,14 +92,15 @@ export default {
 
       window.google.accounts.id.initialize({
         client_id: this.googleClientId,
-        callback: this.handleGoogleCallback,
+        callback: this.handleGoogleCallback.bind(this), // ✅ bind this
         auto_select: false,
         cancel_on_tap_outside: true
       });
 
-      window.google.accounts.id.renderButton(
-        document.getElementById('google-signin-button'),
-        {
+      this.$nextTick(() => {
+        const buttonDiv = document.getElementById('google-signin-button');
+        if (buttonDiv) {
+          window.google.accounts.id.renderButton(buttonDiv, {
           theme: 'outline',
           size: 'large',
           type: 'standard',
@@ -105,11 +108,13 @@ export default {
           text: 'signin_with',
           logo_alignment: 'left',
           width: 350
-        }
-      );
-
-      console.log('✅ Google Sign-In initialized successfully');
-    },
+        });
+        console.log('✅ Google button rendered');
+      } else {
+        console.error('❌ button div not found');
+      }
+    });
+  },
     
     async handleGoogleCallback(response) {
       console.log('🔐 Google Sign-In successful');
@@ -538,6 +543,7 @@ export default {
   }
 }
 </style>
+
 
 
 
