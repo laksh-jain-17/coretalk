@@ -23,6 +23,7 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,           // https://coretalk.vercel.app
 ].filter(Boolean);
 
+app.options('*', cors());
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (mobile apps, curl, Postman)
@@ -331,5 +332,6 @@ app.post('/api/send-email', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 
