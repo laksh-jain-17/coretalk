@@ -70,49 +70,40 @@ export default {
   },
   methods: {
     initGoogleSignIn() {
-      // Check if Client ID is configured
-      if (!this.googleClientId) {
-        console.error('Google Client ID not configured in .env');
-        return;
-      }
+  // Check if Client ID is configured
+  if (!this.googleClientId) {
+    console.error('Google Client ID not configured in .env');
+    return;
+  }
 
-      // Load Google Identity Services script
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        // Initialize Google Sign-In after script loads
-        if (window.google) {
-          window.google.accounts.id.initialize({
-            client_id: this.googleClientId,
-            callback: this.handleGoogleCallback,
-            auto_select: false,
-            cancel_on_tap_outside: true
-          });
-          
-          // Render the Google Sign-In button
-          window.google.accounts.id.renderButton(
-            document.getElementById('google-signin-button'),
-            {
-              theme: 'outline',
-              size: 'large',
-              type: 'standard',
-              shape: 'rectangular',
-              text: 'signin_with',
-              logo_alignment: 'left',
-              width: 350
-            }
-          );
-          
-          console.log('✅ Google Sign-In initialized successfully');
-        }
-      };
-      script.onerror = () => {
-        console.error('❌ Failed to load Google Sign-In script');
-      };
-      document.head.appendChild(script);
-    },
+  // Script already loaded from index.html — just initialize
+  if (window.google) {
+    window.google.accounts.id.initialize({
+      client_id: this.googleClientId,
+      callback: this.handleGoogleCallback,
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+
+    // Render the Google Sign-In button
+    window.google.accounts.id.renderButton(
+      document.getElementById('google-signin-button'),
+      {
+        theme: 'outline',
+        size: 'large',
+        type: 'standard',
+        shape: 'rectangular',
+        text: 'signin_with',
+        logo_alignment: 'left',
+        width: 350
+      }
+    );
+
+    console.log('✅ Google Sign-In initialized successfully');
+  } else {
+    console.error('❌ Google script not loaded. Check index.html <head>');
+  }
+},
     
     async handleGoogleCallback(response) {
       console.log('🔐 Google Sign-In successful');
@@ -541,6 +532,7 @@ export default {
   }
 }
 </style>
+
 
 
 
