@@ -17,7 +17,12 @@ app.use(
 );
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Auth routes
@@ -314,3 +319,4 @@ app.post('/api/send-email', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
