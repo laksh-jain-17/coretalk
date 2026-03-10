@@ -1494,7 +1494,7 @@ async disableBackgroundNoiseSuppression() {
       }
     },
     
-    cleanup() {
+    async cleanup() {
       console.log('Cleaning up resources...');
       
       if (this.broadcastRetryTimer) {
@@ -1507,7 +1507,7 @@ async disableBackgroundNoiseSuppression() {
       }
 
       if (this.silentBackgroundEnabled) {
-        await this.disableBackgroundNoiseSuppression();
+        await this.disableBackgroundNoiseSuppression(); 
         this.silentBackgroundEnabled = false;
       }
 
@@ -1560,7 +1560,7 @@ async disableBackgroundNoiseSuppression() {
     }
   },
 
-  beforeUnmount() {
+  async beforeUnmount() {
     this.cleanup();
     
     document.removeEventListener("mousemove", this.resetinactivityTimer);
@@ -2578,4 +2578,5 @@ body {
   }
 }
 </style>
+
 
