@@ -64,7 +64,8 @@ export default {
     this.interval = setInterval(() => {
       this.welcomeText = !this.welcomeText;
     }, 10000);
-    this.initGoogleSignIn();
+
+    this.waitForGoogle();
   },
   
   beforeUnmount() {
@@ -72,41 +73,43 @@ export default {
   },
   
   methods: {
-    initGoogleSignIn() {
-  // Check if Client ID is configured
-  if (!this.googleClientId) {
-    console.error('Google Client ID not configured in .env');
-    return;
-  }
-
-  // Script already loaded from index.html — just initialize
-  if (window.google) {
-    window.google.accounts.id.initialize({
-      client_id: this.googleClientId,
-      callback: this.handleGoogleCallback,
-      auto_select: false,
-      cancel_on_tap_outside: true
-    });
-
-    // Render the Google Sign-In button
-    window.google.accounts.id.renderButton(
-      document.getElementById('google-signin-button'),
-      {
-        theme: 'outline',
-        size: 'large',
-        type: 'standard',
-        shape: 'rectangular',
-        text: 'signin_with',
-        logo_alignment: 'left',
-        width: 350
+    waitForGoogle() {
+      if (window.google) {
+        this.initGoogleSignIn();
+      } else {
+      // Retry every 100ms until google loads
+        setTimeout(() => this.waitForGoogle(), 100);
       }
-    );
+    },
 
-    console.log('✅ Google Sign-In initialized successfully');
-  } else {
-    console.error('❌ Google script not loaded. Check index.html <head>');
-  }
-},
+    initGoogleSignIn() {
+      if (!this.googleClientId) {
+        console.error('Google Client ID not configured in .env');
+        return;
+      }
+
+      window.google.accounts.id.initialize({
+        client_id: this.googleClientId,
+        callback: this.handleGoogleCallback,
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+
+      window.google.accounts.id.renderButton(
+        document.getElementById('google-signin-button'),
+        {
+          theme: 'outline',
+          size: 'large',
+          type: 'standard',
+          shape: 'rectangular',
+          text: 'signin_with',
+          logo_alignment: 'left',
+          width: 350
+        }
+      );
+
+      console.log('✅ Google Sign-In initialized successfully');
+    },
     
     async handleGoogleCallback(response) {
       console.log('🔐 Google Sign-In successful');
@@ -535,6 +538,7 @@ export default {
   }
 }
 </style>
+
 
 
 
