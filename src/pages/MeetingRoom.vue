@@ -55,7 +55,7 @@
             autoplay 
             playsinline
           ></video>
-          <div class="video-placeholder" :class="{ 'hidden': participant.hasVideo }">
+          <div class="video-placeholder" v-show="!participant.hasVideo">
             <div class="avatar-circle">{{ getInitials(participant.name) }}</div>
           </div>
           
@@ -120,6 +120,7 @@
           </li>
           <li>
             <button
+              v-show="!isMobile"
               @mouseenter="() => setHover('share')"
               @mouseleave="() => setHover(null)"
               @click="sharescreen"
@@ -377,6 +378,8 @@ export default {
       emailSubject: '',
       emailBody: '',
       emailSending: false,
+
+      isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || !navigator.mediaDevices?.getDisplayMedia,
     };
   },
 
@@ -386,9 +389,8 @@ export default {
     },
     
     totalParticipantCount() {
-      if (!this.livekitRoom || !this.livekitRoom.remoteParticipants) return 1;
-      const livekitCount = (this.livekitRoom.remoteParticipants?.size || 0) + 1;
-      return livekitCount;
+  // Use participants array (socket-synced) + self = most accurate count
+      return this.participants.length + 1;
     },
 
     userInitials() {
@@ -1020,6 +1022,21 @@ async disableBackgroundNoiseSuppression() {
           this.toggleMic();
         }
       });
+
+      this.socket.on('participants-list', (list) => {
+  // Filter out self from the list
+        this.participants = list
+          .filter(p => p.userId !== this.userId)
+          .map(p => ({
+          id: p.id,
+          userId: p.userId,
+          name: p.name || 'Unknown',
+          isHost: p.isHost || false,
+          hasMic: true,
+          hasVideo: false,
+          captions: ''
+      }));
+});
     },
 
     startBroadcastRetry() {
@@ -1712,8 +1729,15 @@ body {
 }
 
 .grid-2 {
-  grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: 1fr;
+  grid-template-columns: 1fr;
+  grid-template-rows: repeat(2, 1fr);
+}
+
+@media (min-width: 769px) {
+  .grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: 1fr;
+  }
 }
 
 .grid-4 {
@@ -2578,5 +2602,6 @@ body {
   }
 }
 </style>
+
 
 
