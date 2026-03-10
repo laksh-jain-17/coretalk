@@ -16,19 +16,22 @@ app.use(
   })
 );
 
-// Middleware
 const allowedOrigins = [
   'http://localhost:5173',
-  'http://localhost:3000',
-  process.env.FRONTEND_URL,           // https://coretalk.vercel.app
+  'https://coretalk.vercel.app',
+  process.env.FRONTEND_URL,
 ].filter(Boolean);
 
-app.options('*', cors());
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any Vercel preview deployment for your project
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.vercel.app')
+    ) {
+      return callback(null, true);
+    }
     callback(new Error(`CORS blocked: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
@@ -332,6 +335,7 @@ app.post('/api/send-email', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 
 
