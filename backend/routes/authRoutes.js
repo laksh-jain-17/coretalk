@@ -19,7 +19,7 @@ router.post('/register', async (req, res) => {
     if (existingUser) {
       return res.status(400).json({ message: 'Email already registered' });
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 8);
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
     return res.status(201).json({ message: 'User created' });
@@ -247,3 +247,4 @@ router.delete('/delete-account',authMiddleware,async(req,res) => {
 });	
 
 module.exports = router;
+
