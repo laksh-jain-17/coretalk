@@ -1042,20 +1042,18 @@ async disableBackgroundNoiseSuppression() {
         }
       });
 
-     /* this.socket.on('participants-list', (list) => {
-  // Filter out self from the list
-        this.participants = list
+      this.socket.on('participants-list', (list) => {
+        // LiveKit handles participant tracks — socket only syncs metadata
+        list
           .filter(p => p.userId !== this.userId)
-          .map(p => ({
-          id: p.id,
-          userId: p.userId,
-          name: p.name || 'Unknown',
-          isHost: p.isHost || false,
-          hasMic: true,
-          hasVideo: false,
-          captions: ''
-      }));*/
-});
+          .forEach(p => {
+            const existing = this.participants.find(ep => ep.userId === p.userId);
+            if (existing) {
+              existing.isHost = p.isHost || false;
+              existing.name = p.name || existing.name;
+            }
+          });
+      });
     },
 
     startBroadcastRetry() {
@@ -2621,6 +2619,7 @@ body {
   }
 }
 </style>
+
 
 
 
