@@ -877,7 +877,7 @@ async disableBackgroundNoiseSuppression() {
       }
     },
     
-    handleParticipantConnected(participant) {
+   /* handleParticipantConnected(participant) {
       const participantData = {
         id: participant.identity,
         userId: participant.identity,
@@ -896,7 +896,26 @@ async disableBackgroundNoiseSuppression() {
       }
 
       this.remoteParticipants.set(participant.identity, participant);
-    },
+    },*/
+
+    handleParticipantConnected(participant) {
+  // Remove any duplicate first
+  this.participants = this.participants.filter(
+    p => p.id !== participant.identity
+  );
+
+  this.participants.push({
+    id: participant.identity,
+    userId: participant.identity,
+    name: participant.name || participant.identity,
+    isHost: false,
+    hasMic: false,
+    hasVideo: false,
+    captions: ''
+  });
+
+  this.remoteParticipants.set(participant.identity, participant);
+},
 
     handleParticipantDisconnected(participant) {
       this.participants = this.participants.filter(p => p.id !== participant.identity);
@@ -1023,7 +1042,7 @@ async disableBackgroundNoiseSuppression() {
         }
       });
 
-      this.socket.on('participants-list', (list) => {
+     /* this.socket.on('participants-list', (list) => {
   // Filter out self from the list
         this.participants = list
           .filter(p => p.userId !== this.userId)
@@ -1035,7 +1054,7 @@ async disableBackgroundNoiseSuppression() {
           hasMic: true,
           hasVideo: false,
           captions: ''
-      }));
+      }));*/
 });
     },
 
@@ -2602,6 +2621,7 @@ body {
   }
 }
 </style>
+
 
 
 
