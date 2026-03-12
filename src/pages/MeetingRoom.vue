@@ -307,6 +307,7 @@
   </div>
 </div>
 </template>
+
 <script>
 import { jwtDecode } from 'jwt-decode';
 import { io } from 'socket.io-client';
@@ -361,6 +362,7 @@ export default {
       isInitializingMedia: false,
       broadcastRetryTimer: null,
 
+      // New features
       showCaptions: false,
       captionHistory: [],
       localCaptions: '',
@@ -385,12 +387,16 @@ export default {
     computedRoomId() {
       return this.$route.params.id || 'default-room';
     },
+    
     totalParticipantCount() {
+  // Use participants array (socket-synced) + self = most accurate count
       return this.participants.length + 1;
     },
+
     userInitials() {
       return this.getInitials(this.userName);
     },
+
     gridClass() {
       const total = this.totalParticipantCount;
       if (total === 1) return 'grid-1';
@@ -404,12 +410,15 @@ export default {
 
   watch: {
     isPoorNetwork(newVal) {
-      if (newVal) {
+      if(newVal) {
+        console.log("Poor network -> Transcript enabled");
         this.recognition?.start();
       } else {
+        console.log("Network normal -> Transcript disabled");
         this.recognition?.stop();
       }
     },
+
     activePanel(newVal) {
       if (newVal !== 'chat') {
         this.unreadMessages = 0;
@@ -434,26 +443,53 @@ export default {
 
     toggleFullscreen() {
       if (!this.isFullscreen) {
-        const elem = document.documentElement;
-        (elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen)?.call(elem);
-        this.isFullscreen = true;
+        this.enterFullscreen();
       } else {
-        (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document);
-        this.isFullscreen = false;
+        this.exitFullscreen();
       }
     },
 
+    enterFullscreen() {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
+      this.isFullscreen = true;
+    },
+
+    exitFullscreen() {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      this.isFullscreen = false;
+    },
+
     handleFullscreenChange() {
-      this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+      this.isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement
+      );
     },
 
     handleEscKey(e) {
-      if (e.key === 'Escape' && this.isFullscreen) this.isFullscreen = false;
+      if (e.key === 'Escape' && this.isFullscreen) {
+        this.exitFullscreen();
+      }
     },
 
     toggleCaptions() {
       this.showCaptions = !this.showCaptions;
       this.activeDropdown = null;
+      
       if (this.showCaptions) {
         this.startCaptionRecognition();
       } else {
@@ -468,121 +504,241 @@ export default {
         this.showCaptions = false;
         return;
       }
+
       this.recognition = new SpeechRecognition();
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.lang = 'en-US';
+
       this.recognition.onresult = (event) => {
         let interimTranscript = '';
         let finalTranscript = '';
+
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const t = event.results[i][0].transcript;
-          if (event.results[i].isFinal) finalTranscript += t + ' ';
-          else interimTranscript += t;
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
         }
+
         this.localCaptions = interimTranscript || finalTranscript;
+
         if (finalTranscript) {
-          this.captionHistory.push({ speaker: this.userName, text: finalTranscript.trim(), timestamp: Date.now() });
-          if (this.captionHistory.length > 50) this.captionHistory.shift();
-          setTimeout(() => { this.localCaptions = ''; }, 2000);
+          this.captionHistory.push({
+            speaker: this.userName,
+            text: finalTranscript.trim(),
+            timestamp: Date.now()
+          });
+
+          if (this.captionHistory.length > 50) {
+            this.captionHistory.shift();
+          }
+
+          setTimeout(() => {
+            this.localCaptions = '';
+          }, 2000);
         }
       };
-      this.recognition.onerror = (e) => console.error('Speech recognition error:', e);
-      this.recognition.onend = () => { if (this.showCaptions) this.recognition.start(); };
+
+      this.recognition.onerror = (e) => {
+        console.error('Speech recognition error:', e);
+      };
+
+      this.recognition.onend = () => {
+        if (this.showCaptions) {
+          this.recognition.start();
+        }
+      };
+
       this.recognition.start();
     },
 
     stopCaptionRecognition() {
-      if (this.recognition) { this.recognition.stop(); this.recognition = null; }
+      if (this.recognition) {
+        this.recognition.stop();
+        this.recognition = null;
+      }
       this.localCaptions = '';
     },
 
-    async toggleSilentBackground() {
-      this.silentBackgroundEnabled = !this.silentBackgroundEnabled;
-      if (this.silentBackgroundEnabled) {
-        await this.enableBackgroundNoiseSuppression();
-      } else {
-        await this.disableBackgroundNoiseSuppression();
-      }
-    },
+    // ==================== SILENT BACKGROUND (FIXED) ====================
 
-    async enableBackgroundNoiseSuppression() {
-      try {
-        if (!this.livekitRoom?.localParticipant) {
-          alert('Not connected to meeting room.');
-          this.silentBackgroundEnabled = false;
-          return;
-        }
-        let stream;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-            video: false,
-          });
-        } catch (permError) {
-          alert('Microphone permission denied.');
-          this.silentBackgroundEnabled = false;
-          return;
-        }
-        const rawAudioTrack = stream.getAudioTracks()[0];
-        if (!rawAudioTrack) {
-          alert('Could not get audio track.');
-          this.silentBackgroundEnabled = false;
-          stream.getTracks().forEach(t => t.stop());
-          return;
-        }
-        const existingPub = this.livekitRoom.localParticipant.getTrack(Track.Source.Microphone);
-        if (existingPub?.track) await this.livekitRoom.localParticipant.unpublishTrack(existingPub.track);
-        const { LocalAudioTrack } = await import('livekit-client');
-        const livekitAudioTrack = new LocalAudioTrack(rawAudioTrack, undefined, false);
-        await this.livekitRoom.localParticipant.publishTrack(livekitAudioTrack, { source: Track.Source.Microphone });
-        this.backgroundNoiseSuppressionTrack = livekitAudioTrack;
-        this.backgroundNoiseSuppressionStream = stream;
-        this.micon = true;
-      } catch (error) {
-        alert('Could not enable Silent Background: ' + error.message);
-        this.silentBackgroundEnabled = false;
-        this.backgroundNoiseSuppressionStream?.getTracks().forEach(t => t.stop());
-        this.backgroundNoiseSuppressionStream = null;
-        this.backgroundNoiseSuppressionTrack = null;
-      }
-    },
+async toggleSilentBackground() {
+  this.silentBackgroundEnabled = !this.silentBackgroundEnabled;
 
-    async disableBackgroundNoiseSuppression() {
-      try {
-        if (!this.livekitRoom?.localParticipant) return;
-        if (this.backgroundNoiseSuppressionTrack) {
-          await this.livekitRoom.localParticipant.unpublishTrack(this.backgroundNoiseSuppressionTrack);
-          this.backgroundNoiseSuppressionTrack = null;
-        }
-        this.backgroundNoiseSuppressionStream?.getTracks().forEach(t => t.stop());
-        this.backgroundNoiseSuppressionStream = null;
-        if (this.micon) {
-          await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
-          await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
-        }
-      } catch (error) {
-        console.error('Error disabling noise suppression:', error);
-      }
-    },
+  if (this.silentBackgroundEnabled) {
+    await this.enableBackgroundNoiseSuppression();
+  } else {
+    await this.disableBackgroundNoiseSuppression();
+  }
+},
 
+async enableBackgroundNoiseSuppression() {
+  try {
+    // Guard: must be connected to LiveKit
+    if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+      alert('Not connected to meeting room. Please join first.');
+      this.silentBackgroundEnabled = false;
+      return;
+    }
+
+    // Request a new stream with maximum noise suppression constraints
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // Additional suppression hints (Chrome/Edge support)
+          googNoiseSuppression: true,
+          googHighpassFilter: true,
+          googNoiseSuppression2: true,
+          googEchoCancellation: true,
+          googAutoGainControl: true,
+        },
+        video: false,
+      });
+    } catch (permError) {
+      console.error('Microphone permission denied:', permError);
+      alert('Microphone permission denied. Please allow microphone access.');
+      this.silentBackgroundEnabled = false;
+      return;
+    }
+
+    const rawAudioTrack = stream.getAudioTracks()[0];
+
+    if (!rawAudioTrack) {
+      alert('Could not get audio track for noise suppression.');
+      this.silentBackgroundEnabled = false;
+      stream.getTracks().forEach(t => t.stop());
+      return;
+    }
+
+    // Confirm the browser actually honoured noiseSuppression
+    const settings = rawAudioTrack.getSettings();
+    console.log('Audio track settings after constraint apply:', settings);
+
+    if (settings.noiseSuppression === false) {
+      console.warn('Browser did not honour noiseSuppression constraint.');
+    }
+
+    // Unpublish the current mic track from LiveKit
+    const existingPub = this.livekitRoom.localParticipant.getTrack(
+      Track.Source.Microphone
+    );
+    if (existingPub && existingPub.track) {
+      await this.livekitRoom.localParticipant.unpublishTrack(
+        existingPub.track
+      );
+    }
+
+    // Wrap raw MediaStreamTrack in a LiveKit LocalAudioTrack and publish
+    const { LocalAudioTrack } = await import('livekit-client');
+    const livekitAudioTrack = new LocalAudioTrack(rawAudioTrack, undefined, false);
+
+    await this.livekitRoom.localParticipant.publishTrack(livekitAudioTrack, {
+      source: Track.Source.Microphone,
+    });
+
+    // Store both so we can clean up properly on disable
+    this.backgroundNoiseSuppressionTrack = livekitAudioTrack;
+    this.backgroundNoiseSuppressionStream = stream;
+
+    // Keep micon state in sync
+    this.micon = true;
+
+    console.log('✅ Background noise suppression enabled and published to LiveKit.');
+  } catch (error) {
+    console.error('Error enabling noise suppression:', error);
+    alert('Could not enable Silent Background: ' + error.message);
+    this.silentBackgroundEnabled = false;
+
+    // Clean up any partial state
+    if (this.backgroundNoiseSuppressionStream) {
+      this.backgroundNoiseSuppressionStream.getTracks().forEach(t => t.stop());
+      this.backgroundNoiseSuppressionStream = null;
+    }
+    this.backgroundNoiseSuppressionTrack = null;
+  }
+},
+
+async disableBackgroundNoiseSuppression() {
+  try {
+    if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+      return;
+    }
+
+    // Unpublish the noise-suppressed track
+    if (this.backgroundNoiseSuppressionTrack) {
+      await this.livekitRoom.localParticipant.unpublishTrack(
+        this.backgroundNoiseSuppressionTrack
+      );
+      this.backgroundNoiseSuppressionTrack = null;
+    }
+
+    // Stop the underlying MediaStream
+    if (this.backgroundNoiseSuppressionStream) {
+      this.backgroundNoiseSuppressionStream.getTracks().forEach(t => t.stop());
+      this.backgroundNoiseSuppressionStream = null;
+    }
+
+    // Re-publish a standard mic track so audio continues working
+    if (this.micon) {
+      await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
+      await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
+    }
+
+    console.log('✅ Background noise suppression disabled. Standard mic restored.');
+  } catch (error) {
+    console.error('Error disabling noise suppression:', error);
+  }
+},
+    
     initUserFromToken() {
       const token = localStorage.getItem('token');
-      if (!token) { this.$router.push('/Login'); return false; }
+      if (!token) {
+        console.error('No token found');
+        this.$router.push('/Login');
+        return false;
+      }
+
       try {
         const decoded = jwtDecode(token);
+        
         this.userId = decoded.id || decoded.userId || decoded.user?.id || `user_${Date.now()}`;
+        
         const storedEmail = localStorage.getItem('username');
-        this.userName = decoded.name || decoded.user?.name || decoded.username || decoded.user?.username ||
+        this.userName = 
+          decoded.name || 
+          decoded.user?.name || 
+          decoded.username || 
+          decoded.user?.username ||
           (storedEmail && !storedEmail.includes('@') ? storedEmail : null) ||
-          decoded.email || decoded.user?.email || storedEmail || `User-${this.userId.substring(0, 8)}`;
+          decoded.email || 
+          decoded.user?.email || 
+          storedEmail ||
+          `User-${this.userId.substring(0, 8)}`;
+        
         if (this.userName.includes('@')) {
-          this.userName = this.userName.split('@')[0] || `User-${this.userId.substring(0, 8)}`;
+          const emailParts = this.userName.split('@');
+          this.userName = emailParts[0] || `User-${this.userId.substring(0, 8)}`;
         }
-        this.isHost = localStorage.getItem('isHost') === 'true' || decoded.isHost === true;
-        console.log('User initialized:', { userId: this.userId, userName: this.userName, isHost: this.isHost });
+        
+        const storedIsHost = localStorage.getItem('isHost');
+        this.isHost = storedIsHost === 'true' || decoded.isHost === true;
+        
+        console.log('User initialized:', { 
+          userId: this.userId, 
+          userName: this.userName, 
+          isHost: this.isHost 
+        });
+        
         return true;
       } catch (error) {
+        console.error('Error decoding token:', error);
         localStorage.removeItem('token');
         this.$router.push('/Login');
         return false;
@@ -594,9 +750,18 @@ export default {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/livekit/token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomName: this.roomId, participantName: this.userName, userId: this.userId, isHost: this.isHost })
+          body: JSON.stringify({
+            roomName: this.roomId,
+            participantName: this.userName,
+            userId: this.userId,
+            isHost: this.isHost
+          })
         });
-        if (!response.ok) throw new Error('Failed to get LiveKit token');
+
+        if (!response.ok) {
+          throw new Error('Failed to get LiveKit token');
+        }
+
         const data = await response.json();
         console.log('Raw token response:', data);
         return data;
@@ -609,30 +774,63 @@ export default {
 
     async initLivekit() {
       console.log('=== INITIALIZING LIVEKIT ===');
+      
       const tokenData = await this.getLivekitToken();
-      if (!tokenData) return;
+      if (!tokenData) {
+        console.error('No tokenData received');
+        return;
+      }
 
-      let token, wsUrl;
+      console.log('Token data received:', tokenData);
+      
+      let token;
+      let wsUrl;
+      
       if (typeof tokenData === 'string') {
         token = tokenData;
         wsUrl = `wss://${import.meta.env.VITE_LIVEKIT_URL || 'coretalk-e6xkfd5h.livekit.cloud'}`;
       } else if (tokenData.token) {
-        token = typeof tokenData.token === 'string' ? tokenData.token : String(tokenData.token);
+        if (typeof tokenData.token === 'string') {
+          token = tokenData.token;
+        } else if (typeof tokenData.token === 'object') {
+          token = tokenData.token.token || tokenData.token.value || String(tokenData.token);
+        } else {
+          token = String(tokenData.token);
+        }
         wsUrl = tokenData.url || tokenData.wsUrl || `wss://${import.meta.env.VITE_LIVEKIT_URL || 'coretalk-e6xkfd5h.livekit.cloud'}`;
       } else {
+        console.error('Unexpected token data format:', tokenData);
         alert('Failed to parse authentication token');
         return;
       }
 
-      if (typeof token !== 'string' || token.length < 20 || token === '[object Object]' || token.split('.').length !== 3) {
+      console.log('Extracted token type:', typeof token);
+      console.log('Extracted token length:', token?.length);
+      console.log('WS URL:', wsUrl);
+      
+      if (typeof token !== 'string' || token.length < 20 || token === '[object Object]') {
+        console.error('Invalid token format:', token);
         alert('Failed to get valid authentication token.');
         return;
       }
+      
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) {
+        console.error('Token does not have JWT structure:', token);
+        alert('Invalid token structure.');
+        return;
+      }
 
-      this.livekitRoom = new Room({ adaptiveStream: true, dynacast: true });
+      this.livekitRoom = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+      });
 
       this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
         console.log('LiveKit connection state:', state);
+        if (state === ConnectionState.Connected) {
+          console.log('Connected to LiveKit room');
+        }
       });
 
       this.livekitRoom.on(RoomEvent.ParticipantConnected, (participant) => {
@@ -652,40 +850,35 @@ export default {
 
       this.livekitRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
         console.log('Track unsubscribed:', track.kind, 'from', participant.identity);
-        this.updateRemoteTrackDisplay(participant);
+        this.handleTrackUnsubscribed(track, participant);
       });
 
       this.livekitRoom.on(RoomEvent.TrackMuted, (publication, participant) => {
+        console.log('Track muted:', publication.kind, 'from', participant.identity);
         this.updateRemoteTrackDisplay(participant);
       });
 
       this.livekitRoom.on(RoomEvent.TrackUnmuted, (publication, participant) => {
+        console.log('Track unmuted:', publication.kind, 'from', participant.identity);
         this.updateRemoteTrackDisplay(participant);
       });
 
       try {
+        console.log('Attempting to connect to LiveKit...');
         await this.livekitRoom.connect(wsUrl, token);
-        console.log('LiveKit room connected successfully. Room:', this.livekitRoom.name);
+        
+        console.log('LiveKit room connected successfully');
+        console.log('Room name:', this.livekitRoom.name);
+        
         this.livekitToken = token;
-
-        // ✅ FIX BUG 4: Handle participants already in room when we join
-        this.livekitRoom.remoteParticipants.forEach((participant) => {
-          console.log('Processing existing participant:', participant.identity);
-          this.handleParticipantConnected(participant);
-        });
-
       } catch (error) {
         console.error('Failed to connect to LiveKit:', error);
         alert('Failed to join meeting room: ' + error.message);
       }
     },
-
-    // ✅ FIX BUG 1 & 4: Clean dedup + handle already-published tracks
-    handleParticipantConnected(participant) {
-      // Deduplicate — remove any existing entry for this identity
-      this.participants = this.participants.filter(p => p.id !== participant.identity);
-
-      this.participants.push({
+    
+   /* handleParticipantConnected(participant) {
+      const participantData = {
         id: participant.identity,
         userId: participant.identity,
         name: participant.name || participant.identity,
@@ -693,18 +886,36 @@ export default {
         hasMic: false,
         hasVideo: false,
         captions: ''
-      });
+      };
+
+      const existingIndex = this.participants.findIndex(p => p.id === participant.identity);
+      if (existingIndex >= 0) {
+        this.participants[existingIndex] = participantData;
+      } else {
+        this.participants.push(participantData);
+      }
 
       this.remoteParticipants.set(participant.identity, participant);
+    },*/
 
-      // ✅ FIX BUG 4: Check for tracks already published before we joined
-      participant.trackPublications.forEach((publication) => {
-        if (publication.isSubscribed && publication.track) {
-          console.log('Attaching pre-existing track:', publication.kind, 'from', participant.identity);
-          this.handleTrackSubscribed(publication.track, participant);
-        }
-      });
-    },
+    handleParticipantConnected(participant) {
+  // Remove any duplicate first
+  this.participants = this.participants.filter(
+    p => p.id !== participant.identity
+  );
+
+  this.participants.push({
+    id: participant.identity,
+    userId: participant.identity,
+    name: participant.name || participant.identity,
+    isHost: false,
+    hasMic: false,
+    hasVideo: false,
+    captions: ''
+  });
+
+  this.remoteParticipants.set(participant.identity, participant);
+},
 
     handleParticipantDisconnected(participant) {
       this.participants = this.participants.filter(p => p.id !== participant.identity);
@@ -717,49 +928,39 @@ export default {
       } else if (track.kind === Track.Kind.Audio) {
         this.attachAudio(track, participant);
       }
+
       this.updateRemoteTrackDisplay(participant);
     },
 
-    // ✅ FIX BUG 2 & 3: Retry attach + force hasVideo=true on success
-    attachVideoToGrid(track, participant) {
-      const attach = (attempts = 0) => {
-        this.$nextTick(() => {
-          const tile = document.querySelector(`[data-peer-id="${participant.identity}"]`);
-          if (tile) {
-            const videoElement = tile.querySelector('video');
-            if (videoElement) {
-              track.attach(videoElement);
-              console.log('✅ Video attached for', participant.identity);
+    handleTrackUnsubscribed(track, participant) {
+      this.updateRemoteTrackDisplay(participant);
+    },
 
-              // FIX BUG 3: Force the hasVideo flag so avatar hides
-              const p = this.participants.find(p => p.id === participant.identity);
-              if (p) p.hasVideo = true;
-              return;
-            }
+    attachVideoToGrid(track, participant) {
+      this.$nextTick(() => {
+        const tile = document.querySelector(`[data-peer-id="${participant.identity}"]`);
+        if (tile) {
+          const videoElement = tile.querySelector('video');
+          if (videoElement) {
+            track.attach(videoElement);
           }
-          // Retry up to 15 times with 200ms delay (3 seconds total)
-          if (attempts < 15) {
-            setTimeout(() => attach(attempts + 1), 200);
-          } else {
-            console.warn('Failed to attach video after retries for', participant.identity);
-          }
-        });
-      };
-      attach();
+        }
+      });
     },
 
     attachAudio(track, participant) {
       const audioElement = track.attach();
-      audioElement.play().catch(err => console.error('Error playing audio:', err));
+      audioElement.play().catch(err => {
+        console.error('Error playing audio:', err);
+      });
     },
 
-    // ✅ FIX BUG 5: Correct check for active video/audio
     updateRemoteTrackDisplay(participant) {
       const videoPublication = participant.getTrack(Track.Source.Camera);
-      const hasVideo = !!(videoPublication && videoPublication.track && !videoPublication.isMuted);
+      const hasVideo = videoPublication && !videoPublication.isMuted;
 
       const audioPublication = participant.getTrack(Track.Source.Microphone);
-      const hasMic = !!(audioPublication && audioPublication.track && !audioPublication.isMuted);
+      const hasMic = audioPublication && !audioPublication.isMuted;
 
       const p = this.participants.find(p => p.id === participant.identity);
       if (p) {
@@ -770,6 +971,7 @@ export default {
 
     initSocket() {
       console.log('Initializing socket connection...');
+      
       this.socket = io(`${import.meta.env.VITE_API_URL}`, {
         transports: ['websocket'],
         upgrade: true,
@@ -784,12 +986,15 @@ export default {
       this.socket.on('connect', () => {
         console.log('Socket connected:', this.socket.id);
         this.isSocketConnected = true;
-        this.socket.emit('join-room', {
-          roomId: this.roomId,
+        
+        const joinData = { 
+          roomId: this.roomId, 
           userName: this.userName,
           userId: this.userId,
           isHost: this.isHost
-        });
+        };
+        
+        this.socket.emit('join-room', joinData);
         this.startBroadcastRetry();
       });
 
@@ -804,15 +1009,26 @@ export default {
       });
 
       this.socket.on('chat-message', ({ sender, text, timestamp }) => {
-        this.messages.push({ sender: sender || 'Unknown', text: text || '', timestamp: timestamp || Date.now() });
-        if (this.activePanel !== 'chat') this.unreadMessages++;
+        const message = { 
+          sender: sender || 'Unknown', 
+          text: text || '', 
+          timestamp: timestamp || Date.now() 
+        };
+        this.messages.push(message);
+        
+        if (this.activePanel !== 'chat') {
+          this.unreadMessages++;
+        }
+        
         this.$nextTick(() => {
           const chatBody = this.$refs.chatBody;
-          if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+          if (chatBody) {
+            chatBody.scrollTop = chatBody.scrollHeight;
+          }
         });
       });
 
-      this.socket.on('hand-raised', ({ userName, isRaised }) => {
+      this.socket.on('hand-raised', ({ userId, userName, isRaised }) => {
         console.log(`${userName} ${isRaised ? 'raised' : 'lowered'} hand`);
       });
 
@@ -821,35 +1037,43 @@ export default {
       });
 
       this.socket.on('all-muted', () => {
-        if (!this.isHost && this.micon) this.toggleMic();
+        if (!this.isHost && this.micon) {
+          this.toggleMic();
+        }
       });
 
-      // ✅ FIX BUG 6: Socket only updates metadata, never adds/removes participants
       this.socket.on('participants-list', (list) => {
+        // LiveKit handles participant tracks — socket only syncs metadata
         list
           .filter(p => p.userId !== this.userId)
           .forEach(p => {
             const existing = this.participants.find(ep => ep.userId === p.userId);
             if (existing) {
-              // Only update metadata, never overwrite LiveKit video/mic state
               existing.isHost = p.isHost || false;
-              if (p.name) existing.name = p.name;
+              existing.name = p.name || existing.name;
             }
           });
       });
     },
 
     startBroadcastRetry() {
-      if (this.broadcastRetryTimer) clearInterval(this.broadcastRetryTimer);
+      if (this.broadcastRetryTimer) {
+        clearInterval(this.broadcastRetryTimer);
+      }
+      
       this.broadcastRetryTimer = setInterval(() => {
-        if (this.broadcastQueue.length > 0 && this.isSocketConnected) this.processQueuedBroadcasts();
+        if (this.broadcastQueue.length > 0 && this.isSocketConnected) {
+          this.processQueuedBroadcasts();
+        }
       }, 2000);
     },
 
     processQueuedBroadcasts() {
       if (!this.isSocketConnected || !this.socket?.connected) return;
+
       const toProcess = [...this.broadcastQueue];
       this.broadcastQueue = [];
+
       for (const broadcast of toProcess) {
         try {
           this.socket.emit(broadcast.event, broadcast.data);
@@ -860,7 +1084,7 @@ export default {
     },
 
     safeBroadcast(event, data) {
-      if (this.socket?.connected && this.isSocketConnected) {
+      if (this.socket && this.socket.connected && this.isSocketConnected) {
         try {
           this.socket.emit(event, data);
           return true;
@@ -868,26 +1092,56 @@ export default {
           this.broadcastQueue.push({ event, data });
           return false;
         }
+      } else {
+        this.broadcastQueue.push({ event, data });
+        return false;
       }
-      this.broadcastQueue.push({ event, data });
-      return false;
     },
 
     async toggleMic() {
-      if (this.isInitializingMedia || !this.livekitRoom?.localParticipant) return;
+      if (this.isInitializingMedia) {
+        console.log('Media initialization in progress, ignoring toggle');
+        return;
+      }
+      
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+        alert('Not connected to meeting room');
+        return;
+      }
+      
       this.isInitializingMedia = true;
+
       try {
         if (this.micon) {
+          console.log('Muting microphone...');
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
           this.micon = false;
+          console.log('Microphone muted');
         } else {
+          console.log('Unmuting microphone...');
+          
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+          } catch (permError) {
+            console.warn('Permission request failed:', permError);
+          }
+          
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
           this.micon = true;
+          console.log('Microphone enabled');
         }
       } catch (error) {
         console.error('Error toggling microphone:', error);
-        if (error.name === 'NotAllowedError') alert('Microphone permission denied.');
-        else alert('Could not access microphone: ' + error.message);
+        
+        if (error.name === 'NotAllowedError') {
+          alert('Microphone permission denied. Please allow microphone access in your browser settings.');
+        } else if (error.message && error.message.includes('structuredClone')) {
+          alert('Browser compatibility issue. Please try refreshing the page or using Chrome/Edge.');
+        } else {
+          alert('Could not access microphone: ' + error.message);
+        }
+        
         this.micon = false;
       } finally {
         this.isInitializingMedia = false;
@@ -895,28 +1149,67 @@ export default {
     },
 
     async toggleVideo() {
-      if (this.isInitializingMedia || !this.livekitRoom?.localParticipant) return;
+      if (this.isInitializingMedia) {
+        console.log('Media initialization in progress, ignoring toggle');
+        return;
+      }
+      
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+        alert('Not connected to meeting room');
+        return;
+      }
+      
       this.isInitializingMedia = true;
+
       try {
         if (this.videoon) {
+          console.log('Turning off camera...');
           await this.livekitRoom.localParticipant.setCameraEnabled(false);
           this.videoon = false;
+          
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoElement.srcObject = null;
+          console.log('Camera disabled');
         } else {
+          console.log('Turning on camera...');
+          
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+              video: { 
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+              } 
+            });
+            stream.getTracks().forEach(track => track.stop());
+          } catch (permError) {
+            console.warn('Permission request failed:', permError);
+          }
+          
           await this.livekitRoom.localParticipant.setCameraEnabled(true);
           this.videoon = true;
+          
           await new Promise(resolve => setTimeout(resolve, 100));
+          
           const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
-          if (videoTrack?.track) {
+          if (videoTrack && videoTrack.track) {
             const videoElement = this.$refs.localVideo;
-            if (videoElement) videoTrack.track.attach(videoElement);
+            if (videoElement) {
+              videoTrack.track.attach(videoElement);
+            }
           }
+          console.log('Camera enabled');
         }
       } catch (error) {
         console.error('Error toggling camera:', error);
-        if (error.name === 'NotAllowedError') alert('Camera permission denied.');
-        else alert('Could not access camera: ' + error.message);
+        
+        if (error.name === 'NotAllowedError') {
+          alert('Camera permission denied. Please allow camera access in your browser settings.');
+        } else if (error.message && error.message.includes('structuredClone')) {
+          alert('Browser compatibility issue. Please try:\n1. Refreshing the page\n2. Using Chrome/Edge browser\n3. Updating your browser');
+        } else {
+          alert('Could not access camera: ' + error.message);
+        }
+        
         this.videoon = false;
       } finally {
         this.isInitializingMedia = false;
@@ -924,21 +1217,38 @@ export default {
     },
 
     async sharescreen() {
-      if (!this.livekitRoom?.localParticipant) return;
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+        alert('Not connected to meeting room');
+        return;
+      }
+      
       try {
         if (!this.isScreenSharing) {
+          console.log('Starting screen share...');
+          
           await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
           this.isScreenSharing = true;
+          
           const screenTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.ScreenShare);
-          if (screenTrack?.track) {
+          if (screenTrack) {
             const videoElement = this.$refs.localVideo;
-            if (videoElement) screenTrack.track.attach(videoElement);
+            if (videoElement) {
+              screenTrack.track.attach(videoElement);
+            }
           }
+          console.log('Screen sharing started');
         } else {
           await this.stopScreenShare();
         }
       } catch (error) {
-        if (error.name !== 'NotAllowedError') alert('Could not start screen sharing: ' + error.message);
+        console.error('Error sharing screen:', error);
+        
+        if (error.name === 'NotAllowedError') {
+          alert('Screen sharing permission denied.');
+        } else {
+          alert('Could not start screen sharing: ' + error.message);
+        }
+        
         this.isScreenSharing = false;
       }
     },
@@ -947,16 +1257,20 @@ export default {
       try {
         await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
         this.isScreenSharing = false;
+        
         if (this.videoon) {
           const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
-          if (videoTrack?.track) {
+          if (videoTrack) {
             const videoElement = this.$refs.localVideo;
-            if (videoElement) videoTrack.track.attach(videoElement);
+            if (videoElement) {
+              videoTrack.track.attach(videoElement);
+            }
           }
         } else {
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoElement.srcObject = null;
         }
+        console.log('Screen sharing stopped');
       } catch (error) {
         console.error('Error stopping screen share:', error);
       }
@@ -965,10 +1279,16 @@ export default {
     togglePanel(panel) {
       this.activePanel = this.activePanel === panel ? null : panel;
       this.activeDropdown = null;
-      if (panel === 'chat') this.unreadMessages = 0;
+      
+      if (panel === 'chat') {
+        this.unreadMessages = 0;
+      }
     },
 
-    setHover(icon) { this.hoveredIcon = icon; },
+    setHover(icon) {
+      this.hoveredIcon = icon;
+    },
+
     toggleDropdown(type) {
       this.activeDropdown = this.activeDropdown === type ? null : type;
       this.activePanel = null;
@@ -977,36 +1297,70 @@ export default {
     resetinactivityTimer() {
       this.trayVisible = true;
       clearTimeout(this.inactivityTimer);
-      this.inactivityTimer = setTimeout(() => { this.trayVisible = false; }, 5000);
+      this.inactivityTimer = setTimeout(() => {
+        this.trayVisible = false;
+      }, 5000);
     },
 
-    turn() { this.turned = !this.turned; },
+    turn() {
+      this.turned = !this.turned;
+    },
 
     sendMessage() {
       const text = (this.newMessage || '').trim();
       if (!text) return;
-      this.safeBroadcast('chat-message', { roomId: this.roomId, sender: this.userName, text, timestamp: Date.now() });
+      
+      const message = {
+        sender: this.userName,
+        text: text,
+        timestamp: Date.now()
+      };
+      
+      this.safeBroadcast('chat-message', {
+        roomId: this.roomId,
+        ...message
+      });
+      
       this.newMessage = '';
+      
       this.$nextTick(() => {
         const chatBody = this.$refs.chatBody;
-        if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+        if (chatBody) {
+          chatBody.scrollTop = chatBody.scrollHeight;
+        }
       });
     },
 
     hand_raised() {
       this.hand = !this.hand;
-      this.safeBroadcast('hand-raised', { roomId: this.roomId, userId: this.userId, userName: this.userName, isRaised: this.hand });
+      
+      this.safeBroadcast('hand-raised', {
+        roomId: this.roomId,
+        userId: this.userId,
+        userName: this.userName,
+        isRaised: this.hand
+      });
     },
 
-    toggle_info() { this.show_info = !this.show_info; this.activeDropdown = null; },
-    close_info() { this.show_info = false; },
+    toggle_info() {
+      this.show_info = !this.show_info;
+      this.activeDropdown = null;
+    },
+
+    close_info() {
+      this.show_info = false;
+    },
 
     copystring() {
-      navigator.clipboard.writeText(this.roomId)
-        .then(() => alert("Meeting link copied to clipboard!"))
-        .catch(() => {
+      const meetingLink = this.roomId;
+      navigator.clipboard.writeText(meetingLink)
+        .then(() => {
+          alert("Meeting link copied to clipboard!");
+        })
+        .catch(err => {
+          console.error("Failed to copy link:", err);
           const textArea = document.createElement('textarea');
-          textArea.value = this.roomId;
+          textArea.value = meetingLink;
           document.body.appendChild(textArea);
           textArea.select();
           document.execCommand('copy');
@@ -1015,42 +1369,80 @@ export default {
         });
     },
 
-    leave() { this.cleanup(); this.$router.push('/Ending'); },
+    leave() {
+      this.cleanup();
+      this.$router.push('/Ending');
+    },
 
     async endMeeting() {
-      if (!this.isHost) { alert("Only host can end the meeting"); return; }
+      if (!this.isHost) {
+        alert("Only host can end the meeting");
+        return;
+      }
+
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
         });
-        if (res.ok) { this.cleanup(); this.$router.push('/Ending'); }
-      } catch (err) { console.error("Error ending meeting:", err); }
+        
+        if (res.ok) {
+          this.cleanup();
+          this.$router.push('/Ending');
+        }
+      } catch(err) {
+        console.error("Error ending meeting:", err);
+      }
     },
 
     async muteAll() {
-      if (!this.isHost) { alert("Only host can mute all participants"); return; }
+      if (!this.isHost) {
+        alert("Only host can mute all participants");
+        return;
+      }
+
       try {
-        await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ roomId: this.roomId })
         });
-      } catch (err) { console.error("Error muting all:", err); }
+        
+        if (res.ok) {
+          console.log("All participants muted");
+        }
+      } catch(err) {
+        console.error("Error muting all participants:", err);
+      }
     },
 
     async recording() {
-      if (!this.isHost) { alert("Only host can start recording"); return; }
+      if (!this.isHost) {
+        alert("Only host can start recording");
+        return;
+      }
+
       this.record = !this.record;
-      if (this.record) {
+      
+      if(this.record) {
         try {
-          const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true
+          });
+          
           this.recordedChunks = [];
-          this.mediaRecorder = new MediaRecorder(screenStream, { mimeType: "video/webm" });
-          this.mediaRecorder.ondataavailable = (e) => { if (e.data?.size > 0) this.recordedChunks.push(e.data); };
+          this.mediaRecorder = new MediaRecorder(screenStream, {mimeType: "video/webm"});
+          
+          this.mediaRecorder.ondataavailable = (e) => {
+            if(e.data && e.data.size > 0) {
+              this.recordedChunks.push(e.data);
+            }
+          };
+          
           this.mediaRecorder.onstop = () => {
-            const blob = new Blob(this.recordedChunks, { type: "video/webm" });
+            const blob = new Blob(this.recordedChunks, {type:"video/webm"});
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
@@ -1058,72 +1450,129 @@ export default {
             a.click();
             URL.revokeObjectURL(url);
           };
+          
           this.mediaRecorder.start();
           this.isRecording = true;
-        } catch (err) {
+          console.log("Recording started");
+        } catch(err) {
           console.error("Recording failed:", err);
           this.record = false;
         }
       } else {
-        if (this.mediaRecorder && this.isRecording) {
+        if(this.mediaRecorder && this.isRecording) {
           this.mediaRecorder.stop();
           this.isRecording = false;
+          console.log("Recording stopped");
         }
       }
     },
 
-    async checkNetworkQuality() { /* placeholder */ },
+    async checkNetworkQuality() {
+      if (!this.livekitRoom) return;
+    },
 
-    emailEnact() { this.initiateGmailOAuth(); },
+    emailEnact() {
+      this.initiateGmailOAuth();
+    },
 
     initiateGmailOAuth() {
       const clientId = import.meta.env.VITE_GMAIL_CLIENT_ID;
       const redirectUri = import.meta.env.VITE_GMAIL_REDIRECT_URI;
       const scope = 'https://www.googleapis.com/auth/gmail.send';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
-      window.open(authUrl, 'gmail-oauth', 'width=500,height=600');
-      window.addEventListener('message', (event) => {
-        if (event.data?.type === 'gmail-oauth-success') {
+      const popup = window.open(authUrl,'gmail-oauth','width=500,height=600');
+      console.log('Auth URL:', authUrl);
+      window.addEventListener('message',(event) => {
+        if(event.data?.type === 'gmail-oauth-success') {
           this.gmailAccessToken = event.data.token;
           this.showEmailPanel = true;
+          //popup?.close();
         }
       }, { once: true });
     },
 
     async sendEmail() {
-      if (!this.emailTo || !this.emailSubject || !this.emailBody) { alert('Please fill in all fields'); return; }
+      if(!this.emailTo || !this.emailSubject || !this.emailBody) {
+        alert('Please fill in all fields');
+        return;
+      }
       this.emailSending = true;
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/send-email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type':'application/json' },
           body: JSON.stringify({
             accessToken: this.gmailAccessToken,
             senderEmail: localStorage.getItem('username'),
-            to: this.emailTo, subject: this.emailSubject, body: this.emailBody
+            to: this.emailTo,
+            subject: this.emailSubject,
+            body: this.emailBody
           })
         });
-        if (response.ok) {
-          this.emailTo = ''; this.emailSubject = ''; this.emailBody = '';
+        if(response.ok) {
+          this.emailTo = '';
+          this.emailSubject = '';
+          this.emailBody = '';
           this.showEmailPanel = false;
-        } else throw new Error('Failed to send');
-      } catch (err) {
+        }
+        else{
+          throw new Error('Failed to send');
+        }
+      }
+      catch(err) 
+      {
         alert('Failed to send email: ' + err.message);
-      } finally {
+      }
+      finally {
         this.emailSending = false;
       }
     },
-
+    
     async cleanup() {
       console.log('Cleaning up resources...');
-      if (this.broadcastRetryTimer) { clearInterval(this.broadcastRetryTimer); this.broadcastRetryTimer = null; }
-      if (this.showCaptions) this.stopCaptionRecognition();
-      if (this.silentBackgroundEnabled) { await this.disableBackgroundNoiseSuppression(); this.silentBackgroundEnabled = false; }
-      if (this.livekitRoom) { this.livekitRoom.disconnect(); this.livekitRoom = null; }
-      if (this.mediaRecorder && this.isRecording) { try { this.mediaRecorder.stop(); } catch (e) {} }
-      if (this.socket) { this.socket.disconnect(); this.socket = null; }
-      if (this.networkCheckInterval) { clearInterval(this.networkCheckInterval); this.networkCheckInterval = null; }
-      if (this.inactivityTimer) { clearTimeout(this.inactivityTimer); this.inactivityTimer = null; }
+      
+      if (this.broadcastRetryTimer) {
+        clearInterval(this.broadcastRetryTimer);
+        this.broadcastRetryTimer = null;
+      }
+
+      if (this.showCaptions) {
+        this.stopCaptionRecognition();
+      }
+
+      if (this.silentBackgroundEnabled) {
+        await this.disableBackgroundNoiseSuppression(); 
+        this.silentBackgroundEnabled = false;
+      }
+
+      if (this.livekitRoom) {
+        this.livekitRoom.disconnect();
+        this.livekitRoom = null;
+      }
+
+      if (this.mediaRecorder && this.isRecording) {
+        try {
+          this.mediaRecorder.stop();
+        } catch (e) {
+          console.error('Error stopping recorder:', e);
+        }
+      }
+
+      if (this.socket) {
+        this.socket.disconnect();
+        this.socket = null;
+      }
+
+      if (this.networkCheckInterval) {
+        clearInterval(this.networkCheckInterval);
+        this.networkCheckInterval = null;
+      }
+      
+      if (this.inactivityTimer) {
+        clearTimeout(this.inactivityTimer);
+        this.inactivityTimer = null;
+      }
+
       this.participants = [];
       this.messages = [];
       this.micon = false;
@@ -1136,14 +1585,18 @@ export default {
       this.remoteParticipants.clear();
       this.captionHistory = [];
       this.localCaptions = '';
+
       this.showEmailPanel = false;
       this.gmailAccessToken = null;
-      this.emailTo = ''; this.emailSubject = ''; this.emailBody = '';
+      this.emailTo = '';
+      this.emailSubject = '',
+      this.emailBody = '';
     }
   },
 
   async beforeUnmount() {
-    await this.cleanup();
+    this.cleanup();
+    
     document.removeEventListener("mousemove", this.resetinactivityTimer);
     document.removeEventListener("keydown", this.resetinactivityTimer);
     document.removeEventListener("click", this.resetinactivityTimer);
@@ -1156,27 +1609,46 @@ export default {
 
   async mounted() {
     console.log('=== MEETING ROOM MOUNTING ===');
-    if (!this.initUserFromToken()) return;
+    
+    if (!this.initUserFromToken()) {
+      return;
+    }
+
     this.roomId = this.computedRoomId;
-    console.log('Meeting room initialized:', { roomId: this.roomId, userName: this.userName, userId: this.userId, isHost: this.isHost });
+    
+    console.log('Meeting room initialized:', {
+      roomId: this.roomId,
+      userName: this.userName,
+      userId: this.userId,
+      isHost: this.isHost
+    });
+    
     this.initSocket();
     await this.initLivekit();
+    
     setTimeout(() => {
-      this.networkCheckInterval = setInterval(() => this.checkNetworkQuality(), 5000);
+      this.networkCheckInterval = setInterval(() => {
+        this.checkNetworkQuality();
+      }, 5000);
     }, 5000);
+
     this.resetinactivityTimer();
     document.addEventListener("mousemove", this.resetinactivityTimer);
     document.addEventListener("keydown", this.resetinactivityTimer);
     document.addEventListener("click", this.resetinactivityTimer);
     document.addEventListener("touchstart", this.resetinactivityTimer);
+
+    // Fullscreen event listeners
     document.addEventListener("fullscreenchange", this.handleFullscreenChange);
     document.addEventListener("webkitfullscreenchange", this.handleFullscreenChange);
     document.addEventListener("msfullscreenchange", this.handleFullscreenChange);
     document.addEventListener("keydown", this.handleEscKey);
+
     console.log('=== COMPONENT MOUNTED SUCCESSFULLY ===');
   }
 };
 </script>
+
 <style>
 /* ==================== GLOBAL STYLES ==================== */
 body {
@@ -2147,9 +2619,3 @@ body {
   }
 }
 </style>
-
-
-
-
-
-
