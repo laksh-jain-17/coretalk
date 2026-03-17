@@ -873,16 +873,21 @@ async disableBackgroundNoiseSuppression() {
         this.livekitToken = token;
 
         // Process participants already in room when joining
-        this.livekitRoom.remoteParticipants.forEach((participant) => {
-          console.log('Processing existing participant:', participant.identity);
-          this.handleParticipantConnected(participant);
-          participant.trackPublications.forEach((publication) => {
+         const existingParticipants = this.livekitRoom.remoteParticipants;
+  if (existingParticipants) {
+    existingParticipants.forEach((participant) => {
+      console.log('Processing existing participant:', participant.identity);
+      this.handleParticipantConnected(participant);
+      const publications = participant.trackPublications;
+      if (publications) {
+        publications.forEach((publication) => {
           if (publication.isSubscribed && publication.track) {
             this.handleTrackSubscribed(publication.track, participant);
           }
         });
-      });
-
+      }
+    });
+  }
       } 
       catch (error) {
         console.error('Failed to connect to LiveKit:', error);
@@ -1110,16 +1115,16 @@ async disableBackgroundNoiseSuppression() {
 
   // After list synced, re-attempt track attachment for any existing LiveKit tracks
       this.$nextTick(() => {
-        if (!this.livekitRoom) return;
-          this.livekitRoom.remoteParticipants.forEach((participant) => {
-            participant.trackPublications.forEach((publication) => {
-            if (publication.isSubscribed && publication.track) {
-              this.handleTrackSubscribed(publication.track, participant);
-            }
-          });
-        });
-      });
+  if (!this.livekitRoom || !this.livekitRoom.remoteParticipants) return;
+  this.livekitRoom.remoteParticipants.forEach((participant) => {
+    if (!participant.trackPublications) return;
+    participant.trackPublications.forEach((publication) => {
+      if (publication.isSubscribed && publication.track) {
+        this.handleTrackSubscribed(publication.track, participant);
+      }
     });
+  });
+});
     },
 
     startBroadcastRetry() {
