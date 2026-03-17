@@ -866,14 +866,27 @@ async disableBackgroundNoiseSuppression() {
       try {
         console.log('Attempting to connect to LiveKit...');
         await this.livekitRoom.connect(wsUrl, token);
-        
+  
         console.log('LiveKit room connected successfully');
         console.log('Room name:', this.livekitRoom.name);
-        
+  
         this.livekitToken = token;
-      } catch (error) {
+
+        // Process participants already in room when joining
+        this.livekitRoom.remoteParticipants.forEach((participant) => {
+          console.log('Processing existing participant:', participant.identity);
+          this.handleParticipantConnected(participant);
+          participant.trackPublications.forEach((publication) => {
+          if (publication.isSubscribed && publication.track) {
+            this.handleTrackSubscribed(publication.track, participant);
+          }
+        });
+      });
+
+      } 
+      catch (error) {
         console.error('Failed to connect to LiveKit:', error);
-        alert('Failed to join meeting room: ' + error.message);
+        alert('Failed to join meeting room: ' + error.message);  
       }
     },
     
@@ -937,31 +950,35 @@ async disableBackgroundNoiseSuppression() {
     },
 
     attachVideoToGrid(track, participant) {
-        const maxAttempts = 10;
-        let attempts = 0;
+  const maxAttempts = 10;
+  let attempts = 0;
 
-        const tryAttach = () => {
-        const tile = document.querySelector(`[data-peer-id="${participant.identity}"]`);
-        if (tile) {
-          const videoElement = tile.querySelector('video');
-          if (videoElement) {
-            track.attach(videoElement);
-            console.log('✅ Video attached for', participant.identity);
-            return;
-          }
-        }  
-
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(tryAttach, 150); // retry every 150ms, up to 10 times (1.5s total)
-        } else {
-          console.warn('❌ Could not find tile for', participant.identity, 'after', maxAttempts, 'attempts');
+  const tryAttach = () => {
+    const tile = document.querySelector(`[data-peer-id="${participant.identity}"]`);
+    if (tile) {
+      const videoElement = tile.querySelector('video');
+      if (videoElement) {
+        if (videoElement.srcObject) {
+          console.log('Video already attached for', participant.identity);
+          return;
         }
-      };
+        track.attach(videoElement);
+        console.log('Video attached for', participant.identity);
+        return;
+      }
+    }
 
-      this.$nextTick(tryAttach);
-    },
+    attempts++;
+    if (attempts < maxAttempts) {
+      setTimeout(tryAttach, 150);
+    } else {
+      console.warn('Could not find tile for', participant.identity, 'after', maxAttempts, 'attempts');
+    }
+  };
 
+  this.$nextTick(tryAttach);
+},
+    
     attachAudio(track, participant) {
       const audioElement = track.attach();
       audioElement.play().catch(err => {
@@ -1060,24 +1077,50 @@ async disableBackgroundNoiseSuppression() {
       });
 
       this.socket.on('participants-list', (list) => {
-        // Find self in the server list to correct host status
+        console.log('participants-list received:', JSON.stringify(list));
+
         const selfEntry = list.find(p => p.userId === this.userId);
         if (selfEntry) {
           this.isHost = selfEntry.isHost || false;
-          localStorage.setItem('isHost', String(this.isHost)); // keep in sync
+          localStorage.setItem('isHost', String(this.isHost));
         }
 
         list
           .filter(p => p.userId !== this.userId)
           .forEach(p => {
-          const existing = this.participants.find(ep => ep.userId === p.userId);
+          const existing = this.participants.find(
+            ep => ep.userId === p.userId || ep.id === p.userId
+          );
           if (existing) {
             existing.isHost = p.isHost || false;
             existing.name = p.name || existing.name;
-          }
+          } else {
+          // ADD missing participant
+            this.participants.push({
+            id: p.userId,
+            userId: p.userId,
+            name: p.name || p.userId,
+            isHost: p.isHost || false,
+            hasMic: false,
+            hasVideo: false,
+            captions: ''
+          });
+        }
+      });
+
+  // After list synced, re-attempt track attachment for any existing LiveKit tracks
+      this.$nextTick(() => {
+        if (!this.livekitRoom) return;
+          this.livekitRoom.remoteParticipants.forEach((participant) => {
+            participant.trackPublications.forEach((publication) => {
+            if (publication.isSubscribed && publication.track) {
+              this.handleTrackSubscribed(publication.track, participant);
+            }
+          });
         });
       });
-    },
+    }),
+  },
 
     startBroadcastRetry() {
       if (this.broadcastRetryTimer) {
