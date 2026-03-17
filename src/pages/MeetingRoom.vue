@@ -1093,39 +1093,39 @@ async disableBackgroundNoiseSuppression() {
         list
           .filter(p => p.userId !== this.userId)
           .forEach(p => {
-          const existing = this.participants.find(
-            ep => ep.userId === p.userId || ep.id === p.userId
-          );
-          if (existing) {
-            existing.isHost = p.isHost || false;
-            existing.name = p.name || existing.name;
-          } else {
-          // ADD missing participant
-            this.participants.push({
-            id: p.userId,
-            userId: p.userId,
-            name: p.name || p.userId,
-            isHost: p.isHost || false,
-            hasMic: false,
-            hasVideo: false,
-            captions: ''
+            const existing = this.participants.find(
+              ep => ep.userId === p.userId || ep.id === p.userId
+            );
+            if (existing) {
+              existing.isHost = p.isHost || false;
+              existing.name = p.name || existing.name;
+            } else {
+              this.participants.push({
+                id: p.userId,
+                userId: p.userId,
+                name: p.name || p.userId,
+                isHost: p.isHost || false,
+                hasMic: false,
+                hasVideo: false,
+                captions: ''
+              });
+            }
           });
-        }
-      });
 
-  // After list synced, re-attempt track attachment for any existing LiveKit tracks
-      this.$nextTick(() => {
-  if (!this.livekitRoom || !this.livekitRoom.remoteParticipants) return;
-  this.livekitRoom.remoteParticipants.forEach((participant) => {
-    if (!participant.trackPublications) return;
-    participant.trackPublications.forEach((publication) => {
-      if (publication.isSubscribed && publication.track) {
-        this.handleTrackSubscribed(publication.track, participant);
-      }
-    });
-  });
-});
-    },
+        this.$nextTick(() => {
+          if (!this.livekitRoom || !this.livekitRoom.remoteParticipants) return;
+          this.livekitRoom.remoteParticipants.forEach((participant) => {
+            if (!participant.trackPublications) return;
+            participant.trackPublications.forEach((publication) => {
+              if (publication.isSubscribed && publication.track) {
+                this.handleTrackSubscribed(publication.track, participant);
+              }
+            });
+          });
+        });
+      });   // ← closes socket.on('participants-list')
+
+    },   // ← closes initSocket() method
 
     startBroadcastRetry() {
       if (this.broadcastRetryTimer) {
