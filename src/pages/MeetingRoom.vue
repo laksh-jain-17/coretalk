@@ -937,15 +937,29 @@ async disableBackgroundNoiseSuppression() {
     },
 
     attachVideoToGrid(track, participant) {
-      this.$nextTick(() => {
+        const maxAttempts = 10;
+        let attempts = 0;
+
+        const tryAttach = () => {
         const tile = document.querySelector(`[data-peer-id="${participant.identity}"]`);
         if (tile) {
           const videoElement = tile.querySelector('video');
           if (videoElement) {
             track.attach(videoElement);
+            console.log('✅ Video attached for', participant.identity);
+            return;
           }
+        }  
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(tryAttach, 150); // retry every 150ms, up to 10 times (1.5s total)
+        } else {
+          console.warn('❌ Could not find tile for', participant.identity, 'after', maxAttempts, 'attempts');
         }
-      });
+      };
+
+      this.$nextTick(tryAttach);
     },
 
     attachAudio(track, participant) {
@@ -957,15 +971,18 @@ async disableBackgroundNoiseSuppression() {
 
     updateRemoteTrackDisplay(participant) {
       const videoPublication = participant.getTrack(Track.Source.Camera);
-      const hasVideo = videoPublication && !videoPublication.isMuted;
+      const hasVideo = !!(videoPublication && !videoPublication.isMuted);
 
       const audioPublication = participant.getTrack(Track.Source.Microphone);
-      const hasMic = audioPublication && !audioPublication.isMuted;
+      const hasMic = !!(audioPublication && !audioPublication.isMuted);
 
       const p = this.participants.find(p => p.id === participant.identity);
       if (p) {
         p.hasMic = hasMic;
         p.hasVideo = hasVideo;
+      } else {
+      // Participant not in list yet — retry after Vue renders
+        setTimeout(() => this.updateRemoteTrackDisplay(participant), 200);
       }
     },
 
@@ -1043,16 +1060,22 @@ async disableBackgroundNoiseSuppression() {
       });
 
       this.socket.on('participants-list', (list) => {
-        // LiveKit handles participant tracks — socket only syncs metadata
+        // Find self in the server list to correct host status
+        const selfEntry = list.find(p => p.userId === this.userId);
+        if (selfEntry) {
+          this.isHost = selfEntry.isHost || false;
+          localStorage.setItem('isHost', String(this.isHost)); // keep in sync
+        }
+
         list
           .filter(p => p.userId !== this.userId)
           .forEach(p => {
-            const existing = this.participants.find(ep => ep.userId === p.userId);
-            if (existing) {
-              existing.isHost = p.isHost || false;
-              existing.name = p.name || existing.name;
-            }
-          });
+          const existing = this.participants.find(ep => ep.userId === p.userId);
+          if (existing) {
+            existing.isHost = p.isHost || false;
+            existing.name = p.name || existing.name;
+          }
+        });
       });
     },
 
