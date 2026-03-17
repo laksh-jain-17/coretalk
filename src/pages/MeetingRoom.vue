@@ -1119,8 +1119,8 @@ async disableBackgroundNoiseSuppression() {
           });
         });
       });
-    }),
-  },
+    });
+    },
 
     startBroadcastRetry() {
       if (this.broadcastRetryTimer) {
