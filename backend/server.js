@@ -34,10 +34,13 @@ app.use(cors({
     }
     callback(new Error(`CORS blocked: ${origin}`));
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // ✅ add OPTIONS
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: true,
+  maxAge: 86400 
 }));
+
+app.options('*', cors());
 
 app.use(express.json());
 
