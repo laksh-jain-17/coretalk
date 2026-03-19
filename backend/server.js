@@ -75,8 +75,9 @@ const server = app.listen(PORT, () => console.log(`Server running on port ${PORT
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
