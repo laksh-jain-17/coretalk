@@ -25,8 +25,8 @@
         <div id="ht-btn-row">
           <button class="ht-btn ht-prev" :disabled="current === 0" @click="prev">← Back</button>
           <span id="ht-counter">{{ current + 1 }} / {{ steps.length }}</span>
-          <button class="ht-btn ht-next" :disabled="current === steps.length - 1" @click="next">
-            {{ current === steps.length - 1 ? 'Done ✓' : 'Next →' }}
+          <button class="ht-btn ht-next" @click="current === steps.length - 1 ? $router.push('/') : next()">
+              {{ current === steps.length - 1 ? 'Done ✓' : 'Next →' }}
           </button>
         </div>
       </div>
