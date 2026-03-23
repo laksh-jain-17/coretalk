@@ -4,12 +4,15 @@ const User = require('../models/User');
 const Review = require('../models/Review');
 const Room = require('../models/Room');
 const authMiddleware = require('../middleware/authMiddleware');
+const adminOnly = require('../middleware/adminOnly');
+
+// Shorthand: all admin routes require auth + admin role
+const adminGuard = [authMiddleware, adminOnly];
 
 // ============ USERS MANAGEMENT ============
-// Get all users
-router.get('/users', authMiddleware, async (req, res) => {
+router.get('/users', adminGuard, async (req, res) => {
   try {
-    const users = await User.find().select('-password'); // hide passwords
+    const users = await User.find().select('-password');
     res.json(users);
   } catch (err) {
     console.error('Error fetching users:', err);
@@ -17,8 +20,7 @@ router.get('/users', authMiddleware, async (req, res) => {
   }
 });
 
-// Delete user
-router.delete('/users/:id', authMiddleware, async (req, res) => {
+router.delete('/users/:id', adminGuard, async (req, res) => {
   try {
     await User.findByIdAndDelete(req.params.id);
     res.json({ msg: 'User deleted successfully' });
@@ -29,10 +31,7 @@ router.delete('/users/:id', authMiddleware, async (req, res) => {
 });
 
 // ============ FEEDBACK/REVIEWS ============
-// Get all reviews with user details
-
-// Add this route in adminRoutes.js
-router.get('/feedback', authMiddleware, async (req, res) => {
+router.get('/feedback', adminGuard, async (req, res) => {
   try {
     const reviews = await Review.find()
       .populate('user', 'name email')
@@ -52,14 +51,12 @@ router.get('/feedback', authMiddleware, async (req, res) => {
     res.status(500).json({ msg: 'Server error' });
   }
 });
+
 // ============ USAGE METRICS ============
-// Get monthly usage statistics
-router.get('/usage-metrics', authMiddleware, async (req, res) => {
+router.get('/usage-metrics', adminGuard, async (req, res) => {
   try {
-    // Get current year
     const currentYear = new Date().getFullYear();
     
-    // Aggregate meetings by month
     const monthlyStats = await Room.aggregate([
       {
         $match: {
@@ -75,13 +72,10 @@ router.get('/usage-metrics', authMiddleware, async (req, res) => {
           totalMeetings: { $sum: 1 }
         }
       },
-      {
-        $sort: { _id: 1 }
-      }
+      { $sort: { _id: 1 } }
     ]);
 
-    // Create array for all 12 months (fill missing months with 0)
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
     const usageData = monthNames.map((month, index) => {
@@ -99,19 +93,17 @@ router.get('/usage-metrics', authMiddleware, async (req, res) => {
   }
 });
 
-// ============ ACTIVE MEETINGS (from Socket.io rooms) ============
-// Note: This will be injected from server.js
-// We'll create a getter function that server.js can use
+// ============ ACTIVE MEETINGS ============
 let getRoomsFunction = null;
 
 router.setGetRooms = (fn) => {
   getRoomsFunction = fn;
 };
 
-router.get('/active-meetings', authMiddleware, (req, res) => {
+router.get('/active-meetings', adminGuard, (req, res) => {
   try {
     if (!getRoomsFunction) {
-      return res.json([]); // Return empty array if no rooms available
+      return res.json([]);
     }
 
     const rooms = getRoomsFunction();
