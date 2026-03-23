@@ -25,6 +25,17 @@
         <!-- Local User (You) -->
         <div class="participant-tile local-participant">
           <video ref="localVideo" autoplay muted playsinline></video>
+          <button
+            v-if="isMobile && videoon"
+            @click="flipCamera"
+            style="
+              position: absolute; top: 10px; right: 10px; z-index: 3;
+              background: rgba(0,0,0,0.5); border: none; border-radius: 50%;
+              width: 36px; height: 36px; color: white; font-size: 18px;
+              cursor: pointer; display: flex; align-items: center; justify-content: center;
+            "
+          >🔄</button>
+          
           <div v-if="!videoon" class="video-placeholder">
             <div class="avatar-circle">{{ userInitials }}</div>
           </div>
@@ -275,6 +286,20 @@
       <p>✋ Your hand is raised</p>
     </div>
 
+    <!-- Other participants' raised hands -->
+    <div
+      v-for="h in raisedHands.filter(h => h.userId !== userId)"
+      :key="h.userId"
+      style="
+        position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+        background: #FFA726; color: white; padding: 10px 20px;
+        border-radius: 8px; font-weight: 600; z-index: 101;
+        animation: slideIn 0.3s ease; margin-top: 8px;
+      "
+    >
+    ✋ {{ h.userName }} raised their hand
+    </div>
+
     <!-- Email Permission Dialog -->
     <div v-if="showEmailPermissionDialog" class="email-permission-overlay">
     <div class="email-permission-box">
@@ -395,6 +420,8 @@ export default {
 
       isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || !navigator.mediaDevices?.getDisplayMedia,
       connectionStatus: 'connected',
+      raisedHands: [],
+      facingMode: 'user',
     };
   },
 
@@ -1012,6 +1039,7 @@ async disableBackgroundNoiseSuppression() {
     handleParticipantDisconnected(participant) {
       this.participants = this.participants.filter(p => p.id !== participant.identity);
       this.remoteParticipants.delete(participant.identity);
+      this.raisedHands = this.raisedHands.filter(h => h.userId !== participant.identity);
     },
 
     handleTrackSubscribed(track, participant) {
@@ -1142,7 +1170,13 @@ async disableBackgroundNoiseSuppression() {
       });
 
       this.socket.on('hand-raised', ({ userId, userName, isRaised }) => {
-        console.log(`${userName} ${isRaised ? 'raised' : 'lowered'} hand`);
+        if (isRaised) {
+          if (!this.raisedHands.find(h => h.userId === userId)) {
+            this.raisedHands.push({ userId, userName });
+          }
+        } else {
+          this.raisedHands = this.raisedHands.filter(h => h.userId !== userId);
+        }
       });
 
       this.socket.on('meeting-locked', () => {
@@ -1670,6 +1704,33 @@ async disableBackgroundNoiseSuppression() {
       }
       finally {
         this.emailSending = false;
+      }
+    },
+
+    async flipCamera() {
+      if (!this.videoon) return;
+      this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
+
+      try {
+        // Unpublish current camera track
+        await this.livekitRoom.localParticipant.setCameraEnabled(false);
+
+        // Re-publish with new facingMode constraint
+        await this.livekitRoom.localParticipant.setCameraEnabled(true, {
+          facingMode: this.facingMode,
+        });
+
+    // Re-attach to local preview
+        await this.$nextTick();
+        const videoTrack = this.livekitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+        if (videoTrack?.track) {
+          const videoElement = this.$refs.localVideo;
+          if (videoElement) videoTrack.track.attach(videoElement);
+        }
+      } catch (err) {
+        console.error('Camera flip failed:', err);
+        // Revert
+        this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
       }
     },
     
