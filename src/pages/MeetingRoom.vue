@@ -305,6 +305,20 @@
       </button>
     </div>
   </div>
+
+    <!-- Reconnecting overlay -->
+  <transition name="slide-fade">
+    <div v-if="connectionStatus === 'reconnecting'" style="
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; z-index: 200; gap: 16px;
+    ">
+    <div style="width:40px;height:40px;border:3px solid #4CAF50;
+      border-top-color:transparent;border-radius:50%;
+      animation:spin 0.8s linear infinite;"></div>
+    <p style="color:white;font-size:16px;margin:0">Reconnecting to meeting...</p>
+    </div>
+  </transition>
 </div>
 </template>
 
@@ -380,6 +394,7 @@ export default {
       emailSending: false,
 
       isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || !navigator.mediaDevices?.getDisplayMedia,
+      connectionStatus: 'connected',
     };
   },
 
@@ -650,7 +665,7 @@ async enableBackgroundNoiseSuppression() {
     // Keep micon state in sync
     this.micon = true;
 
-    console.log('✅ Background noise suppression enabled and published to LiveKit.');
+    console.log('Background noise suppression enabled and published to LiveKit.');
   } catch (error) {
     console.error('Error enabling noise suppression:', error);
     alert('Could not enable Silent Background: ' + error.message);
@@ -862,6 +877,65 @@ async disableBackgroundNoiseSuppression() {
         console.log('Track unmuted:', publication.kind, 'from', participant.identity);
         this.updateRemoteTrackDisplay(participant);
       });
+
+      this.livekitRoom.on(RoomEvent.Reconnecting, () => {
+        console.log('LiveKit reconnecting...');
+        this.connectionStatus = 'reconnecting';
+      });
+
+      this.livekitRoom.on(RoomEvent.Reconnected, async () => {
+        console.log('LiveKit reconnected');
+        this.connectionStatus = 'connected';
+
+  // Re-attach all remote tracks after reconnect
+        await this.$nextTick();
+        this.livekitRoom.remoteParticipants.forEach((participant) => {
+        participant.trackPublications.forEach((publication) => {
+        if (publication.isSubscribed && publication.track) {
+          this.handleTrackSubscribed(publication.track, participant);
+        }
+      });
+    });
+
+  // Rejoin socket room in case socket also dropped
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('join-room', {
+        roomId: this.roomId,
+        userName: this.userName,
+        userId: this.userId,
+        isHost: this.isHost
+      });
+    }
+  });
+
+  this.livekitRoom.on(RoomEvent.Disconnected, async (reason) => {
+    console.log('LiveKit disconnected, reason:', reason);
+    this.connectionStatus = 'disconnected';
+
+    // Don't try to rejoin if user intentionally left
+    if (reason === 'leave' || reason === 'room_deleted') return;
+
+    // Attempt full rejoin after a short delay
+    setTimeout(async () => {
+      console.log('Attempting to rejoin room...');
+      try {
+        this.participants = [];
+        this.remoteParticipants.clear();
+        await this.initLivekit();
+
+        if (this.socket && this.socket.connected) {
+          this.socket.emit('join-room', {
+            roomId: this.roomId,
+            userName: this.userName,
+            userId: this.userId,
+            isHost: this.isHost
+          });
+        }
+      } catch (err) {
+        console.error('Rejoin failed:', err);
+      }
+    }, 2000);
+  });
 
       try {
         console.log('Attempting to connect to LiveKit...');
@@ -2651,6 +2725,8 @@ body {
 .perm-deny { background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 .perm-once { background: #FF9800; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 .perm-always { background: #4CAF50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ==================== RESPONSIVE DESIGN ==================== */
 @media (max-width: 768px) {
