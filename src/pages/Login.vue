@@ -19,6 +19,7 @@
               <li>Email Enact feature.</li>
             </ol>
             <p>Version v2.</p>
+            <p>New here? <router-link to="/HowToUse">See how it works</router-link></p>
           </div>
         </div>
       </div>
