@@ -38,7 +38,6 @@
 </template>
 
 <script>
-<script>
 export default {
   name: 'HowToUse',
   data() {
