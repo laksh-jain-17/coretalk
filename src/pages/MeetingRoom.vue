@@ -1821,6 +1821,7 @@ async disableBackgroundNoiseSuppression() {
     }
 
     this.roomId = this.computedRoomId;
+    this.title = localStorage.getItem('meetingtitle') || 'Meeting Room';
     
     console.log('Meeting room initialized:', {
       roomId: this.roomId,
