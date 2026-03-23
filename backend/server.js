@@ -12,7 +12,7 @@ const authMiddleware = require('./middleware/authMiddleware');
 // Add this right after const app = express();
 app.use(
   helmet({
-    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    crossOriginOpenerPolicy: { policy: "unsafe-none" },
     crossOriginEmbedderPolicy: false,
   })
 );
