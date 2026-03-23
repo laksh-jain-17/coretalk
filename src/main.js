@@ -28,7 +28,7 @@ const router = createRouter({
        // { path : '*' , component : PageNotFound },
         { path : '/Admin' , component : Admin },
 	{ path : '/Settings' , component : Settings },
-		{ path: '/oauth/callback', component: () => import('./pages/OAuthCallback.vue') }
+		{ path: '/oauth/callback', component: () => import('./pages/OAuthCallback.vue') },
 		{ path: '/HowToUse', component: () => import('./pages/HowToUse.vue') }
     ],
 });
