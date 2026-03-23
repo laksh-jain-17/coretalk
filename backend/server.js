@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const app = express();
 const helmet = require('helmet'); 
+const authMiddleware = require('./middleware/authMiddleware');
 
 // Add this right after const app = express();
 app.use(
@@ -286,6 +287,9 @@ app.post('/api/lock-meeting', (req, res) => {
 
 // Debug endpoint to see active rooms
 app.get('/api/rooms', (req, res) => {
+  if (!req.user || !req.user.isAdmin) {
+    return res.status(403).json({ msg: 'Access denied. Admins only.' });
+  }
   const roomSummary = {};
   for (const [roomId, participants] of Object.entries(rooms)) {
     roomSummary[roomId] = {
