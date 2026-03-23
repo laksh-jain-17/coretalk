@@ -286,7 +286,7 @@ app.post('/api/lock-meeting', (req, res) => {
 });
 
 // Debug endpoint to see active rooms
-app.get('/api/rooms', (req, res) => {
+app.get('/api/rooms', authMiddleware, (req, res) => {
   if (!req.user || !req.user.isAdmin) {
     return res.status(403).json({ msg: 'Access denied. Admins only.' });
   }
