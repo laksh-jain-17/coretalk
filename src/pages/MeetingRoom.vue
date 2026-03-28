@@ -1752,6 +1752,16 @@ async disableBackgroundNoiseSuppression() {
       }
 
       if (this.livekitRoom) {
+          try {
+            const lp = this.livekitRoom.localParticipant;
+            if (lp) {
+              if (this.micon) await lp.setMicrophoneEnabled(false);
+              if (this.videoon) await lp.setCameraEnabled(false);
+              if (this.isScreenSharing) await lp.setScreenShareEnabled(false);
+            }
+          } catch (e) {
+          console.warn('Error disabling tracks during cleanup:', e);
+        }
         this.livekitRoom.disconnect();
         this.livekitRoom = null;
       }
