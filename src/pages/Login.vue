@@ -16,7 +16,7 @@
               <li>Wider video feed.</li>
               <li>Lightweight and reliable application.</li>
               <li>User customization allowed.</li>
-              <li>Email Enact feature.</li>
+              <!--li>Email Enact feature.</li-->
             </ol>
             <p>Version v2.</p>
             <!--p>New here? <router-link to="/HowToUse">See how it works</router-link></p-->
