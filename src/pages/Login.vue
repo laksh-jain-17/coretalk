@@ -64,17 +64,14 @@ export default {
   },
 
   mounted() {
-    this.show = true;
-    this.interval = setInterval(() => {
-      this.welcomeText = !this.welcomeText;
-    }, 10000);
+  this.show = true;
+  this.interval = setInterval(() => {
+    this.welcomeText = !this.welcomeText;
+  }, 10000);
 
-    // Show error if Google OAuth redirected back with an error
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('error')) {
-      this.message = 'Google sign-in failed. Please try again.';
-    }
-  },
+  // Handle Google redirect return — extract id_token from URL hash
+  this.handleGoogleRedirectReturn();
+},
 
   beforeUnmount() {
     clearInterval(this.interval);
@@ -83,21 +80,57 @@ export default {
   methods: {
     // Full page redirect — no popup, no postMessage, no COOP issues ever
     signInWithGoogle() {
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      const redirectUri = encodeURIComponent(
-        `${import.meta.env.VITE_API_URL}/api/auth/google/callback`
-      );
-      const scope = encodeURIComponent('openid email profile');
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const redirectUri = encodeURIComponent('https://coretalk.vercel.app/Login');
+    const scope = encodeURIComponent('openid email profile');
 
-      window.location.href =
-        `https://accounts.google.com/o/oauth2/v2/auth` +
-        `?client_id=${clientId}` +
-        `&redirect_uri=${redirectUri}` +
-        `&response_type=code` +
-        `&scope=${scope}` +
-        `&access_type=offline` +
-        `&prompt=select_account`;
-    },
+    // response_type=id_token returns token in URL hash — no backend callback route needed
+    window.location.href =
+      `https://accounts.google.com/o/oauth2/v2/auth` +
+      `?client_id=${clientId}` +
+      `&redirect_uri=${redirectUri}` +
+      `&response_type=id_token` +
+      `&scope=${scope}` +
+      `&nonce=${Math.random().toString(36).slice(2)}` +
+      `&prompt=select_account`;
+  },
+
+    async handleGoogleRedirectReturn() {
+    // Google returns id_token in the URL hash e.g. /Login#id_token=xxx
+    const hash = window.location.hash;
+    if (!hash.includes('id_token=')) return;
+
+    const params = new URLSearchParams(hash.replace('#', ''));
+    const idToken = params.get('id_token');
+    if (!idToken) return;
+
+    // Clear the hash from URL so it looks clean
+    window.history.replaceState(null, '', window.location.pathname);
+
+    try {
+      // Send to your EXISTING /google-login endpoint — no backend changes needed
+      const res = await this.$axios.post(
+        `${import.meta.env.VITE_API_URL}/api/auth/google-login`,
+        { credential: idToken }
+      );
+
+      if (res.data.token) {
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('username', res.data.user.name || res.data.user.email);
+
+        if (res.data.user.isAdmin) {
+          localStorage.setItem('isAdmin', 'true');
+        } else {
+          localStorage.removeItem('isAdmin');
+        }
+
+        this.$router.push('/Schedule');
+      }
+    } catch (err) {
+      console.error('Google login error:', err);
+      this.message = err.response?.data?.msg || 'Google login failed. Please try again.';
+    }
+  },
 
     async loginuser() {
       if(!this.email || !this.password) {
