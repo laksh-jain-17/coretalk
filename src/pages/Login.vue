@@ -24,7 +24,6 @@
         </div>
       </div>
       <div id="rightbox">
-        <!--h1>Login Page</h1-->
         <form id="info" @submit.prevent="loginuser">
           <p>Don't have an account? <router-link to="/Registration">Create a new one.</router-link></p>
           <p>It's FREE & takes less than a minute.</p>
@@ -38,8 +37,11 @@
             <span>OR</span>
           </div>
           
-          <!-- Google Sign-In Button -->
-          <div id="google-signin-button"></div>
+          <!-- Google Sign-In Button — plain redirect, no popup, no COOP crash -->
+          <button type="button" id="google-signin-button" @click="signInWithGoogle">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20" alt="Google" />
+            Sign in with Google
+          </button>
           
           <p id="last">Forget Password <router-link to="/Forget">Click here</router-link></p>
         </form>
@@ -47,6 +49,7 @@
     </div>
   </transition>
 </template>
+
 <script>
 export default {
   name: 'Login',
@@ -57,100 +60,45 @@ export default {
       message: '',
       show: false,
       welcomeText: true,
-      googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID
     };
   },
+
   mounted() {
     this.show = true;
     this.interval = setInterval(() => {
       this.welcomeText = !this.welcomeText;
     }, 10000);
 
-    this.waitForGoogle();
+    // Show error if Google OAuth redirected back with an error
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error')) {
+      this.message = 'Google sign-in failed. Please try again.';
+    }
   },
-  
+
   beforeUnmount() {
-    clearInterval(this.interval); // Clean up!
+    clearInterval(this.interval);
   },
-  
+
   methods: {
-    waitForGoogle() {
-      if (window.google) {
-    // ✅ Wait for Vue to render the DOM first
-        this.$nextTick(() => {
-          this.initGoogleSignIn();
-        });
-      } else {
-        setTimeout(() => this.waitForGoogle(), 100);
-      }
+    // Full page redirect — no popup, no postMessage, no COOP issues ever
+    signInWithGoogle() {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      const redirectUri = encodeURIComponent(
+        `${import.meta.env.VITE_API_URL}/api/auth/google/callback`
+      );
+      const scope = encodeURIComponent('openid email profile');
+
+      window.location.href =
+        `https://accounts.google.com/o/oauth2/v2/auth` +
+        `?client_id=${clientId}` +
+        `&redirect_uri=${redirectUri}` +
+        `&response_type=code` +
+        `&scope=${scope}` +
+        `&access_type=offline` +
+        `&prompt=select_account`;
     },
 
-    initGoogleSignIn() {
-      if (!this.googleClientId) {
-        console.error('Google Client ID not configured in .env');
-        return;
-      }
-
-      window.google.accounts.id.initialize({
-        client_id: this.googleClientId,
-        callback: this.handleGoogleCallback.bind(this), // ✅ bind this
-        auto_select: false,
-        cancel_on_tap_outside: true
-      });
-
-      this.$nextTick(() => {
-        const buttonDiv = document.getElementById('google-signin-button');
-        if (buttonDiv) {
-          window.google.accounts.id.renderButton(buttonDiv, {
-          theme: 'outline',
-          size: 'large',
-          type: 'standard',
-          shape: 'rectangular',
-          text: 'signin_with',
-          logo_alignment: 'left',
-          width: 350
-        });
-        console.log('✅ Google button rendered');
-      } else {
-        console.error('❌ button div not found');
-      }
-    });
-  },
-    
-    async handleGoogleCallback(response) {
-      console.log('🔐 Google Sign-In successful');
-      
-      try {
-        // Send the credential token to your backend
-        const res = await this.$axios.post(
-          `${import.meta.env.VITE_API_URL}/api/auth/google-login`,
-          { credential: response.credential }
-        );
-
-
-        if (res.data.token) {
-          // Store authentication data
-          localStorage.setItem('token', res.data.token);
-          localStorage.setItem('username', res.data.user.name || res.data.user.email);
-          
-          // Check admin status
-          if (res.data.user.isAdmin) {
-            localStorage.setItem('isAdmin', 'true');
-          } else {
-            localStorage.removeItem('isAdmin');
-          }
-
-          console.log('✅ Login successful:', res.data.user.email);
-          
-          // Redirect to schedule
-          this.$router.push('/Schedule');
-        }
-      } catch (err) {
-        console.error('❌ Google login error:', err);
-        this.message = err.response?.data?.msg || 'Google login failed. Please try again.';
-      }
-    },
-    
     async loginuser() {
       if(!this.email || !this.password) {
         this.message = "Fill your details which are empty";
@@ -186,12 +134,14 @@ export default {
         this.message = "Login failed";
       }
     },
+
     erase() {
       this.message = '';
     }
   }
 };
 </script>
+
 <style>
 /* Reset & Box Sizing */
 * {
@@ -397,9 +347,33 @@ export default {
 /* Google Sign-In Button */
 #google-signin-button {
   width: 100%;
+  padding: 13px 15px;
+  background-color: white;
+  color: #3c4043;
+  border: 1.5px solid #dadce0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  font-family: helvetica, sans-serif;
+  cursor: pointer;
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 10px;
   margin-bottom: 15px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+#google-signin-button:hover {
+  background-color: #f8f9fa;
+  border-color: #c0c0c0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+#google-signin-button:active {
+  background-color: #f1f3f4;
+  transform: translateY(1px);
 }
 
 /* Forget Password Link */
@@ -423,121 +397,98 @@ export default {
 /* RESPONSIVE BREAKPOINTS */
 /* ============================================ */
 
-/* Large Tablets & Small Laptops (1024px - 1280px) */
 @media (max-width: 1280px) {
   #leftbox {
     flex: 0 0 55%;
     padding: 50px 35px;
   }
-  
   #rightbox {
     flex: 0 0 45%;
   }
 }
 
-/* Tablets (768px - 1024px) */
 @media (max-width: 1024px) {
   #container {
     flex-direction: column;
   }
-  
   #leftbox {
     flex: 0 0 auto;
     width: 100%;
     min-height: 350px;
     padding: 50px 30px;
   }
-  
   #rightbox {
     flex: 0 0 auto;
     width: 100%;
     padding: 50px 30px;
   }
-  
   #info {
     max-width: 500px;
   }
 }
 
-/* Mobile Devices (480px - 768px) */
 @media (max-width: 768px) {
   #leftbox {
     min-height: 300px;
     padding: 40px 25px;
   }
-  
   #rightbox {
     padding: 40px 20px;
   }
-  
   #rightbox > h1 {
     margin-bottom: 25px;
   }
-  
   #info {
     padding: 30px 25px;
     max-width: 100%;
   }
-  
   #new_updates ol {
     margin-left: 20px;
   }
 }
 
-/* Small Mobile Devices (320px - 480px) */
 @media (max-width: 480px) {
   #leftbox {
     padding: 30px 20px;
     min-height: 280px;
   }
-  
   #leftbox h1 {
     font-size: 1.5rem;
   }
-  
   #rightbox {
     padding: 30px 15px;
   }
-  
   #rightbox > h1 {
     font-size: 1.4rem;
     margin-bottom: 20px;
   }
-  
   #info {
     padding: 25px 20px;
     border-radius: 10px;
   }
-  
   #info input {
     padding: 12px 14px;
     font-size: 0.9rem;
   }
-  
   #info button[type="submit"] {
     padding: 12px;
     font-size: 0.95rem;
   }
-  
   #new_updates li {
     font-size: 0.88rem;
   }
-  
   .divider {
     margin: 20px 0 15px 0;
   }
 }
 
-/* Extra Small Devices (below 320px) */
 @media (max-width: 320px) {
   #leftbox {
     padding: 25px 15px;
   }
-  
   #info {
     padding: 20px 15px;
   }
-  
   #info input,
   #info button[type="submit"] {
     font-size: 0.85rem;
