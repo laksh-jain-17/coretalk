@@ -13,8 +13,8 @@
         <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
           {{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
         </button>
-        <!--button @click="emailEnact">Gmail Enact
-        </button-->
+        <button @click="emailEnact">Gmail Enact
+        </button>
       </div>
     </transition>
 
