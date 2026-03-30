@@ -16,10 +16,8 @@
               <li>Wider video feed.</li>
               <li>Lightweight and reliable application.</li>
               <li>User customization allowed.</li>
-              <!--li>Email Enact feature.</li-->
             </ol>
             <p>Version v2.</p>
-            <!--p>New here? <router-link to="/HowToUse">See how it works</router-link></p-->
           </div>
         </div>
       </div>
@@ -27,22 +25,26 @@
         <form id="info" @submit.prevent="loginuser">
           <p>Don't have an account? <router-link to="/Registration">Create a new one.</router-link></p>
           <p>It's FREE & takes less than a minute.</p>
-          <input v-model="email" @keypress="erase" type="email" placeholder="Email address" />
-          <input v-model="password" @keypress="erase" type="password" placeholder="Password" />
+          <input v-model="email" @keypress="erase" type="email" placeholder="Email address" :disabled="loading" />
+          <input v-model="password" @keypress="erase" type="password" placeholder="Password" :disabled="loading" />
           <p v-if="message" style="color:red; font-weight:bold; padding-left:5px;">{{ message }}</p>
-          <button type="submit">Login Now</button>
-          
+          <button type="submit" :disabled="loading || googleLoading">
+            <span v-if="loading" class="spinner"></span>
+            {{ loading ? 'Logging in...' : 'Login Now' }}
+          </button>
+
           <!-- Divider -->
           <div class="divider">
             <span>OR</span>
           </div>
-          
-          <!-- Google Sign-In Button — plain redirect, no popup, no COOP crash -->
-          <button type="button" id="google-signin-button" @click="signInWithGoogle">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20" alt="Google" />
-            Sign in with Google
+
+          <!-- Google Sign-In Button -->
+          <button type="button" id="google-signin-button" @click="signInWithGoogle" :disabled="loading || googleLoading">
+            <span v-if="googleLoading" class="spinner dark"></span>
+            <img v-else src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20" alt="Google" />
+            {{ googleLoading ? 'Signing in...' : 'Sign in with Google' }}
           </button>
-          
+
           <p id="last">Forget Password <router-link to="/Forget">Click here</router-link></p>
         </form>
       </div>
@@ -60,92 +62,107 @@ export default {
       message: '',
       show: false,
       welcomeText: true,
+      loading: false,       // manual login loading
+      googleLoading: false, // google login loading
     };
   },
 
   mounted() {
-  this.show = true;
-  this.interval = setInterval(() => {
-    this.welcomeText = !this.welcomeText;
-  }, 10000);
+    this.show = true;
+    this.interval = setInterval(() => {
+      this.welcomeText = !this.welcomeText;
+    }, 10000);
 
-  // Handle Google redirect return — extract id_token from URL hash
-  this.handleGoogleRedirectReturn();
-},
+    // Handle Google redirect return
+    this.handleGoogleRedirectReturn();
+  },
 
   beforeUnmount() {
     clearInterval(this.interval);
   },
 
   methods: {
-    // Full page redirect — no popup, no postMessage, no COOP issues ever
     signInWithGoogle() {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    const redirectUri = encodeURIComponent('https://coretalk.vercel.app/Login');
-    const scope = encodeURIComponent('openid email profile');
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      const redirectUri = encodeURIComponent('https://coretalk.vercel.app/Login');
+      const scope = encodeURIComponent('openid email profile');
 
-    // response_type=id_token returns token in URL hash — no backend callback route needed
-    window.location.href =
-      `https://accounts.google.com/o/oauth2/v2/auth` +
-      `?client_id=${clientId}` +
-      `&redirect_uri=${redirectUri}` +
-      `&response_type=id_token` +
-      `&scope=${scope}` +
-      `&nonce=${Math.random().toString(36).slice(2)}` +
-      `&prompt=select_account`;
-  },
+      window.location.href =
+        `https://accounts.google.com/o/oauth2/v2/auth` +
+        `?client_id=${clientId}` +
+        `&redirect_uri=${redirectUri}` +
+        `&response_type=id_token` +
+        `&scope=${scope}` +
+        `&nonce=${Math.random().toString(36).slice(2)}` +
+        `&prompt=select_account`;
+    },
 
     async handleGoogleRedirectReturn() {
-    // Google returns id_token in the URL hash e.g. /Login#id_token=xxx
-    const hash = window.location.hash;
-    if (!hash.includes('id_token=')) return;
+      const hash = window.location.hash;
+      if (!hash.includes('id_token=')) return;
 
-    const params = new URLSearchParams(hash.replace('#', ''));
-    const idToken = params.get('id_token');
-    if (!idToken) return;
+      const params = new URLSearchParams(hash.replace('#', ''));
+      const idToken = params.get('id_token');
+      if (!idToken) return;
 
-    // Clear the hash from URL so it looks clean
-    window.history.replaceState(null, '', window.location.pathname);
+      // DON'T clear the hash yet — wait until we know if login succeeded or failed
+      this.googleLoading = true;
+      this.message = '';
 
-    try {
-      // Send to your EXISTING /google-login endpoint — no backend changes needed
-      const res = await this.$axios.post(
-        `${import.meta.env.VITE_API_URL}/api/auth/google-login`,
-        { credential: idToken }
-      );
+      try {
+        const res = await this.$axios.post(
+          `${import.meta.env.VITE_API_URL}/api/auth/google-login`,
+          { credential: idToken }
+        );
 
-      if (res.data.token) {
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('username', res.data.user.name || res.data.user.email);
+        if (res.data.token) {
+          localStorage.setItem('token', res.data.token);
+          localStorage.setItem('username', res.data.user.name || res.data.user.email);
 
-        if (res.data.user.isAdmin) {
-          localStorage.setItem('isAdmin', 'true');
+          if (res.data.user.isAdmin) {
+            localStorage.setItem('isAdmin', 'true');
+          } else {
+            localStorage.removeItem('isAdmin');
+          }
+
+          // Only clear hash AFTER confirmed success
+          window.history.replaceState(null, '', window.location.pathname);
+          this.$router.push('/Schedule');
         } else {
-          localStorage.removeItem('isAdmin');
+          // Unexpected response shape — treat as failure
+          window.history.replaceState(null, '', window.location.pathname);
+          this.message = 'Google login failed. Please try again.';
         }
-
-        this.$router.push('/Schedule');
+      } catch (err) {
+        console.error('Google login error:', err);
+        // Clear hash so stale token doesn't keep retrying on refresh
+        window.history.replaceState(null, '', window.location.pathname);
+        this.message = err.response?.data?.msg || 'Google login failed. Please try again.';
+      } finally {
+        this.googleLoading = false;
       }
-    } catch (err) {
-      console.error('Google login error:', err);
-      this.message = err.response?.data?.msg || 'Google login failed. Please try again.';
-    }
-  },
+    },
 
     async loginuser() {
-      if(!this.email || !this.password) {
+      if (this.loading || this.googleLoading) return; // prevent double submit
+
+      if (!this.email || !this.password) {
         this.message = "Fill your details which are empty";
         return;
       }
       const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if(!regex.test(this.email)) {
+      if (!regex.test(this.email)) {
         this.message = "Fill your email address properly";
         return;
       }
-      if(this.password.length < 6) {
+      if (this.password.length < 6) {
         this.message = "Password should be more than 6 characters";
         return;
       }
+
+      this.loading = true;
+      this.message = '';
+
       try {
         const res = await this.$axios.post(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
           email: this.email,
@@ -154,8 +171,8 @@ export default {
 
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('username', res.data.user.name || this.email);
-        
-        if(res.data.user.isAdmin) {
+
+        if (res.data.user.isAdmin) {
           localStorage.setItem("isAdmin", "true");
         } else {
           localStorage.removeItem("isAdmin");
@@ -164,7 +181,9 @@ export default {
         this.$router.push('/Schedule');
       } catch (err) {
         console.error('Login error', err);
-        this.message = "Login failed";
+        this.message = err.response?.data?.msg || "Login failed. Please try again.";
+      } finally {
+        this.loading = false;
       }
     },
 
@@ -321,6 +340,11 @@ export default {
   color: #999;
 }
 
+#info input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Error Message */
 #info p[style*="color:red"] {
   font-size: 0.85rem;
@@ -344,16 +368,26 @@ export default {
   cursor: pointer;
   margin: 15px 0 10px 0;
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-#info button[type="submit"]:hover {
+#info button[type="submit"]:hover:not(:disabled) {
   background-color: #333;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-#info button[type="submit"]:active {
+#info button[type="submit"]:active:not(:disabled) {
   transform: translateY(0);
+}
+
+#info button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none !important;
 }
 
 /* Divider */
@@ -398,15 +432,36 @@ export default {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-#google-signin-button:hover {
+#google-signin-button:hover:not(:disabled) {
   background-color: #f8f9fa;
   border-color: #c0c0c0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-#google-signin-button:active {
+#google-signin-button:active:not(:disabled) {
   background-color: #f1f3f4;
   transform: translateY(1px);
+}
+
+/* Spinner */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.spinner.dark {
+  border: 2px solid rgba(0,0,0,0.15);
+  border-top-color: #3c4043;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Forget Password Link */
