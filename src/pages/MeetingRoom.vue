@@ -323,6 +323,20 @@
       <input v-model="emailTo" type="email" placeholder="To" class="email-field" />
       <input v-model="emailSubject" type="text" placeholder="Subject" class="email-field" />
       <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
+
+  <!-- Attachment row -->
+      <div class="email-attach-row">
+        <label class="email-attach-btn">
+          📎 Attach files
+          <input type="file" multiple ref="emailFileInput" @change="handleEmailAttachments" style="display:none" />
+        </label>
+        <div class="email-attach-list">
+          <span v-for="(f, i) in emailAttachments" :key="i" class="email-attach-chip">
+            {{ f.name }}
+            <button @click="removeAttachment(i)">✕</button>
+          </span>
+        </div>
+      </div>
     </div>
     <div class="email-footer">
       <button @click="sendEmail" :disabled="emailSending" class="email-send-btn">
@@ -422,6 +436,7 @@ export default {
       connectionStatus: 'connected',
       raisedHands: [],
       facingMode: 'user',
+      emailAttachments: [],
     };
   },
 
@@ -733,7 +748,7 @@ async disableBackgroundNoiseSuppression() {
       await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
     }
 
-    console.log('✅ Background noise suppression disabled. Standard mic restored.');
+    console.log(' Background noise suppression disabled. Standard mic restored.');
   } catch (error) {
     console.error('Error disabling noise suppression:', error);
   }
@@ -1369,7 +1384,7 @@ async disableBackgroundNoiseSuppression() {
           
           await new Promise(resolve => setTimeout(resolve, 100));
           
-          const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
+          const videoTrack = this.livekitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
           if (videoTrack && videoTrack.track) {
             const videoElement = this.$refs.localVideo;
             if (videoElement) {
@@ -1400,19 +1415,26 @@ async disableBackgroundNoiseSuppression() {
         alert('Not connected to meeting room');
         return;
       }
-      
+
       try {
         if (!this.isScreenSharing) {
           console.log('Starting screen share...');
-          
           await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
           this.isScreenSharing = true;
-          
-          const screenTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.ScreenShare);
-          if (screenTrack) {
+
+      // Use getTrackPublication (not getTrack) — returns the full publication
+          const screenPub = this.livekitRoom.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+          if (screenPub && screenPub.track) {
             const videoElement = this.$refs.localVideo;
-            if (videoElement) {
-              screenTrack.track.attach(videoElement);
+            if (videoElement) screenPub.track.attach(videoElement);
+
+        // Handle native browser "Stop sharing" button
+            const mediaTrack = screenPub.track.mediaStreamTrack;
+            if (mediaTrack) {
+              mediaTrack.addEventListener('ended', () => {
+                console.log('Screen share stopped via browser UI');
+                this.stopScreenShare();
+              }, { once: true });
             }
           }
           console.log('Screen sharing started');
@@ -1421,29 +1443,26 @@ async disableBackgroundNoiseSuppression() {
         }
       } catch (error) {
         console.error('Error sharing screen:', error);
-        
         if (error.name === 'NotAllowedError') {
           alert('Screen sharing permission denied.');
         } else {
           alert('Could not start screen sharing: ' + error.message);
         }
-        
         this.isScreenSharing = false;
       }
     },
-
+    
     async stopScreenShare() {
       try {
         await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
         this.isScreenSharing = false;
-        
+
         if (this.videoon) {
-          const videoTrack = this.livekitRoom.localParticipant.getTrack(Track.Source.Camera);
-          if (videoTrack) {
+        // Restore camera preview after screen share ends
+          const cameraPub = this.livekitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+          if (cameraPub && cameraPub.track) {
             const videoElement = this.$refs.localVideo;
-            if (videoElement) {
-              videoTrack.track.attach(videoElement);
-            }
+            if (videoElement) cameraPub.track.attach(videoElement);
           }
         } else {
           const videoElement = this.$refs.localVideo;
