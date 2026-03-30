@@ -1846,6 +1846,7 @@ async disableBackgroundNoiseSuppression() {
       this.emailTo = '';
       this.emailSubject = '',
       this.emailBody = '';
+      this.emailAttachments = [];
     }
   },
 
@@ -2831,6 +2832,57 @@ body {
   display: flex;
   gap: 8px;
   justify-content: center;
+}
+
+.email-attach-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.email-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #555;
+  transition: background 0.2s;
+  width: fit-content;
+}
+
+.email-attach-btn:hover {
+  background: #f0f0f0;
+}
+
+.email-attach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.email-attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+.email-attach-chip button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #3730a3;
+  font-size: 13px;
+  padding: 0;
+  line-height: 1;
 }
 
 .perm-deny { background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
