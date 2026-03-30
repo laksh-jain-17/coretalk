@@ -1689,8 +1689,29 @@ async disableBackgroundNoiseSuppression() {
       }, { once: true });
     },
 
+    handleEmailAttachments(event) {
+      const files = Array.from(event.target.files);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64 = e.target.result.split(',')[1];
+          this.emailAttachments.push({
+            name: file.name,
+            base64,
+            mimeType: file.type || 'application/octet-stream'
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+      event.target.value = '';
+    },
+
+    removeAttachment(index) {
+      this.emailAttachments.splice(index, 1);
+    },
+
     async sendEmail() {
-      if(!this.emailTo || !this.emailSubject || !this.emailBody) {
+      if (!this.emailTo || !this.emailSubject || !this.emailBody) {
         alert('Please fill in all fields');
         return;
       }
@@ -1698,33 +1719,32 @@ async disableBackgroundNoiseSuppression() {
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/send-email`, {
           method: 'POST',
-          headers: {'Content-Type':'application/json' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            accessToken: this.gmailAccessToken,
-            senderEmail: localStorage.getItem('username'),
-            to: this.emailTo,
-            subject: this.emailSubject,
-            body: this.emailBody
-          })
-        });
-        if(response.ok) {
-          this.emailTo = '';
-          this.emailSubject = '';
-          this.emailBody = '';
-          this.showEmailPanel = false;
-        }
-        else{
-          throw new Error('Failed to send');
-        }
+          accessToken: this.gmailAccessToken,
+          senderEmail: localStorage.getItem('username'),
+          to: this.emailTo,
+          subject: this.emailSubject,
+          body: this.emailBody,
+          attachments: this.emailAttachments
+        })
+      });
+      if (response.ok) {
+        this.emailTo = '';
+        this.emailSubject = '';
+        this.emailBody = '';
+        this.emailAttachments = [];
+        this.showEmailPanel = false;
+      } else {
+        throw new Error('Failed to send');
       }
-      catch(err) 
-      {
-        alert('Failed to send email: ' + err.message);
-      }
-      finally {
-        this.emailSending = false;
-      }
-    },
+    } catch (err) {
+      alert('Failed to send email: ' + err.message);
+    }
+    finally {
+      this.emailSending = false;
+    }
+  },
 
     async flipCamera() {
       if (!this.videoon) return;
