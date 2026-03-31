@@ -1383,8 +1383,8 @@ async disableBackgroundNoiseSuppression() {
           this.videoon = true;
           
           await new Promise(resolve => setTimeout(resolve, 100));
-          
-          const videoTrack = this.livekitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+
+          const videoTrack = this.livekitRoom.localParticipant.getTrackPublicationBySource(Track.Source.Camera);
           if (videoTrack && videoTrack.track) {
             const videoElement = this.$refs.localVideo;
             if (videoElement) {
@@ -1423,7 +1423,8 @@ async disableBackgroundNoiseSuppression() {
           this.isScreenSharing = true;
 
       // Use getTrackPublication (not getTrack) — returns the full publication
-          const screenPub = this.livekitRoom.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+          
+          const screenPub = this.livekitRoom.localParticipant.getTrackPublicationBySource(Track.Source.ScreenShare);
           if (screenPub && screenPub.track) {
             const videoElement = this.$refs.localVideo;
             if (videoElement) screenPub.track.attach(videoElement);
@@ -1459,7 +1460,7 @@ async disableBackgroundNoiseSuppression() {
 
         if (this.videoon) {
         // Restore camera preview after screen share ends
-          const cameraPub = this.livekitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+          const cameraPub = this.livekitRoom.localParticipant.getTrackPublicationBySource(Track.Source.Camera);
           if (cameraPub && cameraPub.track) {
             const videoElement = this.$refs.localVideo;
             if (videoElement) cameraPub.track.attach(videoElement);
@@ -1761,7 +1762,7 @@ async disableBackgroundNoiseSuppression() {
 
     // Re-attach to local preview
         await this.$nextTick();
-        const videoTrack = this.livekitRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+        const videoTrack = this.livekitRoom.localParticipant.getTrackPublicationBySource(Track.Source.Camera);
         if (videoTrack?.track) {
           const videoElement = this.$refs.localVideo;
           if (videoElement) videoTrack.track.attach(videoElement);
