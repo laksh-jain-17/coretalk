@@ -1343,140 +1343,144 @@ async disableBackgroundNoiseSuppression() {
     },
 
     async toggleVideo() {
-      if (this.isInitializingMedia) {
-        console.log('Media initialization in progress, ignoring toggle');
-        return;
-      }
-      
-      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-        alert('Not connected to meeting room');
-        return;
-      }
-      
-      this.isInitializingMedia = true;
+  if (this.isInitializingMedia) return;
+  if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+    alert('Not connected to meeting room');
+    return;
+  }
 
+  this.isInitializingMedia = true;
+
+  try {
+    if (this.videoon) {
+      await this.livekitRoom.localParticipant.setCameraEnabled(false);
+      this.videoon = false;
+      const videoElement = this.$refs.localVideo;
+      if (videoElement) videoElement.srcObject = null;
+    } else {
       try {
-        if (this.videoon) {
-          console.log('Turning off camera...');
-          await this.livekitRoom.localParticipant.setCameraEnabled(false);
-          this.videoon = false;
-          
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        stream.getTracks().forEach(t => t.stop());
+      } catch (permError) {
+        console.warn('Permission request failed:', permError);
+      }
+
+      await this.livekitRoom.localParticipant.setCameraEnabled(true);
+      this.videoon = true;
+      await this.$nextTick();
+
+      const videoElement = this.$refs.localVideo;
+      if (videoElement) {
+        for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) {
+          if (pub.source === Track.Source.Camera && pub.track) {
+            pub.track.attach(videoElement);
+            break;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error toggling camera:', error);
+    if (error.name === 'NotAllowedError') {
+      alert('Camera permission denied. Please allow camera access in your browser settings.');
+    } else {
+      alert('Could not access camera: ' + error.message);
+    }
+    this.videoon = false;
+  } finally {
+    this.isInitializingMedia = false;
+  }
+},
+
+async sharescreen() {
+  if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+    alert('Not connected to meeting room');
+    return;
+  }
+
+  try {
+    if (!this.isScreenSharing) {
+      await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
+      this.isScreenSharing = true;
+
+      for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) {
+        if (pub.source === Track.Source.ScreenShare && pub.track) {
           const videoElement = this.$refs.localVideo;
-          if (videoElement) videoElement.srcObject = null;
-          console.log('Camera disabled');
-        } else {
-          console.log('Turning on camera...');
-          
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-              video: { 
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-              } 
-            });
-            stream.getTracks().forEach(track => track.stop());
-          } catch (permError) {
-            console.warn('Permission request failed:', permError);
+          if (videoElement) pub.track.attach(videoElement);
+
+          const mediaTrack = pub.track.mediaStreamTrack;
+          if (mediaTrack) {
+            mediaTrack.addEventListener('ended', () => {
+              this.stopScreenShare();
+            }, { once: true });
           }
-          await this.livekitRoom.localParticipant.setCameraEnabled(true);
-          this.videoon = true;
-
-          await this.$nextTick();
-          // Get it directly from the local participant's published tracks
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) {
-            for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) 
-            {
-              if (pub.source === Track.Source.Camera && pub.track) 
-              {
-                  pub.track.attach(videoElement);
-                  break;
-              }
-            }
-          }
+          break;
         }
-      } catch (error) {
-        console.error('Error toggling camera:', error);
-        
-        if (error.name === 'NotAllowedError') {
-          alert('Camera permission denied. Please allow camera access in your browser settings.');
-        } else if (error.message && error.message.includes('structuredClone')) {
-          alert('Browser compatibility issue. Please try:\n1. Refreshing the page\n2. Using Chrome/Edge browser\n3. Updating your browser');
-        } else {
-          alert('Could not access camera: ' + error.message);
-        }
-        
-        this.videoon = false;
-      } finally {
-        this.isInitializingMedia = false;
       }
-    },
+    } else {
+      await this.stopScreenShare();
+    }
+  } catch (error) {
+    console.error('Error sharing screen:', error);
+    if (error.name === 'NotAllowedError') {
+      alert('Screen sharing permission denied.');
+    } else {
+      alert('Could not start screen sharing: ' + error.message);
+    }
+    this.isScreenSharing = false;
+  }
+},
 
-    async sharescreen() {
-      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-        alert('Not connected to meeting room');
-        return;
-      }
+async stopScreenShare() {
+  try {
+    await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
+    this.isScreenSharing = false;
 
-      try {
-        if (!this.isScreenSharing) {
-          console.log('Starting screen share...');
-          await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
-          this.isScreenSharing = true;
-
-      // Use getTrackPublication (not getTrack) — returns the full publication
-          
-          const screenPub = this.livekitRoom.localParticipant.getTrackPublicationBySource(Track.Source.ScreenShare);
-          if (screenPub && screenPub.track) {
-            const videoElement = this.$refs.localVideo;
-            if (videoElement) screenPub.track.attach(videoElement);
-
-        // Handle native browser "Stop sharing" button
-            const mediaTrack = screenPub.track.mediaStreamTrack;
-            if (mediaTrack) {
-              mediaTrack.addEventListener('ended', () => {
-                console.log('Screen share stopped via browser UI');
-                this.stopScreenShare();
-              }, { once: true });
-            }
-          }
-          console.log('Screen sharing started');
-        } else {
-          await this.stopScreenShare();
+    const videoElement = this.$refs.localVideo;
+    if (this.videoon && videoElement) {
+      for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) {
+        if (pub.source === Track.Source.Camera && pub.track) {
+          pub.track.attach(videoElement);
+          break;
         }
-      } catch (error) {
-        console.error('Error sharing screen:', error);
-        if (error.name === 'NotAllowedError') {
-          alert('Screen sharing permission denied.');
-        } else {
-          alert('Could not start screen sharing: ' + error.message);
-        }
-        this.isScreenSharing = false;
       }
-    },
+    } else if (videoElement) {
+      videoElement.srcObject = null;
+    }
+  } catch (error) {
+    console.error('Error stopping screen share:', error);
+  }
+},
+
+async flipCamera() {
+  if (!this.videoon) return;
+  this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
+
+  try {
+    await this.livekitRoom.localParticipant.setCameraEnabled(false);
+    await this.livekitRoom.localParticipant.setCameraEnabled(true, {
+      facingMode: this.facingMode,
+    });
+
+    await this.$nextTick();
+
+    const videoElement = this.$refs.localVideo;
+    if (videoElement) {
+      for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) {
+        if (pub.source === Track.Source.Camera && pub.track) {
+          pub.track.attach(videoElement);
+          break;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Camera flip failed:', err);
+    this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
+  }
+},
     
-    async stopScreenShare() {
-      try {
-        await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
-        this.isScreenSharing = false;
-
-        if (this.videoon) {
-        // Restore camera preview after screen share ends
-          const cameraPub = this.livekitRoom.localParticipant.getTrackPublicationBySource(Track.Source.Camera);
-          if (cameraPub && cameraPub.track) {
-            const videoElement = this.$refs.localVideo;
-            if (videoElement) cameraPub.track.attach(videoElement);
-          }
-        } else {
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) videoElement.srcObject = null;
-        }
-        console.log('Screen sharing stopped');
-      } catch (error) {
-        console.error('Error stopping screen share:', error);
-      }
-    },
-
     togglePanel(panel) {
       this.activePanel = this.activePanel === panel ? null : panel;
       this.activeDropdown = null;
@@ -1748,33 +1752,6 @@ async disableBackgroundNoiseSuppression() {
       this.emailSending = false;
     }
   },
-
-    async flipCamera() {
-      if (!this.videoon) return;
-      this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
-
-      try {
-        // Unpublish current camera track
-        await this.livekitRoom.localParticipant.setCameraEnabled(false);
-
-        // Re-publish with new facingMode constraint
-        await this.livekitRoom.localParticipant.setCameraEnabled(true, {
-          facingMode: this.facingMode,
-        });
-
-    // Re-attach to local preview
-        await this.$nextTick();
-        const videoTrack = this.livekitRoom.localParticipant.getTrackPublicationBySource(Track.Source.Camera);
-        if (videoTrack?.track) {
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) videoTrack.track.attach(videoElement);
-        }
-      } catch (err) {
-        console.error('Camera flip failed:', err);
-        // Revert
-        this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
-      }
-    },
     
     async cleanup() {
       console.log('Cleaning up resources...');
