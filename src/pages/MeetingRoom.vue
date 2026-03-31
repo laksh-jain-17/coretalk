@@ -1378,20 +1378,22 @@ async disableBackgroundNoiseSuppression() {
           } catch (permError) {
             console.warn('Permission request failed:', permError);
           }
-          
           await this.livekitRoom.localParticipant.setCameraEnabled(true);
           this.videoon = true;
-          
-          await new Promise(resolve => setTimeout(resolve, 100));
 
-          const videoTrack = this.livekitRoom.localParticipant.getTrackPublicationBySource(Track.Source.Camera);
-          if (videoTrack && videoTrack.track) {
-            const videoElement = this.$refs.localVideo;
-            if (videoElement) {
-              videoTrack.track.attach(videoElement);
+          await this.$nextTick();
+          // Get it directly from the local participant's published tracks
+          const videoElement = this.$refs.localVideo;
+          if (videoElement) {
+            for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) 
+            {
+              if (pub.source === Track.Source.Camera && pub.track) 
+              {
+                  pub.track.attach(videoElement);
+                  break;
+              }
             }
           }
-          console.log('Camera enabled');
         }
       } catch (error) {
         console.error('Error toggling camera:', error);
