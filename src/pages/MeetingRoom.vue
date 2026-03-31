@@ -13,8 +13,7 @@
         <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
           {{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
         </button>
-        <button @click="emailEnact">Gmail Enact
-        </button>
+        <button @click="emailEnact">Gmail Enact</button>
       </div>
     </transition>
 
@@ -35,16 +34,16 @@
               cursor: pointer; display: flex; align-items: center; justify-content: center;
             "
           >🔄</button>
-          
+
           <div v-if="!videoon" class="video-placeholder">
             <div class="avatar-circle">{{ userInitials }}</div>
           </div>
-          
+
           <!-- Captions for Local User -->
           <div v-if="showCaptions && localCaptions" class="captions-overlay">
             {{ localCaptions }}
           </div>
-          
+
           <div class="participant-info">
             <span class="participant-name">{{ userName }} (You)</span>
             <div class="participant-controls">
@@ -55,26 +54,26 @@
         </div>
 
         <!-- Remote Participants -->
-        <div 
-          v-for="participant in participants" 
+        <div
+          v-for="participant in participants"
           :key="participant.id"
           class="participant-tile"
           :data-peer-id="participant.id"
         >
-          <video 
+          <video
             :ref="`remoteVideo-${participant.id}`"
-            autoplay 
+            autoplay
             playsinline
           ></video>
           <div class="video-placeholder" v-show="!participant.hasVideo">
             <div class="avatar-circle">{{ getInitials(participant.name) }}</div>
           </div>
-          
+
           <!-- Captions for Remote Participants -->
           <div v-if="showCaptions && participant.captions" class="captions-overlay">
             {{ participant.captions }}
           </div>
-          
+
           <div class="participant-info">
             <span class="participant-name">{{ participant.name }}</span>
             <div class="participant-controls">
@@ -199,7 +198,7 @@
             </ul>
             <div id="chat-box" v-if="activePanel === 'chat'">
               <div class="chat-header">
-                 Chat
+                Chat
                 <button @click="togglePanel(null)">✕</button>
               </div>
               <div class="chat-body" ref="chatBody">
@@ -210,12 +209,12 @@
                 </div>
               </div>
               <div class="chat-input-section">
-                <input 
-                  type="text" 
-                  class="chat-input" 
-                  v-model="newMessage" 
-                  placeholder="Type a message..." 
-                  @keyup.enter="sendMessage" 
+                <input
+                  type="text"
+                  class="chat-input"
+                  v-model="newMessage"
+                  placeholder="Type a message..."
+                  @keyup.enter="sendMessage"
                   maxlength="500"
                 />
                 <button class="chat-send" @click="sendMessage" :disabled="!newMessage.trim()">
@@ -251,13 +250,11 @@
               </li>
             </ul>
           </li>
-
-          <!--Add extras option-->
         </ul>
       </div>
     </transition>
 
-    <!-- Meeting Info Modal - REPOSITIONED TO BOTTOM RIGHT -->
+    <!-- Meeting Info Modal -->
     <div id="info_box" v-if="show_info" @click.stop>
       <div id="inside_info">
         <div id="info_header">
@@ -297,68 +294,67 @@
         animation: slideIn 0.3s ease; margin-top: 8px;
       "
     >
-    ✋ {{ h.userName }} raised their hand
+      ✋ {{ h.userName }} raised their hand
     </div>
 
     <!-- Email Permission Dialog -->
     <div v-if="showEmailPermissionDialog" class="email-permission-overlay">
-    <div class="email-permission-box">
-      <h3>Gmail Access</h3>
-      <p>Allow Coretalk to send emails on your behalf via Gmail?</p>
-      <div class="email-permission-buttons">
-        <button @click="emailPermissionResponse('deny')" class="perm-deny">Deny</button>
-        <button @click="emailPermissionResponse('once')" class="perm-once">Allow Once</button>
-        <button @click="emailPermissionResponse('always')" class="perm-always">Always Allow</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Email Panel -->
-  <div v-if="showEmailPanel" id="email-box">
-    <div class="email-header">
-      <span>New Email</span>
-      <button @click="showEmailPanel = false">✕</button>
-    </div>
-    <div class="email-body-panel">
-      <input v-model="emailTo" type="email" placeholder="To" class="email-field" />
-      <input v-model="emailSubject" type="text" placeholder="Subject" class="email-field" />
-      <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
-
-  <!-- Attachment row -->
-      <div class="email-attach-row">
-        <label class="email-attach-btn">
-          📎 Attach files
-          <input type="file" multiple ref="emailFileInput" @change="handleEmailAttachments" style="display:none" />
-        </label>
-        <div class="email-attach-list">
-          <span v-for="(f, i) in emailAttachments" :key="i" class="email-attach-chip">
-            {{ f.name }}
-            <button @click="removeAttachment(i)">✕</button>
-          </span>
+      <div class="email-permission-box">
+        <h3>Gmail Access</h3>
+        <p>Allow Coretalk to send emails on your behalf via Gmail?</p>
+        <div class="email-permission-buttons">
+          <button @click="emailPermissionResponse('deny')" class="perm-deny">Deny</button>
+          <button @click="emailPermissionResponse('once')" class="perm-once">Allow Once</button>
+          <button @click="emailPermissionResponse('always')" class="perm-always">Always Allow</button>
         </div>
       </div>
     </div>
-    <div class="email-footer">
-      <button @click="sendEmail" :disabled="emailSending" class="email-send-btn">
-        {{ emailSending ? 'Sending...' : 'Send' }}
-      </button>
+
+    <!-- Email Panel -->
+    <div v-if="showEmailPanel" id="email-box">
+      <div class="email-header">
+        <span>New Email</span>
+        <button @click="showEmailPanel = false">✕</button>
+      </div>
+      <div class="email-body-panel">
+        <input v-model="emailTo" type="email" placeholder="To" class="email-field" />
+        <input v-model="emailSubject" type="text" placeholder="Subject" class="email-field" />
+        <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
+        <!-- Attachment row -->
+        <div class="email-attach-row">
+          <label class="email-attach-btn">
+            📎 Attach files
+            <input type="file" multiple ref="emailFileInput" @change="handleEmailAttachments" style="display:none" />
+          </label>
+          <div class="email-attach-list">
+            <span v-for="(f, i) in emailAttachments" :key="i" class="email-attach-chip">
+              {{ f.name }}
+              <button @click="removeAttachment(i)">✕</button>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="email-footer">
+        <button @click="sendEmail" :disabled="emailSending" class="email-send-btn">
+          {{ emailSending ? 'Sending...' : 'Send' }}
+        </button>
+      </div>
     </div>
-  </div>
 
     <!-- Reconnecting overlay -->
-  <transition name="slide-fade">
-    <div v-if="connectionStatus === 'reconnecting'" style="
-      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; z-index: 200; gap: 16px;
-    ">
-    <div style="width:40px;height:40px;border:3px solid #4CAF50;
-      border-top-color:transparent;border-radius:50%;
-      animation:spin 0.8s linear infinite;"></div>
-    <p style="color:white;font-size:16px;margin:0">Reconnecting to meeting...</p>
-    </div>
-  </transition>
-</div>
+    <transition name="slide-fade">
+      <div v-if="connectionStatus === 'reconnecting'" style="
+        position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; z-index: 200; gap: 16px;
+      ">
+        <div style="width:40px;height:40px;border:3px solid #4CAF50;
+          border-top-color:transparent;border-radius:50%;
+          animation:spin 0.8s linear infinite;"></div>
+        <p style="color:white;font-size:16px;margin:0">Reconnecting to meeting...</p>
+      </div>
+    </transition>
+  </div>
 </template>
 
 <script>
@@ -375,7 +371,7 @@ export default {
       userId: '',
       roomId: '',
       title: 'Meeting Room',
-      
+
       hoveredIcon: null,
       activeDropdown: null,
       activePanel: null,
@@ -384,38 +380,37 @@ export default {
       show_info: false,
       hand: false,
       turned: true,
-      
+
       micon: false,
       videoon: false,
       isScreenSharing: false,
       isFullscreen: false,
-      
+
       mediaRecorder: null,
       recordedChunks: [],
       isRecording: false,
       record: false,
-      
+
       socket: null,
       isSocketConnected: false,
       participants: [],
       messages: [],
       newMessage: '',
       unreadMessages: 0,
-      
+
       livekitRoom: null,
       livekitToken: null,
       remoteParticipants: new Map(),
-      
+
       isPoorNetwork: false,
       transcript: [],
       networkCheckInterval: null,
       recognition: null,
-      
+
       broadcastQueue: [],
       isInitializingMedia: false,
       broadcastRetryTimer: null,
 
-      // New features
       showCaptions: false,
       captionHistory: [],
       localCaptions: '',
@@ -444,9 +439,8 @@ export default {
     computedRoomId() {
       return this.$route.params.id || 'default-room';
     },
-    
+
     totalParticipantCount() {
-  // Use participants array (socket-synced) + self = most accurate count
       return this.participants.length + 1;
     },
 
@@ -467,11 +461,11 @@ export default {
 
   watch: {
     isPoorNetwork(newVal) {
-      if(newVal) {
-        console.log("Poor network -> Transcript enabled");
+      if (newVal) {
+        console.log('Poor network -> Transcript enabled');
         this.recognition?.start();
       } else {
-        console.log("Network normal -> Transcript disabled");
+        console.log('Network normal -> Transcript disabled');
         this.recognition?.stop();
       }
     },
@@ -546,7 +540,7 @@ export default {
     toggleCaptions() {
       this.showCaptions = !this.showCaptions;
       this.activeDropdown = null;
-      
+
       if (this.showCaptions) {
         this.startCaptionRecognition();
       } else {
@@ -620,140 +614,273 @@ export default {
       this.localCaptions = '';
     },
 
-    // ==================== SILENT BACKGROUND (FIXED) ====================
+    // ==================== SILENT BACKGROUND ====================
 
-async toggleSilentBackground() {
-  this.silentBackgroundEnabled = !this.silentBackgroundEnabled;
+    async toggleSilentBackground() {
+      this.silentBackgroundEnabled = !this.silentBackgroundEnabled;
+      if (this.silentBackgroundEnabled) {
+        await this.enableBackgroundNoiseSuppression();
+      } else {
+        await this.disableBackgroundNoiseSuppression();
+      }
+    },
 
-  if (this.silentBackgroundEnabled) {
-    await this.enableBackgroundNoiseSuppression();
-  } else {
-    await this.disableBackgroundNoiseSuppression();
-  }
-},
+    async enableBackgroundNoiseSuppression() {
+      try {
+        if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+          alert('Not connected to meeting room. Please join first.');
+          this.silentBackgroundEnabled = false;
+          return;
+        }
 
-async enableBackgroundNoiseSuppression() {
-  try {
-    // Guard: must be connected to LiveKit
-    if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-      alert('Not connected to meeting room. Please join first.');
-      this.silentBackgroundEnabled = false;
-      return;
-    }
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              googNoiseSuppression: true,
+              googHighpassFilter: true,
+              googNoiseSuppression2: true,
+              googEchoCancellation: true,
+              googAutoGainControl: true,
+            },
+            video: false,
+          });
+        } catch (permError) {
+          console.error('Microphone permission denied:', permError);
+          alert('Microphone permission denied. Please allow microphone access.');
+          this.silentBackgroundEnabled = false;
+          return;
+        }
 
-    // Request a new stream with maximum noise suppression constraints
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          // Additional suppression hints (Chrome/Edge support)
-          googNoiseSuppression: true,
-          googHighpassFilter: true,
-          googNoiseSuppression2: true,
-          googEchoCancellation: true,
-          googAutoGainControl: true,
-        },
-        video: false,
-      });
-    } catch (permError) {
-      console.error('Microphone permission denied:', permError);
-      alert('Microphone permission denied. Please allow microphone access.');
-      this.silentBackgroundEnabled = false;
-      return;
-    }
+        const rawAudioTrack = stream.getAudioTracks()[0];
 
-    const rawAudioTrack = stream.getAudioTracks()[0];
+        if (!rawAudioTrack) {
+          alert('Could not get audio track for noise suppression.');
+          this.silentBackgroundEnabled = false;
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
 
-    if (!rawAudioTrack) {
-      alert('Could not get audio track for noise suppression.');
-      this.silentBackgroundEnabled = false;
-      stream.getTracks().forEach(t => t.stop());
-      return;
-    }
+        const settings = rawAudioTrack.getSettings();
+        console.log('Audio track settings after constraint apply:', settings);
 
-    // Confirm the browser actually honoured noiseSuppression
-    const settings = rawAudioTrack.getSettings();
-    console.log('Audio track settings after constraint apply:', settings);
+        if (settings.noiseSuppression === false) {
+          console.warn('Browser did not honour noiseSuppression constraint.');
+        }
 
-    if (settings.noiseSuppression === false) {
-      console.warn('Browser did not honour noiseSuppression constraint.');
-    }
+        // Unpublish current mic track
+        const existingPub = this._getLocalTrack(Track.Source.Microphone);
+        if (existingPub && existingPub.track) {
+          await this.livekitRoom.localParticipant.unpublishTrack(existingPub.track);
+        }
 
-    // Unpublish the current mic track from LiveKit
-    const existingPub = this.livekitRoom.localParticipant.getTrack(
-      Track.Source.Microphone
-    );
-    if (existingPub && existingPub.track) {
-      await this.livekitRoom.localParticipant.unpublishTrack(
-        existingPub.track
-      );
-    }
+        const { LocalAudioTrack } = await import('livekit-client');
+        const livekitAudioTrack = new LocalAudioTrack(rawAudioTrack, undefined, false);
 
-    // Wrap raw MediaStreamTrack in a LiveKit LocalAudioTrack and publish
-    const { LocalAudioTrack } = await import('livekit-client');
-    const livekitAudioTrack = new LocalAudioTrack(rawAudioTrack, undefined, false);
+        await this.livekitRoom.localParticipant.publishTrack(livekitAudioTrack, {
+          source: Track.Source.Microphone,
+        });
 
-    await this.livekitRoom.localParticipant.publishTrack(livekitAudioTrack, {
-      source: Track.Source.Microphone,
-    });
+        this.backgroundNoiseSuppressionTrack = livekitAudioTrack;
+        this.backgroundNoiseSuppressionStream = stream;
+        this.micon = true;
 
-    // Store both so we can clean up properly on disable
-    this.backgroundNoiseSuppressionTrack = livekitAudioTrack;
-    this.backgroundNoiseSuppressionStream = stream;
+        console.log('Background noise suppression enabled and published to LiveKit.');
+      } catch (error) {
+        console.error('Error enabling noise suppression:', error);
+        alert('Could not enable Silent Background: ' + error.message);
+        this.silentBackgroundEnabled = false;
 
-    // Keep micon state in sync
-    this.micon = true;
+        if (this.backgroundNoiseSuppressionStream) {
+          this.backgroundNoiseSuppressionStream.getTracks().forEach(t => t.stop());
+          this.backgroundNoiseSuppressionStream = null;
+        }
+        this.backgroundNoiseSuppressionTrack = null;
+      }
+    },
 
-    console.log('Background noise suppression enabled and published to LiveKit.');
-  } catch (error) {
-    console.error('Error enabling noise suppression:', error);
-    alert('Could not enable Silent Background: ' + error.message);
-    this.silentBackgroundEnabled = false;
+    async disableBackgroundNoiseSuppression() {
+      try {
+        if (!this.livekitRoom || !this.livekitRoom.localParticipant) return;
 
-    // Clean up any partial state
-    if (this.backgroundNoiseSuppressionStream) {
-      this.backgroundNoiseSuppressionStream.getTracks().forEach(t => t.stop());
-      this.backgroundNoiseSuppressionStream = null;
-    }
-    this.backgroundNoiseSuppressionTrack = null;
-  }
-},
+        if (this.backgroundNoiseSuppressionTrack) {
+          await this.livekitRoom.localParticipant.unpublishTrack(
+            this.backgroundNoiseSuppressionTrack
+          );
+          this.backgroundNoiseSuppressionTrack = null;
+        }
 
-async disableBackgroundNoiseSuppression() {
-  try {
-    if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-      return;
-    }
+        if (this.backgroundNoiseSuppressionStream) {
+          this.backgroundNoiseSuppressionStream.getTracks().forEach(t => t.stop());
+          this.backgroundNoiseSuppressionStream = null;
+        }
 
-    // Unpublish the noise-suppressed track
-    if (this.backgroundNoiseSuppressionTrack) {
-      await this.livekitRoom.localParticipant.unpublishTrack(
-        this.backgroundNoiseSuppressionTrack
-      );
-      this.backgroundNoiseSuppressionTrack = null;
-    }
+        if (this.micon) {
+          await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
+          await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
+        }
 
-    // Stop the underlying MediaStream
-    if (this.backgroundNoiseSuppressionStream) {
-      this.backgroundNoiseSuppressionStream.getTracks().forEach(t => t.stop());
-      this.backgroundNoiseSuppressionStream = null;
-    }
+        console.log('Background noise suppression disabled. Standard mic restored.');
+      } catch (error) {
+        console.error('Error disabling noise suppression:', error);
+      }
+    },
 
-    // Re-publish a standard mic track so audio continues working
-    if (this.micon) {
-      await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
-      await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
-    }
+    // ==================== HELPER: safely get local track publication ====================
+    // FIXED: replaces getTrackPublication (not available in all livekit-client versions)
+    _getLocalTrack(source) {
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) return null;
+      const lp = this.livekitRoom.localParticipant;
 
-    console.log(' Background noise suppression disabled. Standard mic restored.');
-  } catch (error) {
-    console.error('Error disabling noise suppression:', error);
-  }
-},
-    
+      // Method 1: getTrack (available in most versions)
+      if (typeof lp.getTrack === 'function') {
+        const pub = lp.getTrack(source);
+        if (pub) return pub;
+      }
+
+      // Method 2: iterate trackPublications map
+      const pubs = lp.trackPublications;
+      if (pubs) {
+        const entries = typeof pubs.values === 'function'
+          ? [...pubs.values()]
+          : Object.values(pubs);
+        for (const pub of entries) {
+          if (pub.source === source) return pub;
+        }
+      }
+
+      // Method 3: videoTrackPublications / audioTrackPublications
+      const subMap = source === Track.Source.Camera || source === Track.Source.ScreenShare
+        ? lp.videoTrackPublications
+        : lp.audioTrackPublications;
+
+      if (subMap) {
+        const entries = typeof subMap.values === 'function'
+          ? [...subMap.values()]
+          : Object.values(subMap);
+        for (const pub of entries) {
+          if (pub.source === source) return pub;
+        }
+      }
+
+      return null;
+    },
+
+    // ==================== ATTACH LOCAL CAMERA TRACK (FIXED) ====================
+    attachLocalCameraTrack() {
+      const videoElement = this.$refs.localVideo;
+      if (!videoElement) return;
+
+      const lp = this.livekitRoom.localParticipant;
+
+      // Method 1: getTrack (most compatible — avoids missing getTrackPublication)
+      if (typeof lp.getTrack === 'function') {
+        const pub = lp.getTrack(Track.Source.Camera);
+        if (pub && pub.track) {
+          pub.track.attach(videoElement);
+          console.log('Camera attached via getTrack');
+          return;
+        }
+      }
+
+      // Method 2: iterate trackPublications map
+      const pubs = lp.trackPublications;
+      if (pubs) {
+        const entries = typeof pubs.values === 'function'
+          ? [...pubs.values()]
+          : Object.values(pubs);
+        for (const pub of entries) {
+          if (pub.source === Track.Source.Camera && pub.track) {
+            pub.track.attach(videoElement);
+            console.log('Camera attached via trackPublications iteration');
+            return;
+          }
+        }
+      }
+
+      // Method 3: videoTrackPublications fallback
+      if (lp.videoTrackPublications) {
+        const videoPubs = typeof lp.videoTrackPublications.values === 'function'
+          ? [...lp.videoTrackPublications.values()]
+          : Object.values(lp.videoTrackPublications);
+        for (const pub of videoPubs) {
+          if (pub.source === Track.Source.Camera && pub.track) {
+            pub.track.attach(videoElement);
+            console.log('Camera attached via videoTrackPublications');
+            return;
+          }
+        }
+      }
+
+      console.warn('Could not find camera track to attach');
+    },
+
+    // ==================== ATTACH LOCAL SCREEN TRACK (FIXED) ====================
+    attachLocalScreenTrack() {
+      const videoElement = this.$refs.localVideo;
+      if (!videoElement) return;
+
+      const lp = this.livekitRoom.localParticipant;
+
+      // Method 1: getTrack (avoids missing getTrackPublication)
+      if (typeof lp.getTrack === 'function') {
+        const pub = lp.getTrack(Track.Source.ScreenShare);
+        if (pub && pub.track) {
+          pub.track.attach(videoElement);
+          const mediaTrack = pub.track.mediaStreamTrack;
+          if (mediaTrack) {
+            mediaTrack.addEventListener('ended', () => this.stopScreenShare(), { once: true });
+          }
+          console.log('Screen share attached via getTrack');
+          return;
+        }
+      }
+
+      // Method 2: iterate trackPublications
+      const pubs = lp.trackPublications;
+      if (pubs) {
+        const entries = typeof pubs.values === 'function'
+          ? [...pubs.values()]
+          : Object.values(pubs);
+        for (const pub of entries) {
+          if (pub.source === Track.Source.ScreenShare && pub.track) {
+            pub.track.attach(videoElement);
+            const mediaTrack = pub.track.mediaStreamTrack;
+            if (mediaTrack) {
+              mediaTrack.addEventListener('ended', () => this.stopScreenShare(), { once: true });
+            }
+            console.log('Screen share attached via trackPublications iteration');
+            return;
+          }
+        }
+      }
+
+      // Method 3: videoTrackPublications fallback
+      if (lp.videoTrackPublications) {
+        const videoPubs = typeof lp.videoTrackPublications.values === 'function'
+          ? [...lp.videoTrackPublications.values()]
+          : Object.values(lp.videoTrackPublications);
+        for (const pub of videoPubs) {
+          if (pub.source === Track.Source.ScreenShare && pub.track) {
+            pub.track.attach(videoElement);
+            const mediaTrack = pub.track.mediaStreamTrack;
+            if (mediaTrack) {
+              mediaTrack.addEventListener('ended', () => this.stopScreenShare(), { once: true });
+            }
+            console.log('Screen share attached via videoTrackPublications');
+            return;
+          }
+        }
+      }
+
+      console.warn('Could not find screen share track to attach');
+    },
+
+    // ==================== USER INIT ====================
+
     initUserFromToken() {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -764,35 +891,35 @@ async disableBackgroundNoiseSuppression() {
 
       try {
         const decoded = jwtDecode(token);
-        
+
         this.userId = decoded.id || decoded.userId || decoded.user?.id || `user_${Date.now()}`;
-        
+
         const storedEmail = localStorage.getItem('username');
-        this.userName = 
-          decoded.name || 
-          decoded.user?.name || 
-          decoded.username || 
+        this.userName =
+          decoded.name ||
+          decoded.user?.name ||
+          decoded.username ||
           decoded.user?.username ||
           (storedEmail && !storedEmail.includes('@') ? storedEmail : null) ||
-          decoded.email || 
-          decoded.user?.email || 
+          decoded.email ||
+          decoded.user?.email ||
           storedEmail ||
           `User-${this.userId.substring(0, 8)}`;
-        
+
         if (this.userName.includes('@')) {
           const emailParts = this.userName.split('@');
           this.userName = emailParts[0] || `User-${this.userId.substring(0, 8)}`;
         }
-        
+
         const storedIsHost = localStorage.getItem('isHost');
         this.isHost = storedIsHost === 'true' || decoded.isHost === true;
-        
-        console.log('User initialized:', { 
-          userId: this.userId, 
-          userName: this.userName, 
-          isHost: this.isHost 
+
+        console.log('User initialized:', {
+          userId: this.userId,
+          userName: this.userName,
+          isHost: this.isHost
         });
-        
+
         return true;
       } catch (error) {
         console.error('Error decoding token:', error);
@@ -831,7 +958,7 @@ async disableBackgroundNoiseSuppression() {
 
     async initLivekit() {
       console.log('=== INITIALIZING LIVEKIT ===');
-      
+
       const tokenData = await this.getLivekitToken();
       if (!tokenData) {
         console.error('No tokenData received');
@@ -839,10 +966,10 @@ async disableBackgroundNoiseSuppression() {
       }
 
       console.log('Token data received:', tokenData);
-      
+
       let token;
       let wsUrl;
-      
+
       if (typeof tokenData === 'string') {
         token = tokenData;
         wsUrl = `wss://${import.meta.env.VITE_LIVEKIT_URL || 'coretalk-e6xkfd5h.livekit.cloud'}`;
@@ -864,13 +991,13 @@ async disableBackgroundNoiseSuppression() {
       console.log('Extracted token type:', typeof token);
       console.log('Extracted token length:', token?.length);
       console.log('WS URL:', wsUrl);
-      
+
       if (typeof token !== 'string' || token.length < 20 || token === '[object Object]') {
         console.error('Invalid token format:', token);
         alert('Failed to get valid authentication token.');
         return;
       }
-      
+
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3) {
         console.error('Token does not have JWT structure:', token);
@@ -929,41 +1056,14 @@ async disableBackgroundNoiseSuppression() {
         console.log('LiveKit reconnected');
         this.connectionStatus = 'connected';
 
-  // Re-attach all remote tracks after reconnect
         await this.$nextTick();
         this.livekitRoom.remoteParticipants.forEach((participant) => {
-        participant.trackPublications.forEach((publication) => {
-        if (publication.isSubscribed && publication.track) {
-          this.handleTrackSubscribed(publication.track, participant);
-        }
-      });
-    });
-
-  // Rejoin socket room in case socket also dropped
-    if (this.socket && this.socket.connected) {
-      this.socket.emit('join-room', {
-        roomId: this.roomId,
-        userName: this.userName,
-        userId: this.userId,
-        isHost: this.isHost
-      });
-    }
-  });
-
-  this.livekitRoom.on(RoomEvent.Disconnected, async (reason) => {
-    console.log('LiveKit disconnected, reason:', reason);
-    this.connectionStatus = 'disconnected';
-
-    // Don't try to rejoin if user intentionally left
-    if (reason === 'leave' || reason === 'room_deleted') return;
-
-    // Attempt full rejoin after a short delay
-    setTimeout(async () => {
-      console.log('Attempting to rejoin room...');
-      try {
-        this.participants = [];
-        this.remoteParticipants.clear();
-        await this.initLivekit();
+          participant.trackPublications.forEach((publication) => {
+            if (publication.isSubscribed && publication.track) {
+              this.handleTrackSubscribed(publication.track, participant);
+            }
+          });
+        });
 
         if (this.socket && this.socket.connected) {
           this.socket.emit('join-room', {
@@ -973,46 +1073,72 @@ async disableBackgroundNoiseSuppression() {
             isHost: this.isHost
           });
         }
-      } catch (err) {
-        console.error('Rejoin failed:', err);
-      }
-    }, 2000);
-  });
+      });
+
+      this.livekitRoom.on(RoomEvent.Disconnected, async (reason) => {
+        console.log('LiveKit disconnected, reason:', reason);
+        this.connectionStatus = 'disconnected';
+
+        if (reason === 'leave' || reason === 'room_deleted') return;
+
+        setTimeout(async () => {
+          console.log('Attempting to rejoin room...');
+          try {
+            this.participants = [];
+            this.remoteParticipants.clear();
+            await this.initLivekit();
+
+            if (this.socket && this.socket.connected) {
+              this.socket.emit('join-room', {
+                roomId: this.roomId,
+                userName: this.userName,
+                userId: this.userId,
+                isHost: this.isHost
+              });
+            }
+          } catch (err) {
+            console.error('Rejoin failed:', err);
+          }
+        }, 2000);
+      });
 
       try {
         console.log('Attempting to connect to LiveKit...');
         await this.livekitRoom.connect(wsUrl, token);
-  
+
         console.log('LiveKit room connected successfully');
         console.log('Room name:', this.livekitRoom.name);
-  
+
         this.livekitToken = token;
 
-        // Process participants already in room when joining
-         const existingParticipants = this.livekitRoom.remoteParticipants;
-  if (existingParticipants) {
-    existingParticipants.forEach((participant) => {
-      console.log('Processing existing participant:', participant.identity);
-      this.handleParticipantConnected(participant);
-      const publications = participant.trackPublications;
-      if (publications) {
-        publications.forEach((publication) => {
-          if (publication.isSubscribed && publication.track) {
-            this.handleTrackSubscribed(publication.track, participant);
-          }
-        });
-      }
-    });
-  }
-      } 
-      catch (error) {
+        const existingParticipants = this.livekitRoom.remoteParticipants;
+        if (existingParticipants) {
+          existingParticipants.forEach((participant) => {
+            console.log('Processing existing participant:', participant.identity);
+            this.handleParticipantConnected(participant);
+            const publications = participant.trackPublications;
+            if (publications) {
+              publications.forEach((publication) => {
+                if (publication.isSubscribed && publication.track) {
+                  this.handleTrackSubscribed(publication.track, participant);
+                }
+              });
+            }
+          });
+        }
+      } catch (error) {
         console.error('Failed to connect to LiveKit:', error);
-        alert('Failed to join meeting room: ' + error.message);  
+        alert('Failed to join meeting room: ' + error.message);
       }
     },
-    
-   /* handleParticipantConnected(participant) {
-      const participantData = {
+
+    handleParticipantConnected(participant) {
+      // Remove any duplicate first
+      this.participants = this.participants.filter(
+        p => p.id !== participant.identity
+      );
+
+      this.participants.push({
         id: participant.identity,
         userId: participant.identity,
         name: participant.name || participant.identity,
@@ -1020,36 +1146,10 @@ async disableBackgroundNoiseSuppression() {
         hasMic: false,
         hasVideo: false,
         captions: ''
-      };
-
-      const existingIndex = this.participants.findIndex(p => p.id === participant.identity);
-      if (existingIndex >= 0) {
-        this.participants[existingIndex] = participantData;
-      } else {
-        this.participants.push(participantData);
-      }
+      });
 
       this.remoteParticipants.set(participant.identity, participant);
-    },*/
-
-    handleParticipantConnected(participant) {
-  // Remove any duplicate first
-  this.participants = this.participants.filter(
-    p => p.id !== participant.identity
-  );
-
-  this.participants.push({
-    id: participant.identity,
-    userId: participant.identity,
-    name: participant.name || participant.identity,
-    isHost: false,
-    hasMic: false,
-    hasVideo: false,
-    captions: ''
-  });
-
-  this.remoteParticipants.set(participant.identity, participant);
-},
+    },
 
     handleParticipantDisconnected(participant) {
       this.participants = this.participants.filter(p => p.id !== participant.identity);
@@ -1063,7 +1163,6 @@ async disableBackgroundNoiseSuppression() {
       } else if (track.kind === Track.Kind.Audio) {
         this.attachAudio(track, participant);
       }
-
       this.updateRemoteTrackDisplay(participant);
     },
 
@@ -1072,35 +1171,35 @@ async disableBackgroundNoiseSuppression() {
     },
 
     attachVideoToGrid(track, participant) {
-  const maxAttempts = 10;
-  let attempts = 0;
+      const maxAttempts = 10;
+      let attempts = 0;
 
-  const tryAttach = () => {
-    const tile = document.querySelector(`[data-peer-id="${participant.identity}"]`);
-    if (tile) {
-      const videoElement = tile.querySelector('video');
-      if (videoElement) {
-        if (videoElement.srcObject) {
-          console.log('Video already attached for', participant.identity);
-          return;
+      const tryAttach = () => {
+        const tile = document.querySelector(`[data-peer-id="${participant.identity}"]`);
+        if (tile) {
+          const videoElement = tile.querySelector('video');
+          if (videoElement) {
+            if (videoElement.srcObject) {
+              console.log('Video already attached for', participant.identity);
+              return;
+            }
+            track.attach(videoElement);
+            console.log('Video attached for', participant.identity);
+            return;
+          }
         }
-        track.attach(videoElement);
-        console.log('Video attached for', participant.identity);
-        return;
-      }
-    }
 
-    attempts++;
-    if (attempts < maxAttempts) {
-      setTimeout(tryAttach, 150);
-    } else {
-      console.warn('Could not find tile for', participant.identity, 'after', maxAttempts, 'attempts');
-    }
-  };
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(tryAttach, 150);
+        } else {
+          console.warn('Could not find tile for', participant.identity, 'after', maxAttempts, 'attempts');
+        }
+      };
 
-  this.$nextTick(tryAttach);
-},
-    
+      this.$nextTick(tryAttach);
+    },
+
     attachAudio(track, participant) {
       const audioElement = track.attach();
       audioElement.play().catch(err => {
@@ -1109,25 +1208,42 @@ async disableBackgroundNoiseSuppression() {
     },
 
     updateRemoteTrackDisplay(participant) {
-      const videoPublication = participant.getTrack(Track.Source.Camera);
-      const hasVideo = !!(videoPublication && !videoPublication.isMuted);
+      // FIXED: use getTrack instead of getTrackPublication
+      let hasVideo = false;
+      let hasMic = false;
 
-      const audioPublication = participant.getTrack(Track.Source.Microphone);
-      const hasMic = !!(audioPublication && !audioPublication.isMuted);
+      if (typeof participant.getTrack === 'function') {
+        const videoPublication = participant.getTrack(Track.Source.Camera);
+        hasVideo = !!(videoPublication && !videoPublication.isMuted);
+
+        const audioPublication = participant.getTrack(Track.Source.Microphone);
+        hasMic = !!(audioPublication && !audioPublication.isMuted);
+      } else {
+        // Fallback: iterate trackPublications
+        const pubs = participant.trackPublications;
+        if (pubs) {
+          const entries = typeof pubs.values === 'function'
+            ? [...pubs.values()]
+            : Object.values(pubs);
+          for (const pub of entries) {
+            if (pub.source === Track.Source.Camera) hasVideo = !pub.isMuted;
+            if (pub.source === Track.Source.Microphone) hasMic = !pub.isMuted;
+          }
+        }
+      }
 
       const p = this.participants.find(p => p.id === participant.identity);
       if (p) {
         p.hasMic = hasMic;
         p.hasVideo = hasVideo;
       } else {
-      // Participant not in list yet — retry after Vue renders
         setTimeout(() => this.updateRemoteTrackDisplay(participant), 200);
       }
     },
 
     initSocket() {
       console.log('Initializing socket connection...');
-      
+
       this.socket = io(`${import.meta.env.VITE_API_URL}`, {
         transports: ['websocket'],
         upgrade: true,
@@ -1142,14 +1258,14 @@ async disableBackgroundNoiseSuppression() {
       this.socket.on('connect', () => {
         console.log('Socket connected:', this.socket.id);
         this.isSocketConnected = true;
-        
-        const joinData = { 
-          roomId: this.roomId, 
+
+        const joinData = {
+          roomId: this.roomId,
           userName: this.userName,
           userId: this.userId,
           isHost: this.isHost
         };
-        
+
         this.socket.emit('join-room', joinData);
         this.startBroadcastRetry();
       });
@@ -1165,17 +1281,17 @@ async disableBackgroundNoiseSuppression() {
       });
 
       this.socket.on('chat-message', ({ sender, text, timestamp }) => {
-        const message = { 
-          sender: sender || 'Unknown', 
-          text: text || '', 
-          timestamp: timestamp || Date.now() 
+        const message = {
+          sender: sender || 'Unknown',
+          text: text || '',
+          timestamp: timestamp || Date.now()
         };
         this.messages.push(message);
-        
+
         if (this.activePanel !== 'chat') {
           this.unreadMessages++;
         }
-        
+
         this.$nextTick(() => {
           const chatBody = this.$refs.chatBody;
           if (chatBody) {
@@ -1246,15 +1362,14 @@ async disableBackgroundNoiseSuppression() {
             });
           });
         });
-      });   // ← closes socket.on('participants-list')
-
-    },   // ← closes initSocket() method
+      });
+    },
 
     startBroadcastRetry() {
       if (this.broadcastRetryTimer) {
         clearInterval(this.broadcastRetryTimer);
       }
-      
+
       this.broadcastRetryTimer = setInterval(() => {
         if (this.broadcastQueue.length > 0 && this.isSocketConnected) {
           this.processQueuedBroadcasts();
@@ -1297,12 +1412,12 @@ async disableBackgroundNoiseSuppression() {
         console.log('Media initialization in progress, ignoring toggle');
         return;
       }
-      
+
       if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
         alert('Not connected to meeting room');
         return;
       }
-      
+
       this.isInitializingMedia = true;
 
       try {
@@ -1313,21 +1428,21 @@ async disableBackgroundNoiseSuppression() {
           console.log('Microphone muted');
         } else {
           console.log('Unmuting microphone...');
-          
+
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             stream.getTracks().forEach(track => track.stop());
           } catch (permError) {
             console.warn('Permission request failed:', permError);
           }
-          
+
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
           this.micon = true;
           console.log('Microphone enabled');
         }
       } catch (error) {
         console.error('Error toggling microphone:', error);
-        
+
         if (error.name === 'NotAllowedError') {
           alert('Microphone permission denied. Please allow microphone access in your browser settings.');
         } else if (error.message && error.message.includes('structuredClone')) {
@@ -1335,7 +1450,7 @@ async disableBackgroundNoiseSuppression() {
         } else {
           alert('Could not access microphone: ' + error.message);
         }
-        
+
         this.micon = false;
       } finally {
         this.isInitializingMedia = false;
@@ -1343,224 +1458,116 @@ async disableBackgroundNoiseSuppression() {
     },
 
     async toggleVideo() {
-  if (this.isInitializingMedia) return;
-  if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-    alert('Not connected to meeting room');
-    return;
-  }
+      if (this.isInitializingMedia) return;
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+        alert('Not connected to meeting room');
+        return;
+      }
 
-  this.isInitializingMedia = true;
+      this.isInitializingMedia = true;
 
-  try {
-    if (this.videoon) {
-      await this.livekitRoom.localParticipant.setCameraEnabled(false);
-      this.videoon = false;
-      const videoElement = this.$refs.localVideo;
-      if (videoElement) videoElement.srcObject = null;
-    } else {
-      // Pre-request permission
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        stream.getTracks().forEach(t => t.stop());
-      } catch (permError) {
-        console.warn('Permission request failed:', permError);
-      }
+        if (this.videoon) {
+          await this.livekitRoom.localParticipant.setCameraEnabled(false);
+          this.videoon = false;
+          const videoElement = this.$refs.localVideo;
+          if (videoElement) videoElement.srcObject = null;
+        } else {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+            });
+            stream.getTracks().forEach(t => t.stop());
+          } catch (permError) {
+            console.warn('Permission request failed:', permError);
+          }
 
-      await this.livekitRoom.localParticipant.setCameraEnabled(true);
-      this.videoon = true;
-      await this.$nextTick();
-
-      // FIXED: Safely get the camera track and attach it
-      this.attachLocalCameraTrack();
-    }
-  } catch (error) {
-    console.error('Error toggling camera:', error);
-    if (error.name === 'NotAllowedError') {
-      alert('Camera permission denied. Please allow camera access in your browser settings.');
-    } else {
-      alert('Could not access camera: ' + error.message);
-    }
-    this.videoon = false;
-  } finally {
-    this.isInitializingMedia = false;
-  }
-},
-
-// NEW HELPER METHOD — safely finds and attaches local camera track
-attachLocalCameraTrack() {
-  const videoElement = this.$refs.localVideo;
-  if (!videoElement) return;
-
-  const lp = this.livekitRoom.localParticipant;
-
-  // Method 1: Use getTrackPublication (most reliable)
-  const cameraPub = lp.getTrackPublication(Track.Source.Camera);
-  if (cameraPub && cameraPub.track) {
-    cameraPub.track.attach(videoElement);
-    console.log('Camera attached via getTrackPublication');
-    return;
-  }
-
-  // Method 2: Use getTrack
-  const cameraTrack = lp.getTrack(Track.Source.Camera);
-  if (cameraTrack && cameraTrack.track) {
-    cameraTrack.track.attach(videoElement);
-    console.log('Camera attached via getTrack');
-    return;
-  }
-
-  // Method 3: Iterate trackPublications safely
-  const pubs = lp.trackPublications;
-  if (pubs) {
-    const entries = typeof pubs.values === 'function' ? pubs.values() :
-                    typeof pubs.entries === 'function' ? [...pubs.entries()].map(e => e[1]) :
-                    Array.isArray(pubs) ? pubs :
-                    Object.values(pubs);
-
-    for (const pub of entries) {
-      if (pub.source === Track.Source.Camera && pub.track) {
-        pub.track.attach(videoElement);
-        console.log('Camera attached via trackPublications iteration');
-        return;
-      }
-    }
-  }
-
-  // Method 4: Use videoTrackPublications if available
-  if (lp.videoTrackPublications) {
-    const videoPubs = typeof lp.videoTrackPublications.values === 'function'
-      ? lp.videoTrackPublications.values()
-      : Object.values(lp.videoTrackPublications);
-
-    for (const pub of videoPubs) {
-      if (pub.source === Track.Source.Camera && pub.track) {
-        pub.track.attach(videoElement);
-        console.log('Camera attached via videoTrackPublications');
-        return;
-      }
-    }
-  }
-
-  console.warn('Could not find camera track to attach');
-},
-
-// HELPER: safely find and attach local screen share track
-attachLocalScreenTrack() {
-  const videoElement = this.$refs.localVideo;
-  if (!videoElement) return;
-
-  const lp = this.livekitRoom.localParticipant;
-
-  const screenPub = lp.getTrackPublication
-    ? lp.getTrackPublication(Track.Source.ScreenShare)
-    : lp.getTrack?.(Track.Source.ScreenShare);
-
-  if (screenPub && screenPub.track) {
-    screenPub.track.attach(videoElement);
-
-    const mediaTrack = screenPub.track.mediaStreamTrack;
-    if (mediaTrack) {
-      mediaTrack.addEventListener('ended', () => {
-        this.stopScreenShare();
-      }, { once: true });
-    }
-    console.log('Screen share attached');
-    return;
-  }
-
-  // Fallback: iterate
-  const pubs = lp.trackPublications;
-  if (pubs) {
-    const entries = typeof pubs.values === 'function' ? pubs.values() :
-                    Array.isArray(pubs) ? pubs : Object.values(pubs);
-    for (const pub of entries) {
-      if (pub.source === Track.Source.ScreenShare && pub.track) {
-        pub.track.attach(videoElement);
-        const mediaTrack = pub.track.mediaStreamTrack;
-        if (mediaTrack) {
-          mediaTrack.addEventListener('ended', () => {
-            this.stopScreenShare();
-          }, { once: true });
+          await this.livekitRoom.localParticipant.setCameraEnabled(true);
+          this.videoon = true;
+          await this.$nextTick();
+          // FIXED: use updated helper that avoids getTrackPublication
+          this.attachLocalCameraTrack();
         }
+      } catch (error) {
+        console.error('Error toggling camera:', error);
+        if (error.name === 'NotAllowedError') {
+          alert('Camera permission denied. Please allow camera access in your browser settings.');
+        } else {
+          alert('Could not access camera: ' + error.message);
+        }
+        this.videoon = false;
+      } finally {
+        this.isInitializingMedia = false;
+      }
+    },
+
+    async sharescreen() {
+      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+        alert('Not connected to meeting room');
         return;
       }
-    }
-  }
 
-  console.warn('Could not find screen share track to attach');
-},
+      try {
+        if (!this.isScreenSharing) {
+          await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
+          this.isScreenSharing = true;
+          await this.$nextTick();
+          // FIXED: use updated helper that avoids getTrackPublication
+          this.attachLocalScreenTrack();
+        } else {
+          await this.stopScreenShare();
+        }
+      } catch (error) {
+        console.error('Error sharing screen:', error);
+        if (error.name === 'NotAllowedError') {
+          alert('Screen sharing permission denied.');
+        } else {
+          alert('Could not start screen sharing: ' + error.message);
+        }
+        this.isScreenSharing = false;
+      }
+    },
 
-async sharescreen() {
-  if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-    alert('Not connected to meeting room');
-    return;
-  }
+    async stopScreenShare() {
+      try {
+        await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
+        this.isScreenSharing = false;
 
-  try {
-    if (!this.isScreenSharing) {
-      await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
-      this.isScreenSharing = true;
+        const videoElement = this.$refs.localVideo;
+        if (this.videoon && videoElement) {
+          // FIXED: use updated helper
+          this.attachLocalCameraTrack();
+        } else if (videoElement) {
+          videoElement.srcObject = null;
+        }
+      } catch (error) {
+        console.error('Error stopping screen share:', error);
+      }
+    },
 
-      // FIXED: Use helper method
-      await this.$nextTick();
-      this.attachLocalScreenTrack();
-    } else {
-      await this.stopScreenShare();
-    }
-  } catch (error) {
-    console.error('Error sharing screen:', error);
-    if (error.name === 'NotAllowedError') {
-      alert('Screen sharing permission denied.');
-    } else {
-      alert('Could not start screen sharing: ' + error.message);
-    }
-    this.isScreenSharing = false;
-  }
-},
+    async flipCamera() {
+      if (!this.videoon) return;
+      this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
 
-async stopScreenShare() {
-  try {
-    await this.livekitRoom.localParticipant.setScreenShareEnabled(false);
-    this.isScreenSharing = false;
+      try {
+        await this.livekitRoom.localParticipant.setCameraEnabled(false);
+        await this.livekitRoom.localParticipant.setCameraEnabled(true, {
+          facingMode: this.facingMode,
+        });
 
-    const videoElement = this.$refs.localVideo;
-    if (this.videoon && videoElement) {
-      // FIXED: Use helper
-      this.attachLocalCameraTrack();
-    } else if (videoElement) {
-      videoElement.srcObject = null;
-    }
-  } catch (error) {
-    console.error('Error stopping screen share:', error);
-  }
-},
+        await this.$nextTick();
+        // FIXED: use updated helper
+        this.attachLocalCameraTrack();
+      } catch (err) {
+        console.error('Camera flip failed:', err);
+        this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
+      }
+    },
 
-async flipCamera() {
-  if (!this.videoon) return;
-  this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
-
-  try {
-    await this.livekitRoom.localParticipant.setCameraEnabled(false);
-    await this.livekitRoom.localParticipant.setCameraEnabled(true, {
-      facingMode: this.facingMode,
-    });
-
-    await this.$nextTick();
-
-    // FIXED: Use helper
-    this.attachLocalCameraTrack();
-  } catch (err) {
-    console.error('Camera flip failed:', err);
-    this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
-  }
-},
-    
     togglePanel(panel) {
       this.activePanel = this.activePanel === panel ? null : panel;
       this.activeDropdown = null;
-      
+
       if (panel === 'chat') {
         this.unreadMessages = 0;
       }
@@ -1590,20 +1597,20 @@ async flipCamera() {
     sendMessage() {
       const text = (this.newMessage || '').trim();
       if (!text) return;
-      
+
       const message = {
         sender: this.userName,
         text: text,
         timestamp: Date.now()
       };
-      
+
       this.safeBroadcast('chat-message', {
         roomId: this.roomId,
         ...message
       });
-      
+
       this.newMessage = '';
-      
+
       this.$nextTick(() => {
         const chatBody = this.$refs.chatBody;
         if (chatBody) {
@@ -1614,7 +1621,7 @@ async flipCamera() {
 
     hand_raised() {
       this.hand = !this.hand;
-      
+
       this.safeBroadcast('hand-raised', {
         roomId: this.roomId,
         userId: this.userId,
@@ -1636,17 +1643,17 @@ async flipCamera() {
       const meetingLink = this.roomId;
       navigator.clipboard.writeText(meetingLink)
         .then(() => {
-          alert("Meeting link copied to clipboard!");
+          alert('Meeting link copied to clipboard!');
         })
         .catch(err => {
-          console.error("Failed to copy link:", err);
+          console.error('Failed to copy link:', err);
           const textArea = document.createElement('textarea');
           textArea.value = meetingLink;
           document.body.appendChild(textArea);
           textArea.select();
           document.execCommand('copy');
           document.body.removeChild(textArea);
-          alert("Meeting link copied to clipboard!");
+          alert('Meeting link copied to clipboard!');
         });
     },
 
@@ -1657,93 +1664,93 @@ async flipCamera() {
 
     async endMeeting() {
       if (!this.isHost) {
-        alert("Only host can end the meeting");
+        alert('Only host can end the meeting');
         return;
       }
 
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roomId: this.roomId })
         });
-        
+
         if (res.ok) {
           this.cleanup();
           this.$router.push('/Ending');
         }
-      } catch(err) {
-        console.error("Error ending meeting:", err);
+      } catch (err) {
+        console.error('Error ending meeting:', err);
       }
     },
 
     async muteAll() {
       if (!this.isHost) {
-        alert("Only host can mute all participants");
+        alert('Only host can mute all participants');
         return;
       }
 
       try {
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roomId: this.roomId })
         });
-        
+
         if (res.ok) {
-          console.log("All participants muted");
+          console.log('All participants muted');
         }
-      } catch(err) {
-        console.error("Error muting all participants:", err);
+      } catch (err) {
+        console.error('Error muting all participants:', err);
       }
     },
 
     async recording() {
       if (!this.isHost) {
-        alert("Only host can start recording");
+        alert('Only host can start recording');
         return;
       }
 
       this.record = !this.record;
-      
-      if(this.record) {
+
+      if (this.record) {
         try {
           const screenStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: true
           });
-          
+
           this.recordedChunks = [];
-          this.mediaRecorder = new MediaRecorder(screenStream, {mimeType: "video/webm"});
-          
+          this.mediaRecorder = new MediaRecorder(screenStream, { mimeType: 'video/webm' });
+
           this.mediaRecorder.ondataavailable = (e) => {
-            if(e.data && e.data.size > 0) {
+            if (e.data && e.data.size > 0) {
               this.recordedChunks.push(e.data);
             }
           };
-          
+
           this.mediaRecorder.onstop = () => {
-            const blob = new Blob(this.recordedChunks, {type:"video/webm"});
+            const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
+            const a = document.createElement('a');
             a.href = url;
             a.download = `meeting-${this.roomId}-${Date.now()}.webm`;
             a.click();
             URL.revokeObjectURL(url);
           };
-          
+
           this.mediaRecorder.start();
           this.isRecording = true;
-          console.log("Recording started");
-        } catch(err) {
-          console.error("Recording failed:", err);
+          console.log('Recording started');
+        } catch (err) {
+          console.error('Recording failed:', err);
           this.record = false;
         }
       } else {
-        if(this.mediaRecorder && this.isRecording) {
+        if (this.mediaRecorder && this.isRecording) {
           this.mediaRecorder.stop();
           this.isRecording = false;
-          console.log("Recording stopped");
+          console.log('Recording stopped');
         }
       }
     },
@@ -1761,13 +1768,12 @@ async flipCamera() {
       const redirectUri = import.meta.env.VITE_GMAIL_REDIRECT_URI;
       const scope = 'https://www.googleapis.com/auth/gmail.send';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
-      const popup = window.open(authUrl,'gmail-oauth','width=500,height=600');
+      window.open(authUrl, 'gmail-oauth', 'width=500,height=600');
       console.log('Auth URL:', authUrl);
-      window.addEventListener('message',(event) => {
-        if(event.data?.type === 'gmail-oauth-success') {
+      window.addEventListener('message', (event) => {
+        if (event.data?.type === 'gmail-oauth-success') {
           this.gmailAccessToken = event.data.token;
           this.showEmailPanel = true;
-          //popup?.close();
         }
       }, { once: true });
     },
@@ -1804,34 +1810,33 @@ async flipCamera() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-          accessToken: this.gmailAccessToken,
-          senderEmail: localStorage.getItem('username'),
-          to: this.emailTo,
-          subject: this.emailSubject,
-          body: this.emailBody,
-          attachments: this.emailAttachments
-        })
-      });
-      if (response.ok) {
-        this.emailTo = '';
-        this.emailSubject = '';
-        this.emailBody = '';
-        this.emailAttachments = [];
-        this.showEmailPanel = false;
-      } else {
-        throw new Error('Failed to send');
+            accessToken: this.gmailAccessToken,
+            senderEmail: localStorage.getItem('username'),
+            to: this.emailTo,
+            subject: this.emailSubject,
+            body: this.emailBody,
+            attachments: this.emailAttachments
+          })
+        });
+        if (response.ok) {
+          this.emailTo = '';
+          this.emailSubject = '';
+          this.emailBody = '';
+          this.emailAttachments = [];
+          this.showEmailPanel = false;
+        } else {
+          throw new Error('Failed to send');
+        }
+      } catch (err) {
+        alert('Failed to send email: ' + err.message);
+      } finally {
+        this.emailSending = false;
       }
-    } catch (err) {
-      alert('Failed to send email: ' + err.message);
-    }
-    finally {
-      this.emailSending = false;
-    }
-  },
-    
+    },
+
     async cleanup() {
       console.log('Cleaning up resources...');
-      
+
       if (this.broadcastRetryTimer) {
         clearInterval(this.broadcastRetryTimer);
         this.broadcastRetryTimer = null;
@@ -1842,19 +1847,19 @@ async flipCamera() {
       }
 
       if (this.silentBackgroundEnabled) {
-        await this.disableBackgroundNoiseSuppression(); 
+        await this.disableBackgroundNoiseSuppression();
         this.silentBackgroundEnabled = false;
       }
 
       if (this.livekitRoom) {
-          try {
-            const lp = this.livekitRoom.localParticipant;
-            if (lp) {
-              if (this.micon) await lp.setMicrophoneEnabled(false);
-              if (this.videoon) await lp.setCameraEnabled(false);
-              if (this.isScreenSharing) await lp.setScreenShareEnabled(false);
-            }
-          } catch (e) {
+        try {
+          const lp = this.livekitRoom.localParticipant;
+          if (lp) {
+            if (this.micon) await lp.setMicrophoneEnabled(false);
+            if (this.videoon) await lp.setCameraEnabled(false);
+            if (this.isScreenSharing) await lp.setScreenShareEnabled(false);
+          }
+        } catch (e) {
           console.warn('Error disabling tracks during cleanup:', e);
         }
         this.livekitRoom.disconnect();
@@ -1878,7 +1883,7 @@ async flipCamera() {
         clearInterval(this.networkCheckInterval);
         this.networkCheckInterval = null;
       }
-      
+
       if (this.inactivityTimer) {
         clearTimeout(this.inactivityTimer);
         this.inactivityTimer = null;
@@ -1896,49 +1901,48 @@ async flipCamera() {
       this.remoteParticipants.clear();
       this.captionHistory = [];
       this.localCaptions = '';
-
       this.showEmailPanel = false;
       this.gmailAccessToken = null;
       this.emailTo = '';
-      this.emailSubject = '',
+      this.emailSubject = '';
       this.emailBody = '';
       this.emailAttachments = [];
     }
   },
 
   async beforeUnmount() {
-    this.cleanup();
-    
-    document.removeEventListener("mousemove", this.resetinactivityTimer);
-    document.removeEventListener("keydown", this.resetinactivityTimer);
-    document.removeEventListener("click", this.resetinactivityTimer);
-    document.removeEventListener("touchstart", this.resetinactivityTimer);
-    document.removeEventListener("fullscreenchange", this.handleFullscreenChange);
-    document.removeEventListener("webkitfullscreenchange", this.handleFullscreenChange);
-    document.removeEventListener("msfullscreenchange", this.handleFullscreenChange);
-    document.removeEventListener("keydown", this.handleEscKey);
+    await this.cleanup();
+
+    document.removeEventListener('mousemove', this.resetinactivityTimer);
+    document.removeEventListener('keydown', this.resetinactivityTimer);
+    document.removeEventListener('click', this.resetinactivityTimer);
+    document.removeEventListener('touchstart', this.resetinactivityTimer);
+    document.removeEventListener('fullscreenchange', this.handleFullscreenChange);
+    document.removeEventListener('webkitfullscreenchange', this.handleFullscreenChange);
+    document.removeEventListener('msfullscreenchange', this.handleFullscreenChange);
+    document.removeEventListener('keydown', this.handleEscKey);
   },
 
   async mounted() {
     console.log('=== MEETING ROOM MOUNTING ===');
-    
+
     if (!this.initUserFromToken()) {
       return;
     }
 
     this.roomId = this.computedRoomId;
     this.title = localStorage.getItem('meetingtitle') || 'Meeting Room';
-    
+
     console.log('Meeting room initialized:', {
       roomId: this.roomId,
       userName: this.userName,
       userId: this.userId,
       isHost: this.isHost
     });
-    
+
     this.initSocket();
     await this.initLivekit();
-    
+
     setTimeout(() => {
       this.networkCheckInterval = setInterval(() => {
         this.checkNetworkQuality();
@@ -1946,16 +1950,15 @@ async flipCamera() {
     }, 5000);
 
     this.resetinactivityTimer();
-    document.addEventListener("mousemove", this.resetinactivityTimer);
-    document.addEventListener("keydown", this.resetinactivityTimer);
-    document.addEventListener("click", this.resetinactivityTimer);
-    document.addEventListener("touchstart", this.resetinactivityTimer);
+    document.addEventListener('mousemove', this.resetinactivityTimer);
+    document.addEventListener('keydown', this.resetinactivityTimer);
+    document.addEventListener('click', this.resetinactivityTimer);
+    document.addEventListener('touchstart', this.resetinactivityTimer);
 
-    // Fullscreen event listeners
-    document.addEventListener("fullscreenchange", this.handleFullscreenChange);
-    document.addEventListener("webkitfullscreenchange", this.handleFullscreenChange);
-    document.addEventListener("msfullscreenchange", this.handleFullscreenChange);
-    document.addEventListener("keydown", this.handleEscKey);
+    document.addEventListener('fullscreenchange', this.handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', this.handleFullscreenChange);
+    document.addEventListener('keydown', this.handleEscKey);
 
     console.log('=== COMPONENT MOUNTED SUCCESSFULLY ===');
   }
@@ -2009,8 +2012,8 @@ body {
   transition: background-color 0.2s;
 }
 
-#left-tray button:hover { 
-  background-color: #4a4a4a; 
+#left-tray button:hover {
+  background-color: #4a4a4a;
 }
 
 #left-tray button.active-feature {
@@ -2052,7 +2055,6 @@ body {
   padding: 0;
 }
 
-/* Dynamic Grid Layouts */
 .grid-1 {
   grid-template-columns: 1fr;
   grid-template-rows: 1fr;
@@ -2414,7 +2416,7 @@ body {
   background-color: #3a3a3a;
 }
 
-/* ==================== PANELS (CHAT & PARTICIPANTS) - WHITE THEME ==================== */
+/* ==================== PANELS (CHAT & PARTICIPANTS) ==================== */
 #chat-box,
 #list-box {
   position: fixed;
@@ -2468,7 +2470,6 @@ body {
   background-color: #ffffff;
 }
 
-/* CHAT MESSAGES */
 .message {
   background-color: #f5f5f5;
   padding: 12px;
@@ -2548,7 +2549,6 @@ body {
   transform: rotate(-45deg);
 }
 
-/* PARTICIPANTS LIST */
 .participant {
   background-color: #f5f5f5;
   border-radius: 8px;
@@ -2595,7 +2595,7 @@ body {
   color: #666666;
 }
 
-/* ==================== MEETING INFO MODAL - WHITE THEME & BOTTOM RIGHT ==================== */
+/* ==================== MEETING INFO MODAL ==================== */
 #info_box {
   position: fixed;
   bottom: 80px;
@@ -2750,7 +2750,6 @@ body {
   background: #aaaaaa;
 }
 
-/* Dark scrollbars for dark panels */
 .captions-content::-webkit-scrollbar-track {
   background: #2a2a2a;
 }
@@ -2941,9 +2940,9 @@ body {
   line-height: 1;
 }
 
-.perm-deny { background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
-.perm-once { background: #FF9800; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
-.perm-always { background: #4CAF50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+.perm-deny    { background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+.perm-once    { background: #FF9800; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
+.perm-always  { background: #4CAF50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -2952,20 +2951,20 @@ body {
   #left-tray {
     width: 180px;
   }
-  
+
   #chat-box,
   #list-box {
     width: 100%;
   }
-  
+
   .grid-many {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
-  
+
   #navbar {
     padding: 0 16px;
   }
-  
+
   #navbar button {
     width: 40px;
     height: 40px;
