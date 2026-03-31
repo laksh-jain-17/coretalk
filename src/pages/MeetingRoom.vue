@@ -1358,6 +1358,7 @@ async disableBackgroundNoiseSuppression() {
       const videoElement = this.$refs.localVideo;
       if (videoElement) videoElement.srcObject = null;
     } else {
+      // Pre-request permission
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -1371,15 +1372,8 @@ async disableBackgroundNoiseSuppression() {
       this.videoon = true;
       await this.$nextTick();
 
-      const videoElement = this.$refs.localVideo;
-      if (videoElement) {
-        for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) {
-          if (pub.source === Track.Source.Camera && pub.track) {
-            pub.track.attach(videoElement);
-            break;
-          }
-        }
-      }
+      // FIXED: Safely get the camera track and attach it
+      this.attachLocalCameraTrack();
     }
   } catch (error) {
     console.error('Error toggling camera:', error);
@@ -1394,6 +1388,110 @@ async disableBackgroundNoiseSuppression() {
   }
 },
 
+// NEW HELPER METHOD — safely finds and attaches local camera track
+attachLocalCameraTrack() {
+  const videoElement = this.$refs.localVideo;
+  if (!videoElement) return;
+
+  const lp = this.livekitRoom.localParticipant;
+
+  // Method 1: Use getTrackPublication (most reliable)
+  const cameraPub = lp.getTrackPublication(Track.Source.Camera);
+  if (cameraPub && cameraPub.track) {
+    cameraPub.track.attach(videoElement);
+    console.log('Camera attached via getTrackPublication');
+    return;
+  }
+
+  // Method 2: Use getTrack
+  const cameraTrack = lp.getTrack(Track.Source.Camera);
+  if (cameraTrack && cameraTrack.track) {
+    cameraTrack.track.attach(videoElement);
+    console.log('Camera attached via getTrack');
+    return;
+  }
+
+  // Method 3: Iterate trackPublications safely
+  const pubs = lp.trackPublications;
+  if (pubs) {
+    const entries = typeof pubs.values === 'function' ? pubs.values() :
+                    typeof pubs.entries === 'function' ? [...pubs.entries()].map(e => e[1]) :
+                    Array.isArray(pubs) ? pubs :
+                    Object.values(pubs);
+
+    for (const pub of entries) {
+      if (pub.source === Track.Source.Camera && pub.track) {
+        pub.track.attach(videoElement);
+        console.log('Camera attached via trackPublications iteration');
+        return;
+      }
+    }
+  }
+
+  // Method 4: Use videoTrackPublications if available
+  if (lp.videoTrackPublications) {
+    const videoPubs = typeof lp.videoTrackPublications.values === 'function'
+      ? lp.videoTrackPublications.values()
+      : Object.values(lp.videoTrackPublications);
+
+    for (const pub of videoPubs) {
+      if (pub.source === Track.Source.Camera && pub.track) {
+        pub.track.attach(videoElement);
+        console.log('Camera attached via videoTrackPublications');
+        return;
+      }
+    }
+  }
+
+  console.warn('Could not find camera track to attach');
+},
+
+// HELPER: safely find and attach local screen share track
+attachLocalScreenTrack() {
+  const videoElement = this.$refs.localVideo;
+  if (!videoElement) return;
+
+  const lp = this.livekitRoom.localParticipant;
+
+  const screenPub = lp.getTrackPublication
+    ? lp.getTrackPublication(Track.Source.ScreenShare)
+    : lp.getTrack?.(Track.Source.ScreenShare);
+
+  if (screenPub && screenPub.track) {
+    screenPub.track.attach(videoElement);
+
+    const mediaTrack = screenPub.track.mediaStreamTrack;
+    if (mediaTrack) {
+      mediaTrack.addEventListener('ended', () => {
+        this.stopScreenShare();
+      }, { once: true });
+    }
+    console.log('Screen share attached');
+    return;
+  }
+
+  // Fallback: iterate
+  const pubs = lp.trackPublications;
+  if (pubs) {
+    const entries = typeof pubs.values === 'function' ? pubs.values() :
+                    Array.isArray(pubs) ? pubs : Object.values(pubs);
+    for (const pub of entries) {
+      if (pub.source === Track.Source.ScreenShare && pub.track) {
+        pub.track.attach(videoElement);
+        const mediaTrack = pub.track.mediaStreamTrack;
+        if (mediaTrack) {
+          mediaTrack.addEventListener('ended', () => {
+            this.stopScreenShare();
+          }, { once: true });
+        }
+        return;
+      }
+    }
+  }
+
+  console.warn('Could not find screen share track to attach');
+},
+
 async sharescreen() {
   if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
     alert('Not connected to meeting room');
@@ -1405,20 +1503,9 @@ async sharescreen() {
       await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
       this.isScreenSharing = true;
 
-      for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) {
-        if (pub.source === Track.Source.ScreenShare && pub.track) {
-          const videoElement = this.$refs.localVideo;
-          if (videoElement) pub.track.attach(videoElement);
-
-          const mediaTrack = pub.track.mediaStreamTrack;
-          if (mediaTrack) {
-            mediaTrack.addEventListener('ended', () => {
-              this.stopScreenShare();
-            }, { once: true });
-          }
-          break;
-        }
-      }
+      // FIXED: Use helper method
+      await this.$nextTick();
+      this.attachLocalScreenTrack();
     } else {
       await this.stopScreenShare();
     }
@@ -1440,12 +1527,8 @@ async stopScreenShare() {
 
     const videoElement = this.$refs.localVideo;
     if (this.videoon && videoElement) {
-      for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) {
-        if (pub.source === Track.Source.Camera && pub.track) {
-          pub.track.attach(videoElement);
-          break;
-        }
-      }
+      // FIXED: Use helper
+      this.attachLocalCameraTrack();
     } else if (videoElement) {
       videoElement.srcObject = null;
     }
@@ -1466,15 +1549,8 @@ async flipCamera() {
 
     await this.$nextTick();
 
-    const videoElement = this.$refs.localVideo;
-    if (videoElement) {
-      for (const pub of this.livekitRoom.localParticipant.trackPublications.values()) {
-        if (pub.source === Track.Source.Camera && pub.track) {
-          pub.track.attach(videoElement);
-          break;
-        }
-      }
-    }
+    // FIXED: Use helper
+    this.attachLocalCameraTrack();
   } catch (err) {
     console.error('Camera flip failed:', err);
     this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
