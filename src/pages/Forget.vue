@@ -8,11 +8,12 @@
                 <input v-model="password" @keypress="erase" class="text" type="password" placeholder="Password">
                 <input v-model="confirm" @keypress="erase" class="text" type="password" placeholder="Confirm Password">
                 <p id="error" v-if="message">{{ message }}</p>
-                <button id="clicked" @mouseenter="enterevent" @mouseleave=leaveevent>Submit</button>
+                <button id="clicked" @mouseenter="enterevent" @mouseleave="leaveevent">Submit</button>
             </form>
         </div>
     </div>
 </template>
+
 <script>
     export default{
         data(){
@@ -25,25 +26,17 @@
         },
         methods:{
             async passed(){
-                /*if(this.email)
-                {
-                    if this email does not exist then there is no point to just forget password thing thus
-                    it should throw an exception.
-                }*/
                 if(this.email === '' || this.password === '' || this.confirm === '')
                 {
-                    console.log("Empty credentials");
                     this.message = "Please fill all the details";
                     return;
                 }
                 else if(this.password !== this.confirm)
                 {
-                    console.log("Passwords are not matched");
                     this.message = "Password and Confirm Password are not matched";
                     return;
                 }
                 else{
-                    console.log("Passed");
                     try
                     {
                         const response = await this.$axios.post(`${import.meta.env.VITE_API_URL}/api/auth/forget`,{
@@ -63,6 +56,8 @@
                     {
                         if(err.response && err.response.data && err.response.data.message)
                         {
+                            // ✅ BUG 2 FIX: backend now always returns the same message,
+                            // so this will never reveal whether an email is registered or not
                             this.message = err.response.data.message;
                         }
                         else{
@@ -74,73 +69,97 @@
             erase(){
                 this.message = '';
             },
-	    enterevent()
-	    {
-		var change = document.getElementById("clicked");
-		change.style.background = "white";
-		change.style.color = "black";
-		change.style.border = "1px solid black";
-	    },
-	    leaveevent()
-	    {
-		var change = document.getElementById("clicked");
-		change.style.background = "black";
-		change.style.color = "white";
-		change.style.border = "1px solid black";
-	    },
+            enterevent(){
+                var change = document.getElementById("clicked");
+                change.style.background = "white";
+                change.style.color = "black";
+                change.style.border = "1px solid black";
+            },
+            leaveevent(){
+                var change = document.getElementById("clicked");
+                change.style.background = "black";
+                change.style.color = "white";
+                change.style.border = "1px solid black";
+            },
         }
     };
 </script>
-<style>
-#container{
+
+<style scoped>
+/* ✅ BUG 1 FIX: replaced fixed px/% values with flexbox so it works on all screen sizes */
+#container {
     background-color: #1e3a8a;
-    height: 100vh;
+    min-height: 100vh;
     font-family: helvetica;
-}
-#box {
-  background-color: white;
-  position: absolute;
-  top: 130px;
-  left: 50%;
-  transform: translateX(-50%);
-  height: 60%;
-  width: 40%;
-  border-radius: 10px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
-}
-hr{
-    color:black;
-}
-#headers{
-    font-size: 2rem;
-  text-align:center;
-  letter-spacing: 1px;
-  padding-top:30px;
-  color:black;
-}
-.text{
-    display:block;
-    margin-top:30px;
-    margin-left:160px;
-    height:40px;
-    width:300px;
-    padding:10px 0 10px 10px;
-}
-#clicked{
-  width: 60%;
-  padding: 12px;
-  background-color: black;
-  margin:30px 0 0 130px;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: bold;
-}
-#error {
-  font-weight: bold;
-  color: red;
-  margin-top: 5px;
-  text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
+#box {
+    background-color: white;
+    width: 100%;
+    max-width: 480px;
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+    padding: 30px 40px 40px;
+    box-sizing: border-box;
+}
+
+hr {
+    color: black;
+}
+
+#headers {
+    font-size: 2rem;
+    text-align: center;
+    letter-spacing: 1px;
+    padding-top: 10px;
+    color: black;
+}
+
+.text {
+    display: block;
+    width: 100%;
+    margin-top: 25px;
+    height: 40px;
+    padding: 10px 10px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+#clicked {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background-color: black;
+    margin-top: 25px;
+    color: white;
+    border: 1px solid black;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+#error {
+    font-weight: bold;
+    color: red;
+    margin-top: 10px;
+    text-align: center;
+}
+
+/* mobile tweaks */
+@media (max-width: 480px) {
+    #box {
+        padding: 24px 20px 32px;
+    }
+    #headers {
+        font-size: 1.5rem;
+    }
+}
 </style>
