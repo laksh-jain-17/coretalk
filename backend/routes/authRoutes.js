@@ -99,7 +99,7 @@ router.post('/join', authMiddleware, async (req, res) => {
   res.json({ success: true });
 });*/
 
-router.post('/forget', async (req, res) => {
+/*router.post('/forget', async (req, res) => {				Its previous function changed to prevent email harvesting and absence of OTP issue
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
@@ -116,8 +116,28 @@ router.post('/forget', async (req, res) => {
     console.error(err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
-});
+});*/
 
+router.post('/forget', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+ 
+    // ✅ BUG 2 FIX: don't reveal whether the email is registered or not.
+    // If user doesn't exist, just silently do nothing and return success.
+    if (user) {
+      user.password = await bcrypt.hash(password, 10);
+      await user.save();
+    }
+ 
+    // Always return the same response either way
+    res.json({ success: true, message: 'If that email is registered, the password has been updated.' });
+ 
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 router.post('/end-meeting', authMiddleware, hostOnly, async (req, res) => {
   try {
