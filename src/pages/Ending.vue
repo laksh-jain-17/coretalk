@@ -26,7 +26,17 @@ import axios from 'axios';
 
 export default {
   name: 'Ending',
+  mounted() {
+    window.jistory.pushState(null,'',window.location.href);
+    window.addEventListener('popstate',this.preventBack);
+  },
+  beforeUnmount() {
+    window.removeEventListener('popstate',this.preventBack);
+  },
   methods: {
+    preventBack() {
+      window.history.pushState(null,'',window.location.href);
+    },
     returned() {
       this.$router.push('/Schedule');
     },
@@ -211,5 +221,4 @@ button {
     font-size: 1.2rem;
   }
 }
-
 </style>
