@@ -26,7 +26,7 @@ const router = createRouter({
         { path : '/Ending' , component : Ending,meta: { requiresAuth: true} },
         { path : '/Forget' , component : Forget },
        // { path : '*' , component : PageNotFound },
-        { path : '/Admin' , component : Admin },
+		{ path: '/Admin', component: Admin, meta: { requiresAuth: true, requiresAdmin: true } },
 	{ path : '/Settings' , component : Settings },
 		{ path: '/oauth/callback', component: () => import('./pages/OAuthCallback.vue') },
 		{ path: '/HowToUse', component: () => import('./pages/HowToUse.vue') }
