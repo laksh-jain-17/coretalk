@@ -152,6 +152,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chat-message', ({ roomId, sender, text, timestamp }) => {
+    if (!text || typeof text !== 'string' || text.length > 2000) return;
     if (joinedRoom && text) {
       io.to(roomId).emit('chat-message', {
         sender: sender || 'Unknown',
