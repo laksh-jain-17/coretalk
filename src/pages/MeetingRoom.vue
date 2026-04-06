@@ -1768,14 +1768,15 @@ export default {
       const redirectUri = import.meta.env.VITE_GMAIL_REDIRECT_URI;
       const scope = 'https://www.googleapis.com/auth/gmail.send';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
-      window.open(authUrl, 'gmail-oauth', 'width=500,height=600');
+      window.open(authUrl, 'gmail-oauth', 'width=500,height=500');
       console.log('Auth URL:', authUrl);
+      const EXPECTED_ORIGIN = 'https://coretalk.vercel.app'; // or import.meta.env.VITE_APP_URL
       window.addEventListener('message', (event) => {
-        if (event.data?.type === 'gmail-oauth-success') {
-          this.gmailAccessToken = event.data.token;
-          this.showEmailPanel = true;
-        }
-      }, { once: true });
+        if (event.origin !== EXPECTED_ORIGIN) return;
+          if (event.data?.type === 'gmail-oauth-success') {
+            this.gmailAccessToken = event.data.token;
+          }
+        }, { once: true });
     },
 
     handleEmailAttachments(event) {
