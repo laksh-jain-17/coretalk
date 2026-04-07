@@ -18,6 +18,13 @@ const blockedDomains = [
   'noemail.com', 'noreply.com', 'nomail.com',
 ];
 
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
+  maxAge: 3600000 // 1 hour
+};
+
 exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -58,8 +65,12 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email });
 
+    if (!email || !password) {
+      return res.status(400).json({ msg: 'Email and password are required' });
+    }
+
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ msg: 'Invalid credentials' });
     }
@@ -72,23 +83,24 @@ exports.login = async (req, res) => {
     const isAdmin = user.isAdmin || false;
 
     const token = jwt.sign(
-      { id: user._id, isAdmin: isAdmin },
+      { id: user._id, isAdmin },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
+    res.cookie('token', token, cookieOptions);
+
     return res.status(200).json({
-      token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        isAdmin: isAdmin
+        isAdmin
       }
     });
 
   } catch (err) {
-    console.error("Login error:", err);
+    console.error('Login error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 };
