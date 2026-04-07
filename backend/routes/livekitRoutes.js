@@ -1,6 +1,7 @@
 const express = require('express');
 const { AccessToken } = require('livekit-server-sdk');
 const router = express.Router();
+const authMiddleware = require('../middleware/authMiddleware');
 
 router.post('/token', async (req, res) => {  // ← ADDED async here
   console.log('\n========== LIVEKIT TOKEN REQUEST ==========');
@@ -126,7 +127,7 @@ router.post('/token', async (req, res) => {  // ← ADDED async here
 // ========================================
 // TEST ENDPOINT
 // ========================================
-router.get('/test', async (req, res) => {  // ← ADDED async here too
+router.get('/test', authMiddleware, async (req, res) => {
   console.log('\n========== LIVEKIT TEST REQUEST ==========');
   
   if (!process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_API_SECRET) {
