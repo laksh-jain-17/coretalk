@@ -51,7 +51,7 @@ router.post('/register', async (req, res) => {
     return res.status(201).json({ message: 'User created' });
   } catch (err) {
     console.error('Registration error', err);
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: 'Server error. Please try again.' });
   }
 });
 
@@ -194,9 +194,17 @@ router.post('/forget-reset', otpLimiter, async (req, res) => {
     const user = await User.findById(payload.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
+    if (user.passwordChangedAt) {
+      const tokenIssuedAt = new Date(payload.iat * 1000);
+      if (user.passwordChangedAt > tokenIssuedAt) {
+        return res.status(400).json({ success: false, message: 'Reset token already used.' });
+      }
+    }
+
     user.password = await bcrypt.hash(newPassword, 10);
     user.resetOtp = null;
     user.resetOtpExpiry = null;
+    user.passwordChangedAt = new Date();
     await user.save();
 
     return res.json({ success: true, message: 'Password updated successfully.' });
