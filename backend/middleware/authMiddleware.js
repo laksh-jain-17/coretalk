@@ -1,11 +1,16 @@
 const jwt = require('jsonwebtoken');
 
 function authMiddleware(req, res, next) {
+  // First try cookie (new secure method)
+  const tokenFromCookie = req.cookies?.token;
+
+  // Fallback to Authorization header (for backward compatibility)
   const authHeader = req.header('Authorization') || req.header('authorization');
-  const token = authHeader && authHeader.startsWith('Bearer ')
+  const tokenFromHeader = authHeader && authHeader.startsWith('Bearer ')
     ? authHeader.slice(7).trim()
     : null;
-  //const token = req.cookies.token;
+
+  const token = tokenFromCookie || tokenFromHeader;
 
   if (!token) {
     return res.status(401).json({ msg: 'Authorization failed' });
