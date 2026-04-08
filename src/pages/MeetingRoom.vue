@@ -911,7 +911,8 @@ export default {
           this.userName = emailParts[0] || `User-${this.userId.substring(0, 8)}`;
         }
 
-        this.isHost = false;
+        const storedIsHost = localStorage.getItem('isHost');
+        this.isHost = storedIsHost === 'true' || decoded.isHost === true;
 
         console.log('User initialized:', {
           userId: this.userId,
@@ -1325,6 +1326,7 @@ export default {
         const selfEntry = list.find(p => p.userId === this.userId);
         if (selfEntry) {
           this.isHost = selfEntry.isHost || false;
+          localStorage.setItem('isHost', String(this.isHost));
         }
 
         list
@@ -1805,14 +1807,6 @@ export default {
       }
       this.emailSending = true;
       try {
-        const emailLines = [
-          `To: ${this.emailTo}`,
-          `Subject: ${this.emailSubject}`,
-          `Content-Type: text/palin; charset=utf-8`,
-          '',
-          this.emailBody
-        ];
-        const raw = btoa(emailLines.join('\n')).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/send-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
