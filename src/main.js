@@ -11,7 +11,7 @@ import PageNotFound from './pages/PageNotFound.vue'
 import Admin from './pages/Admin.vue'
 import Settings from './pages/Settings.vue'
 import axios from 'axios'
-import { isLoggedIn } from './auth'
+import { isLoggedIn, verifyAuth } from './auth'
 
 axios.defaults.baseURL = import.meta.env.VITE_API_URL;
 axios.defaults.withCredentials = true; // ✅ sends cookie automatically with every request
@@ -34,18 +34,22 @@ const router = createRouter({
   ],
 });
 
-router.beforeEach((to, from, next) => {
-  const loggedIn = isLoggedIn();
-  const isAdmin = localStorage.getItem('isAdmin') === 'true';
-
-  if (to.meta.requiresAuth && !loggedIn) {
-    next('/Login');
-  } else if (to.meta.requiresAdmin && !isAdmin) {
-    // ✅ Admin route guard fixed
-    next('/Login');
-  } else {
-    next();
+router.beforeEach(async (to, from, next) => {
+  if (!to.meta.requiresAuth && !to.meta.requiresAdmin) {
+    return next(); 
   }
+  let loggedIn = isLoggedIn();
+  if (!loggedIn) {
+    loggedIn = await verifyAuth();
+  }
+  const isAdmin = localStorage.getItem('isAdmin') === 'true';
+  if (to.meta.requiresAuth && !loggedIn) {
+    return next('/Login');
+  }
+  if (to.meta.requiresAdmin && !isAdmin) {
+    return next('/Login');
+  }
+  next();
 });
 
 const app = createApp(App);
