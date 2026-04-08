@@ -1760,17 +1760,6 @@ export default {
     },
 
     emailEnact() {
-      this.showEmailPermissionDialog = true;
-    },
-
-    emailPermissionResponse(choice) {
-      this.showEmailPermissionDialog = false;
-      if (choice === 'deny') return;
-
-      if (choice === 'always') {
-        this.emailPermissionGranted = true;
-      }
-
       this.initiateGmailOAuth();
     },
 
