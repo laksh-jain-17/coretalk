@@ -12,33 +12,10 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { OAuth2Client } = require('google-auth-library');
 const sendOtpEmail = require('../utils/sendOtpEmail');
-const rateLimit = require('express-rate-limit');
-
-// ── Cookie options (same as authController) ───────────────────────────────────
-const cookieOptions = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
-  maxAge: 3600000
-};
-
-// ── Blocked disposable/fake email domains ────────────────────────────────────
-const blockedDomains = [
-  'example.com', 'example.org', 'example.net',
-  'mailinator.com', 'guerrillamail.com', 'tempmail.com',
-  'throwaway.email', 'fakeinbox.com', 'sharklasers.com',
-  'guerrillamailblock.com', 'grr.la', 'guerrillamail.info',
-  'spam4.me', 'trashmail.com', 'trashmail.me',
-  'yopmail.com', 'dispostable.com', 'maildrop.cc',
-  'mailnull.com', 'spamgourmet.com', 'spamgourmet.net',
-  'discard.email', 'spamhereplease.com', 'spamspot.com',
-  'tempr.email', 'throwam.com', 'tmp-mailbox.com',
-  'wegwerfmail.de', 'wegwerfmail.net', 'wegwerfmail.org',
-  'test.com', 'test.org', 'fake.com', 'fake.org',
-  'noemail.com', 'noreply.com', 'nomail.com',
-];
 
 // ── Rate limiter for OTP endpoints ───────────────────────────────────────────
+const rateLimit = require('express-rate-limit');
+
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -58,22 +35,10 @@ router.post('/register', async (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ message: 'All fields are required' });
   }
-  if (name.length > 50)      return res.status(400).json({ message: 'Name too long (max 50 chars)' });
-  if (email.length > 100)    return res.status(400).json({ message: 'Email too long (max 100 chars)' });
+  if (name.length > 50)     return res.status(400).json({ message: 'Name too long (max 50 chars)' });
+  if (email.length > 100)   return res.status(400).json({ message: 'Email too long (max 100 chars)' });
   if (password.length > 128) return res.status(400).json({ message: 'Password too long (max 128 chars)' });
-  if (password.length < 6)   return res.status(400).json({ message: 'Password too short (min 6 chars)' });
-
-  // ✅ Email format check
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ message: 'Invalid email format' });
-  }
-
-  // ✅ Block disposable/fake domains
-  const domain = email.split('@')[1].toLowerCase();
-  if (blockedDomains.includes(domain)) {
-    return res.status(400).json({ message: 'Disposable or fake email addresses are not allowed.' });
-  }
+  if (password.length < 6)  return res.status(400).json({ message: 'Password too short (min 6 chars)' });
 
   try {
     const existingUser = await User.findOne({ email });
@@ -86,39 +51,12 @@ router.post('/register', async (req, res) => {
     return res.status(201).json({ message: 'User created' });
   } catch (err) {
     console.error('Registration error', err);
-    return res.status(500).json({ message: 'Server error. Please try again.' });
+    return res.status(500).json({ message: err.message });
   }
 });
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 router.post('/login', login);
-
-// ── Logout ────────────────────────────────────────────────────────────────────
-router.post('/logout', (req, res) => {
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
-  });
-  res.json({ msg: 'Logged out successfully' });
-});
-
-// ── Me (get current user from cookie) ────────────────────────────────────────
-router.get('/me', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('-password');
-    if (!user) return res.status(404).json({ msg: 'User not found' });
-    res.json({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin || false
-    });
-  } catch (err) {
-    console.error('Error in /me:', err);
-    res.status(500).json({ msg: 'Server error' });
-  }
-});
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 router.get('/profile', authMiddleware, (req, res) => {
@@ -172,6 +110,8 @@ router.post('/join', authMiddleware, async (req, res) => {
 });
 
 // ── Forgot Password — Step 1: Send OTP ───────────────────────────────────────
+// ✅ FIX BUG 2: always returns same response — never reveals if email exists
+// ✅ FIX BUG 3: no password accepted here — only sends OTP
 router.post('/forget-request', otpLimiter, async (req, res) => {
   try {
     const { email } = req.body;
@@ -181,11 +121,12 @@ router.post('/forget-request', otpLimiter, async (req, res) => {
     if (user) {
       const otp = generateOtp();
       user.resetOtp = hashOtp(otp);
-      user.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+      user.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min
       await user.save();
       await sendOtpEmail(email, otp);
     }
 
+    // Always same response — attacker learns nothing
     return res.json({
       success: true,
       message: 'If that email is registered, an OTP has been sent to it.'
@@ -214,6 +155,7 @@ router.post('/forget-verify', otpLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
     }
 
+    // Issue a short-lived reset session token (5 min)
     const resetSessionToken = jwt.sign(
       { id: user._id, purpose: 'password-reset' },
       process.env.JWT_SECRET,
@@ -252,18 +194,9 @@ router.post('/forget-reset', otpLimiter, async (req, res) => {
     const user = await User.findById(payload.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
 
-    // ✅ Reject if token already used
-    if (user.passwordChangedAt) {
-      const tokenIssuedAt = new Date(payload.iat * 1000);
-      if (user.passwordChangedAt > tokenIssuedAt) {
-        return res.status(400).json({ success: false, message: 'Reset token already used. Please start over.' });
-      }
-    }
-
     user.password = await bcrypt.hash(newPassword, 10);
     user.resetOtp = null;
     user.resetOtpExpiry = null;
-    user.passwordChangedAt = new Date(); // ✅ mark token as used
     await user.save();
 
     return res.json({ success: true, message: 'Password updated successfully.' });
@@ -301,10 +234,7 @@ router.post('/google-login', async (req, res) => {
     if (!credential) return res.status(400).json({ msg: 'No credential provided' });
 
     const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-    const ticket = await client.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID
-    });
+    const ticket = await client.verifyIdToken({ idToken: credential, audience: process.env.GOOGLE_CLIENT_ID });
     const payload = ticket.getPayload();
     const { email, name, sub: googleId } = payload;
 
@@ -324,16 +254,9 @@ router.post('/google-login', async (req, res) => {
       { expiresIn: '2h' }
     );
 
-    // ✅ Set cookie instead of returning token in body
-    res.cookie('token', token, { ...cookieOptions, maxAge: 7200000 });
-
     return res.status(200).json({
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        isAdmin: user.isAdmin || false
-      }
+      token,
+      user: { id: user._id, name: user.name, email: user.email, isAdmin: user.isAdmin || false }
     });
   } catch (error) {
     console.error('Google login error');
@@ -353,7 +276,7 @@ router.post('/report', authMiddleware, async (req, res) => {
     await report.save();
     res.status(201).json({ msg: 'Report submitted successfully' });
   } catch (err) {
-    console.error('Error submitting report');
+    console.error("Error submitting report");
     res.status(500).json({ msg: 'Server error while submitting report' });
   }
 });
@@ -362,15 +285,11 @@ router.post('/report', authMiddleware, async (req, res) => {
 router.delete('/delete-account', authMiddleware, async (req, res) => {
   try {
     await User.findByIdAndDelete(req.user.id);
-    res.clearCookie('token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax'
-    });
     res.json({ msg: 'Account deleted successfully' });
   } catch (err) {
-    console.error('Error deleting account');
+    console.error("Error deleting account");
     res.status(500).json({ msg: 'Server error while deleting account' });
   }
 });
+
 module.exports = router;
