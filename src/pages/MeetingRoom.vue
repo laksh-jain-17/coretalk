@@ -1760,6 +1760,17 @@ export default {
     },
 
     emailEnact() {
+      this.showEmailPermissionDialog = true;
+    },
+
+    emailPermissionResponse(choice) {
+      this.showEmailPermissionDialog = false;
+      if (choice === 'deny') return;
+
+      if (choice === 'always') {
+        this.emailPermissionGranted = true;
+      }
+
       this.initiateGmailOAuth();
     },
 
@@ -1767,18 +1778,29 @@ export default {
       const clientId = import.meta.env.VITE_GMAIL_CLIENT_ID;
       const redirectUri = import.meta.env.VITE_GMAIL_REDIRECT_URI;
       const scope = 'https://www.googleapis.com/auth/gmail.send';
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}`;
-      window.open(authUrl, 'gmail-oauth', 'width=500,height=500');
-      console.log('Auth URL:', authUrl);
-      const EXPECTED_ORIGIN = 'https://coretalk.vercel.app'; // or import.meta.env.VITE_APP_URL
-      window.addEventListener('message', (event) => {
-        if (event.origin !== EXPECTED_ORIGIN) return;
-          if (event.data?.type === 'gmail-oauth-success') {
-            this.gmailAccessToken = event.data.token;
-          }
-        }, { once: true });
-    },
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
+        `?client_id=${clientId}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=token` +
+        `&scope=${encodeURIComponent(scope)}`;
 
+      const popup = window.open(authUrl, 'gmail-oauth', 'width=500,height=600');
+
+  // Use current origin instead of hardcoded value
+      const expectedOrigin = window.location.origin;
+
+      const handler = (event) => {
+        if (event.origin !== expectedOrigin) return;
+        if (event.data?.type === 'gmail-oauth-success') {
+          this.gmailAccessToken = event.data.token;
+          this.showEmailPanel = true;  // ← THIS was missing
+          if (popup && !popup.closed) popup.close();
+        }
+      };
+
+      window.addEventListener('message', handler, { once: true });
+    },
+    
     handleEmailAttachments(event) {
       const files = Array.from(event.target.files);
       files.forEach(file => {
