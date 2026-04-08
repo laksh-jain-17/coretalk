@@ -65,12 +65,18 @@ export default {
     };
   },
 
-  mounted() {
+  async mounted() {
     this.show = true;
+    if (isLoggedIn()) {
+      const verified = await verifyAuth();
+      if (verified) {
+        this.$router.push('/Schedule');
+        return;
+      }
+    }
     this.interval = setInterval(() => {
       this.welcomeText = !this.welcomeText;
     }, 10000);
-
     this.handleGoogleRedirectReturn();
   },
 
