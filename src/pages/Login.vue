@@ -33,10 +33,12 @@
             {{ loading ? 'Logging in...' : 'Login Now' }}
           </button>
 
+          <!-- Divider -->
           <div class="divider">
             <span>OR</span>
           </div>
 
+          <!-- Google Sign-In Button -->
           <button type="button" id="google-signin-button" @click="signInWithGoogle" :disabled="loading || googleLoading">
             <span v-if="googleLoading" class="spinner dark"></span>
             <img v-else src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20" alt="Google" />
@@ -60,23 +62,18 @@ export default {
       message: '',
       show: false,
       welcomeText: true,
-      loading: false,
-      googleLoading: false,
+      loading: false,       // manual login loading
+      googleLoading: false, // google login loading
     };
   },
 
-  async mounted() {
+  mounted() {
     this.show = true;
-    if (isLoggedIn()) {
-      const verified = await verifyAuth();
-      if (verified) {
-        this.$router.push('/Schedule');
-        return;
-      }
-    }
     this.interval = setInterval(() => {
       this.welcomeText = !this.welcomeText;
     }, 10000);
+
+    // Handle Google redirect return
     this.handleGoogleRedirectReturn();
   },
 
@@ -108,30 +105,37 @@ export default {
       const idToken = params.get('id_token');
       if (!idToken) return;
 
+      // DON'T clear the hash yet — wait until we know if login succeeded or failed
       this.googleLoading = true;
       this.message = '';
 
       try {
         const res = await this.$axios.post(
           `${import.meta.env.VITE_API_URL}/api/auth/google-login`,
-          { credential: idToken },
-          { withCredentials: true } // ✅ receive cookie
+          { credential: idToken }
         );
 
-        // ✅ No token in body anymore — just store non-sensitive user info
-        localStorage.setItem('username', res.data.user.name || res.data.user.email);
+        if (res.data.token) {
+          localStorage.setItem('token', res.data.token);
+          localStorage.setItem('username', res.data.user.name || res.data.user.email);
 
-        if (res.data.user.isAdmin) {
-          localStorage.setItem('isAdmin', 'true');
+          if (res.data.user.isAdmin) {
+            localStorage.setItem('isAdmin', 'true');
+          } else {
+            localStorage.removeItem('isAdmin');
+          }
+
+          // Only clear hash AFTER confirmed success
+          window.history.replaceState(null, '', window.location.pathname);
+          this.$router.push('/Schedule');
         } else {
-          localStorage.removeItem('isAdmin');
+          // Unexpected response shape — treat as failure
+          window.history.replaceState(null, '', window.location.pathname);
+          this.message = 'Google login failed. Please try again.';
         }
-
-        window.history.replaceState(null, '', window.location.pathname);
-        this.$router.push('/Schedule');
-
       } catch (err) {
         console.error('Google login error:', err);
+        // Clear hash so stale token doesn't keep retrying on refresh
         window.history.replaceState(null, '', window.location.pathname);
         this.message = err.response?.data?.msg || 'Google login failed. Please try again.';
       } finally {
@@ -140,19 +144,19 @@ export default {
     },
 
     async loginuser() {
-      if (this.loading || this.googleLoading) return;
+      if (this.loading || this.googleLoading) return; // prevent double submit
 
       if (!this.email || !this.password) {
-        this.message = 'Fill your details which are empty';
+        this.message = "Fill your details which are empty";
         return;
       }
       const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!regex.test(this.email)) {
-        this.message = 'Fill your email address properly';
+        this.message = "Fill your email address properly";
         return;
       }
       if (this.password.length < 6) {
-        this.message = 'Password should be more than 6 characters';
+        this.message = "Password should be more than 6 characters";
         return;
       }
 
@@ -160,26 +164,24 @@ export default {
       this.message = '';
 
       try {
-        const res = await this.$axios.post(
-          `${import.meta.env.VITE_API_URL}/api/auth/login`,
-          { email: this.email, password: this.password },
-          { withCredentials: true } // ✅ receive cookie
-        );
+        const res = await this.$axios.post(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
+          email: this.email,
+          password: this.password
+        });
 
-        // ✅ No token stored in localStorage — cookie handles auth
+        localStorage.setItem('token', res.data.token);
         localStorage.setItem('username', res.data.user.name || this.email);
 
         if (res.data.user.isAdmin) {
-          localStorage.setItem('isAdmin', 'true');
+          localStorage.setItem("isAdmin", "true");
         } else {
-          localStorage.removeItem('isAdmin');
+          localStorage.removeItem("isAdmin");
         }
 
         this.$router.push('/Schedule');
-
       } catch (err) {
         console.error('Login error', err);
-        this.message = err.response?.data?.msg || 'Login failed. Please try again.';
+        this.message = err.response?.data?.msg || "Login failed. Please try again.";
       } finally {
         this.loading = false;
       }
@@ -193,12 +195,14 @@ export default {
 </script>
 
 <style>
+/* Reset & Box Sizing */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* Main Container */
 #container {
   display: flex;
   min-height: 100vh;
@@ -207,6 +211,7 @@ export default {
   overflow-x: hidden;
 }
 
+/* Left Box - Feature Section */
 #leftbox {
   flex: 0 0 60%;
   background-color: #1e3a8a;
@@ -236,6 +241,7 @@ export default {
   opacity: 0.9;
 }
 
+/* Updates Section */
 #new_updates {
   text-align: left;
 }
@@ -263,6 +269,7 @@ export default {
   opacity: 0.7;
 }
 
+/* Right Box - Login Form */
 #rightbox {
   flex: 0 0 40%;
   display: flex;
@@ -273,6 +280,17 @@ export default {
   background-color: #f8f9fa;
 }
 
+#rightbox > h1 {
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  color: #1a1a1a;
+  margin-bottom: 30px;
+  font-weight: 600;
+  position: static;
+  width: 100%;
+  text-align: center;
+}
+
+/* Form Styling */
 #info {
   width: 100%;
   max-width: 420px;
@@ -295,6 +313,11 @@ export default {
   font-weight: 600;
 }
 
+#info p a:hover {
+  text-decoration: underline;
+}
+
+/* Input Fields */
 #info input {
   width: 100%;
   padding: 13px 15px;
@@ -322,6 +345,17 @@ export default {
   cursor: not-allowed;
 }
 
+/* Error Message */
+#info p[style*="color:red"] {
+  font-size: 0.85rem;
+  margin: 10px 0;
+  padding: 8px 12px;
+  background-color: #fee;
+  border-left: 3px solid #f44336;
+  border-radius: 4px;
+}
+
+/* Login Button */
 #info button[type="submit"] {
   width: 100%;
   padding: 13px;
@@ -346,12 +380,17 @@ export default {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+#info button[type="submit"]:active:not(:disabled) {
+  transform: translateY(0);
+}
+
 #info button:disabled {
   opacity: 0.65;
   cursor: not-allowed;
   transform: none !important;
 }
 
+/* Divider */
 .divider {
   display: flex;
   align-items: center;
@@ -372,6 +411,7 @@ export default {
   font-weight: 500;
 }
 
+/* Google Sign-In Button */
 #google-signin-button {
   width: 100%;
   padding: 13px 15px;
@@ -381,6 +421,7 @@ export default {
   border-radius: 8px;
   font-size: 0.95rem;
   font-weight: 500;
+  font-family: helvetica, sans-serif;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -397,11 +438,12 @@ export default {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-#last {
-  margin-top: 20px !important;
-  font-size: 0.88rem !important;
+#google-signin-button:active:not(:disabled) {
+  background-color: #f1f3f4;
+  transform: translateY(1px);
 }
 
+/* Spinner */
 .spinner {
   width: 16px;
   height: 16px;
@@ -422,6 +464,13 @@ export default {
   to { transform: rotate(360deg); }
 }
 
+/* Forget Password Link */
+#last {
+  margin-top: 20px !important;
+  font-size: 0.88rem !important;
+}
+
+/* Fade Transition */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
@@ -432,21 +481,105 @@ export default {
   opacity: 0;
 }
 
+/* ============================================ */
+/* RESPONSIVE BREAKPOINTS */
+/* ============================================ */
+
+@media (max-width: 1280px) {
+  #leftbox {
+    flex: 0 0 55%;
+    padding: 50px 35px;
+  }
+  #rightbox {
+    flex: 0 0 45%;
+  }
+}
+
 @media (max-width: 1024px) {
-  #container { flex-direction: column; }
-  #leftbox { flex: 0 0 auto; width: 100%; min-height: 350px; padding: 50px 30px; }
-  #rightbox { flex: 0 0 auto; width: 100%; padding: 50px 30px; }
+  #container {
+    flex-direction: column;
+  }
+  #leftbox {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 350px;
+    padding: 50px 30px;
+  }
+  #rightbox {
+    flex: 0 0 auto;
+    width: 100%;
+    padding: 50px 30px;
+  }
+  #info {
+    max-width: 500px;
+  }
 }
 
 @media (max-width: 768px) {
-  #leftbox { min-height: 300px; padding: 40px 25px; }
-  #rightbox { padding: 40px 20px; }
-  #info { padding: 30px 25px; max-width: 100%; }
+  #leftbox {
+    min-height: 300px;
+    padding: 40px 25px;
+  }
+  #rightbox {
+    padding: 40px 20px;
+  }
+  #rightbox > h1 {
+    margin-bottom: 25px;
+  }
+  #info {
+    padding: 30px 25px;
+    max-width: 100%;
+  }
+  #new_updates ol {
+    margin-left: 20px;
+  }
 }
 
 @media (max-width: 480px) {
-  #leftbox { padding: 30px 20px; min-height: 280px; }
-  #rightbox { padding: 30px 15px; }
-  #info { padding: 25px 20px; border-radius: 10px; }
+  #leftbox {
+    padding: 30px 20px;
+    min-height: 280px;
+  }
+  #leftbox h1 {
+    font-size: 1.5rem;
+  }
+  #rightbox {
+    padding: 30px 15px;
+  }
+  #rightbox > h1 {
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+  }
+  #info {
+    padding: 25px 20px;
+    border-radius: 10px;
+  }
+  #info input {
+    padding: 12px 14px;
+    font-size: 0.9rem;
+  }
+  #info button[type="submit"] {
+    padding: 12px;
+    font-size: 0.95rem;
+  }
+  #new_updates li {
+    font-size: 0.88rem;
+  }
+  .divider {
+    margin: 20px 0 15px 0;
+  }
+}
+
+@media (max-width: 320px) {
+  #leftbox {
+    padding: 25px 15px;
+  }
+  #info {
+    padding: 20px 15px;
+  }
+  #info input,
+  #info button[type="submit"] {
+    font-size: 0.85rem;
+  }
 }
 </style>
