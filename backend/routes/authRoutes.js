@@ -112,27 +112,40 @@ router.post('/join', authMiddleware, async (req, res) => {
 // ── Forgot Password — Step 1: Send OTP ───────────────────────────────────────
 // ✅ FIX BUG 2: always returns same response — never reveals if email exists
 // ✅ FIX BUG 3: no password accepted here — only sends OTP
-router.post('/forget-request', otpLimiter, async (req, res) => {
+router.post('/forget-reset', otpLimiter, async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, message: 'Email is required.' });
+    const { resetSessionToken, newPassword } = req.body;
+    if (!resetSessionToken || !newPassword)
+      return res.status(400).json({ success: false, message: 'All fields are required.' });
+    if (newPassword.length < 8)
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
 
-    const user = await User.findOne({ email });
-    if (user) {
-      const otp = generateOtp();
-      user.resetOtp = hashOtp(otp);
-      user.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-      await user.save();
-      await sendOtpEmail(email, otp);
+    let payload;
+    try {
+      payload = jwt.verify(resetSessionToken, process.env.JWT_SECRET);
+    } catch {
+      return res.status(400).json({ success: false, message: 'Reset session expired. Please start over.' });
     }
 
-    // Always same response — attacker learns nothing
-    return res.json({
-      success: true,
-      message: 'If that email is registered, an OTP has been sent to it.'
-    });
+    if (payload.purpose !== 'password-reset')
+      return res.status(400).json({ success: false, message: 'Invalid token.' });
+
+    const user = await User.findById(payload.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.resetOtp = null;
+    user.resetOtpExpiry = null;
+    await user.save();
+
+    // ✅ Point 2 — fire and forget, never blocks the reset response
+    sendPasswordChangeEmail(user.email, user.name).catch(err =>
+      console.error('Password change email failed (non-fatal):', err)
+    );
+
+    return res.json({ success: true, message: 'Password updated successfully.' });
   } catch (err) {
-    console.error('forget-request error:', err);
+    console.error('forget-reset error:', err);
     return res.status(500).json({ success: false, message: 'Server error. Please try again.' });
   }
 });
@@ -278,6 +291,46 @@ router.post('/report', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("Error submitting report");
     res.status(500).json({ msg: 'Server error while submitting report' });
+  }
+});
+
+// ── Admin Login — Step 1: Trigger OTP (called from login controller) ──────────
+// This route is internal — the login controller handles sending OTP.
+// This route verifies it and issues the final token.
+router.post('/admin-login-verify', otpLimiter, async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp)
+      return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
+
+    const user = await User.findOne({
+      email,
+      adminLoginOtp: hashOtp(otp),
+      adminLoginOtpExpiry: { $gt: new Date() },
+    });
+
+    if (!user)
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+
+    // Clear after single use
+    user.adminLoginOtp = null;
+    user.adminLoginOtpExpiry = null;
+    await user.save();
+
+    const token = jwt.sign(
+      { id: user._id, isAdmin: true },
+      process.env.JWT_SECRET,
+      { expiresIn: '2h' }
+    );
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: { id: user._id, name: user.name, email: user.email, isAdmin: true },
+    });
+  } catch (err) {
+    console.error('admin-login-verify error:', err);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
 });
 
