@@ -12,10 +12,8 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { OAuth2Client } = require('google-auth-library');
 const sendOtpEmail = require('../utils/sendOtpEmail');
-const sendPasswordChangeEmail  = require('../utils/sendPasswordChangeEmail');
-const sendAdminLoginOtpEmail   = require('../utils/sendAdminLoginOtpEmail');
-
-// ── Rate limiter for OTP endpoints ───────────────────────────────────────────
+const sendPasswordChangeEmail = require('../utils/sendPasswordChangeEmail');
+const sendAdminLoginOtpEmail = require('../utils/sendAdminLoginOtpEmail');
 const rateLimit = require('express-rate-limit');
 
 const otpLimiter = rateLimit({
@@ -26,27 +24,26 @@ const otpLimiter = rateLimit({
   message: { success: false, message: 'Too many attempts. Please try again in 15 minutes.' }
 });
 
-// ── OTP helpers ───────────────────────────────────────────────────────────────
 const generateOtp = () => String(crypto.randomInt(100000, 999999));
 const hashOtp = (otp) => crypto.createHash('sha256').update(otp).digest('hex');
 
 // ── Register ──────────────────────────────────────────────────────────────────
 router.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
-
-  if (!name || !email || !password) {
+  if (!name || !email || !password)
     return res.status(400).json({ message: 'All fields are required' });
-  }
-  if (name.length > 50)     return res.status(400).json({ message: 'Name too long (max 50 chars)' });
-  if (email.length > 100)   return res.status(400).json({ message: 'Email too long (max 100 chars)' });
-  if (password.length > 128) return res.status(400).json({ message: 'Password too long (max 128 chars)' });
-  if (password.length < 6)  return res.status(400).json({ message: 'Password too short (min 6 chars)' });
-
+  if (name.length > 50)
+    return res.status(400).json({ message: 'Name too long (max 50 chars)' });
+  if (email.length > 100)
+    return res.status(400).json({ message: 'Email too long (max 100 chars)' });
+  if (password.length > 128)
+    return res.status(400).json({ message: 'Password too long (max 128 chars)' });
+  if (password.length < 6)
+    return res.status(400).json({ message: 'Password too short (min 6 chars)' });
   try {
     const existingUser = await User.findOne({ email });
-    if (existingUser) {
+    if (existingUser)
       return res.status(400).json({ message: 'Email already registered' });
-    }
     const hashedPassword = await bcrypt.hash(password, 8);
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
@@ -102,7 +99,8 @@ router.post('/join', authMiddleware, async (req, res) => {
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ msg: 'Room ID is required' });
   const existingRoom = await Room.findOne({ roomId });
-  if (!existingRoom) return res.status(404).json({ msg: 'Invalid or expired room ID' });
+  if (!existingRoom)
+    return res.status(404).json({ msg: 'Invalid or expired room ID' });
   const token = jwt.sign(
     { id: req.user.id, role: 'participant', roomid: existingRoom.roomId },
     process.env.JWT_SECRET,
@@ -112,42 +110,25 @@ router.post('/join', authMiddleware, async (req, res) => {
 });
 
 // ── Forgot Password — Step 1: Send OTP ───────────────────────────────────────
-// ✅ FIX BUG 2: always returns same response — never reveals if email exists
-// ✅ FIX BUG 3: no password accepted here — only sends OTP
-router.post('/forget-reset', otpLimiter, async (req, res) => {
+router.post('/forget-request', otpLimiter, async (req, res) => {
   try {
-    const { resetSessionToken, newPassword } = req.body;
-    if (!resetSessionToken || !newPassword)
-      return res.status(400).json({ success: false, message: 'All fields are required.' });
-    if (newPassword.length < 8)
-      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
-
-    let payload;
-    try {
-      payload = jwt.verify(resetSessionToken, process.env.JWT_SECRET);
-    } catch {
-      return res.status(400).json({ success: false, message: 'Reset session expired. Please start over.' });
+    const { email } = req.body;
+    if (!email)
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    const user = await User.findOne({ email });
+    if (user) {
+      const otp = generateOtp();
+      user.resetOtp = hashOtp(otp);
+      user.resetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+      await user.save();
+      await sendOtpEmail(email, otp);
     }
-
-    if (payload.purpose !== 'password-reset')
-      return res.status(400).json({ success: false, message: 'Invalid token.' });
-
-    const user = await User.findById(payload.id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
-
-    user.password = await bcrypt.hash(newPassword, 10);
-    user.resetOtp = null;
-    user.resetOtpExpiry = null;
-    await user.save();
-
-    // ✅ Point 2 — fire and forget, never blocks the reset response
-    sendPasswordChangeEmail(user.email, user.name).catch(err =>
-      console.error('Password change email failed (non-fatal):', err)
-    );
-
-    return res.json({ success: true, message: 'Password updated successfully.' });
+    return res.json({
+      success: true,
+      message: 'If that email is registered, an OTP has been sent to it.'
+    });
   } catch (err) {
-    console.error('forget-reset error:', err);
+    console.error('forget-request error:', err);
     return res.status(500).json({ success: false, message: 'Server error. Please try again.' });
   }
 });
@@ -156,31 +137,90 @@ router.post('/forget-reset', otpLimiter, async (req, res) => {
 router.post('/forget-verify', otpLimiter, async (req, res) => {
   try {
     const { email, otp } = req.body;
-    if (!email || !otp) {
+    if (!email || !otp)
       return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
-    }
-
     const user = await User.findOne({
       email,
       resetOtp: hashOtp(otp),
       resetOtpExpiry: { $gt: new Date() }
     });
-
-    if (!user) {
+    if (!user)
       return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
-    }
-
-    // Issue a short-lived reset session token (5 min)
     const resetSessionToken = jwt.sign(
       { id: user._id, purpose: 'password-reset' },
       process.env.JWT_SECRET,
       { expiresIn: '5m' }
     );
-
     return res.json({ success: true, resetSessionToken });
   } catch (err) {
     console.error('forget-verify error:', err);
     return res.status(500).json({ success: false, message: 'Server error. Please try again.' });
+  }
+});
+
+// ── Forgot Password — Step 3: Reset Password ─────────────────────────────────
+router.post('/forget-reset', otpLimiter, async (req, res) => {
+  try {
+    const { resetSessionToken, newPassword } = req.body;
+    if (!resetSessionToken || !newPassword)
+      return res.status(400).json({ success: false, message: 'All fields are required.' });
+    if (newPassword.length < 8)
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+    let payload;
+    try {
+      payload = jwt.verify(resetSessionToken, process.env.JWT_SECRET);
+    } catch {
+      return res.status(400).json({ success: false, message: 'Reset session expired. Please start over.' });
+    }
+    if (payload.purpose !== 'password-reset')
+      return res.status(400).json({ success: false, message: 'Invalid token.' });
+    const user = await User.findById(payload.id);
+    if (!user)
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.resetOtp = null;
+    user.resetOtpExpiry = null;
+    await user.save();
+    // ✅ Point 2 — confirmation email, fire and forget
+    sendPasswordChangeEmail(user.email, user.name).catch(err =>
+      console.error('Password change email failed (non-fatal):', err)
+    );
+    return res.json({ success: true, message: 'Password updated successfully.' });
+  } catch (err) {
+    console.error('forget-reset error:', err);
+    return res.status(500).json({ success: false, message: 'Server error. Please try again.' });
+  }
+});
+
+// ── Admin Login OTP Verify ────────────────────────────────────────────────────
+router.post('/admin-login-verify', otpLimiter, async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp)
+      return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
+    const user = await User.findOne({
+      email,
+      adminLoginOtp: hashOtp(otp),
+      adminLoginOtpExpiry: { $gt: new Date() },
+    });
+    if (!user)
+      return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+    user.adminLoginOtp = null;
+    user.adminLoginOtpExpiry = null;
+    await user.save();
+    const token = jwt.sign(
+      { id: user._id, isAdmin: true },
+      process.env.JWT_SECRET,
+      { expiresIn: '2h' }
+    );
+    return res.status(200).json({
+      success: true,
+      token,
+      user: { id: user._id, name: user.name, email: user.email, isAdmin: true },
+    });
+  } catch (err) {
+    console.error('admin-login-verify error:', err);
+    return res.status(500).json({ success: false, message: 'Server error.' });
   }
 });
 
@@ -210,12 +250,13 @@ router.post('/google-login', async (req, res) => {
   try {
     const { credential } = req.body;
     if (!credential) return res.status(400).json({ msg: 'No credential provided' });
-
     const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-    const ticket = await client.verifyIdToken({ idToken: credential, audience: process.env.GOOGLE_CLIENT_ID });
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
     const payload = ticket.getPayload();
     const { email, name, sub: googleId } = payload;
-
     let user = await User.findOne({ email });
     if (!user) {
       const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
@@ -225,13 +266,11 @@ router.post('/google-login', async (req, res) => {
       user.googleId = googleId;
       await user.save();
     }
-
     const token = jwt.sign(
       { id: user._id, isAdmin: user.isAdmin || false },
       process.env.JWT_SECRET,
       { expiresIn: '2h' }
     );
-
     return res.status(200).json({
       token,
       user: { id: user._id, name: user.name, email: user.email, isAdmin: user.isAdmin || false }
@@ -246,56 +285,18 @@ router.post('/google-login', async (req, res) => {
 router.post('/report', authMiddleware, async (req, res) => {
   try {
     const { username, reason } = req.body;
-    if (!username || !reason) return res.status(400).json({ msg: 'Username and reason are required' });
-    if (username.length > 50) return res.status(400).json({ msg: 'Username too long' });
-    if (reason.length > 500) return res.status(400).json({ msg: 'Reason too long (max 500 chars)' });
-
+    if (!username || !reason)
+      return res.status(400).json({ msg: 'Username and reason are required' });
+    if (username.length > 50)
+      return res.status(400).json({ msg: 'Username too long' });
+    if (reason.length > 500)
+      return res.status(400).json({ msg: 'Reason too long (max 500 chars)' });
     const report = new Report({ reporterId: req.user.id, culpritUsername: username, reason });
     await report.save();
     res.status(201).json({ msg: 'Report submitted successfully' });
   } catch (err) {
-    console.error("Error submitting report");
+    console.error('Error submitting report');
     res.status(500).json({ msg: 'Server error while submitting report' });
-  }
-});
-
-// ── Admin Login — Step 1: Trigger OTP (called from login controller) ──────────
-// This route is internal — the login controller handles sending OTP.
-// This route verifies it and issues the final token.
-router.post('/admin-login-verify', otpLimiter, async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    if (!email || !otp)
-      return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
-
-    const user = await User.findOne({
-      email,
-      adminLoginOtp: hashOtp(otp),
-      adminLoginOtpExpiry: { $gt: new Date() },
-    });
-
-    if (!user)
-      return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
-
-    // Clear after single use
-    user.adminLoginOtp = null;
-    user.adminLoginOtpExpiry = null;
-    await user.save();
-
-    const token = jwt.sign(
-      { id: user._id, isAdmin: true },
-      process.env.JWT_SECRET,
-      { expiresIn: '2h' }
-    );
-
-    return res.status(200).json({
-      success: true,
-      token,
-      user: { id: user._id, name: user.name, email: user.email, isAdmin: true },
-    });
-  } catch (err) {
-    console.error('admin-login-verify error:', err);
-    return res.status(500).json({ success: false, message: 'Server error.' });
   }
 });
 
@@ -305,7 +306,7 @@ router.delete('/delete-account', authMiddleware, async (req, res) => {
     await User.findByIdAndDelete(req.user.id);
     res.json({ msg: 'Account deleted successfully' });
   } catch (err) {
-    console.error("Error deleting account");
+    console.error('Error deleting account');
     res.status(500).json({ msg: 'Server error while deleting account' });
   }
 });
