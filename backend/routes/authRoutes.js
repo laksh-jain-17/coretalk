@@ -184,43 +184,6 @@ router.post('/forget-verify', otpLimiter, async (req, res) => {
   }
 });
 
-// ── Forgot Password — Step 3: Reset Password ─────────────────────────────────
-router.post('/forget-reset', otpLimiter, async (req, res) => {
-  try {
-    const { resetSessionToken, newPassword } = req.body;
-    if (!resetSessionToken || !newPassword) {
-      return res.status(400).json({ success: false, message: 'All fields are required.' });
-    }
-    if (newPassword.length < 8) {
-      return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
-    }
-
-    let payload;
-    try {
-      payload = jwt.verify(resetSessionToken, process.env.JWT_SECRET);
-    } catch {
-      return res.status(400).json({ success: false, message: 'Reset session expired. Please start over.' });
-    }
-
-    if (payload.purpose !== 'password-reset') {
-      return res.status(400).json({ success: false, message: 'Invalid token.' });
-    }
-
-    const user = await User.findById(payload.id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
-
-    user.password = await bcrypt.hash(newPassword, 10);
-    user.resetOtp = null;
-    user.resetOtpExpiry = null;
-    await user.save();
-
-    return res.json({ success: true, message: 'Password updated successfully.' });
-  } catch (err) {
-    console.error('forget-reset error:', err);
-    return res.status(500).json({ success: false, message: 'Server error. Please try again.' });
-  }
-});
-
 // ── Host actions ──────────────────────────────────────────────────────────────
 router.post('/end-meeting', authMiddleware, hostOnly, async (req, res) => {
   try {
