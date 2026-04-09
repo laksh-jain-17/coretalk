@@ -10,6 +10,8 @@ const userSchema = new mongoose.Schema({
     // ✅ OTP-based password reset
     resetOtp:       { type: String, default: null }, // stores hashed OTP — never raw
     resetOtpExpiry: { type: Date,   default: null },
+    adminLoginOtp:        { type: String, default: null }, // hashed
+    adminLoginOtpExpiry:  { type: Date,   default: null },
 }, {
     timestamps: true
 });
