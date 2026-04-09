@@ -23,6 +23,7 @@ const createTransporter = async () => {
   });
 };
 
+
 const sendPasswordChangeEmail = async (toEmail, name) => {
   const transporter = await createTransporter();
   const changedAt = new Date().toLocaleString('en-IN', {
