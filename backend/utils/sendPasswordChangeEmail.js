@@ -1,11 +1,14 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD,
   },
+  tls: { rejectUnauthorized: false },
 });
 
 const sendPasswordChangeEmail = async (toEmail, name) => {
@@ -26,12 +29,8 @@ const sendPasswordChangeEmail = async (toEmail, name) => {
         <p>Your CoreTalk account password was changed on <strong>${changedAt}</strong>.</p>
         <p>If you made this change, no further action is needed.</p>
         <div style="
-          background: #fff3f3;
-          border-left: 4px solid #d32f2f;
-          padding: 14px 16px;
-          border-radius: 6px;
-          margin: 20px 0;
-          color: #b71c1c;
+          background: #fff3f3; border-left: 4px solid #d32f2f;
+          padding: 14px 16px; border-radius: 6px; margin: 20px 0; color: #b71c1c;
         ">
           <strong>⚠️ If you did NOT make this change</strong>, your account may be
           compromised. Reset your password immediately.
