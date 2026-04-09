@@ -9,6 +9,9 @@ const transporter = nodemailer.createTransport({
 });
 
 const sendAdminLoginOtpEmail = async (toEmail, name, otp) => {
+   console.log('GMAIL_USER set:', !!process.env.GMAIL_USER);
+  console.log('GMAIL_APP_PASSWORD set:', !!process.env.GMAIL_APP_PASSWORD);
+  console.log('Sending admin OTP to:', toEmail);
   await transporter.sendMail({
     from: `"CoreTalk" <${process.env.GMAIL_USER}>`,
     to: toEmail,
