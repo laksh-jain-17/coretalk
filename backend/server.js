@@ -74,6 +74,15 @@ app.get('/', (req, res) => {
   res.send('Backend is running');
 });
 
+app.get("/api/test-email", async (req, res) => {
+  try {
+    await transporter.verify();
+    res.json({ status: "SMTP OK" });
+  } catch (err) {
+    res.status(500).json({ error: err.message, code: err.code });
+  }
+});
+
 app.use('/api/livekit', livekitRoutes);
 
 // ── MongoDB ──────────────────────────────────────────────────────────────────
