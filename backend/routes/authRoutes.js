@@ -12,6 +12,8 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { OAuth2Client } = require('google-auth-library');
 const sendOtpEmail = require('../utils/sendOtpEmail');
+const sendPasswordChangeEmail  = require('../utils/sendPasswordChangeEmail');
+const sendAdminLoginOtpEmail   = require('../utils/sendAdminLoginOtpEmail');
 
 // ── Rate limiter for OTP endpoints ───────────────────────────────────────────
 const rateLimit = require('express-rate-limit');
