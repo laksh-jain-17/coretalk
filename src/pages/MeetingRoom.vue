@@ -208,7 +208,38 @@
                   <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
                 </div>
               </div>
-              <div class="chat-input-section">
+              <div class="chat-input-section" style="flex-direction:column; gap:0;">
+                <!-- Attachment previews -->
+                <div v-if="chatAttachments.length > 0" style="
+                display:flex; flex-wrap:wrap; gap:6px;
+                padding:8px 12px; border-top:1px solid #e0e0e0; background:#fafafa;
+                ">
+                  <div
+                    v-for="(att, i) in chatAttachments"
+                    :key="i"
+                    style="display:flex; align-items:center; gap:6px; background:#eef2ff;
+                    border-radius:20px; padding:4px 10px; font-size:12px; color:#3730a3;"
+                  >
+                    <img v-if="att.previewUrl" :src="att.previewUrl"
+                     style="width:24px; height:24px; border-radius:4px; object-fit:cover;" />
+                    <span v-else style="font-size:14px;">📎</span>
+                    <span style="max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                      {{ att.name }}
+                    </span>
+                    <span style="opacity:0.6;">{{ formatFileSize(att.size) }}</span>
+                      <button @click="removeChatAttachment(i)"
+                    style="background:none; border:none; cursor:pointer; color:#3730a3;
+                     font-size:14px; padding:0; line-height:1;">✕</button>
+                  </div>
+                </div>
+                <!-- Input row -->
+                <div style="display:flex; padding:12px; gap:8px; align-items:center;">
+                  <label style="cursor:pointer; color:#888; font-size:20px; line-height:1; flex-shrink:0;"
+                   title="Attach file">
+                  📎
+                  <input type="file" multiple style="display:none;"
+                   @change="handleChatAttachments" accept="*/*" />
+                  </label>
                 <input
                   type="text"
                   class="chat-input"
@@ -217,13 +248,15 @@
                   @keyup.enter="sendMessage"
                   maxlength="500"
                 />
-                <button class="chat-send" @click="sendMessage" :disabled="!newMessage.trim()">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
+                <button class="chat-send" @click="sendMessage"
+                  :disabled="!newMessage.trim() && chatAttachments.length === 0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"
+                 viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+          </div>
+        </div>
           </li>
           <li class="dropdown">
             <button @click.stop="toggleDropdown('extras')" @mouseenter="() => setHover('extras')" @mouseleave="() => setHover(null)">
@@ -432,6 +465,7 @@ export default {
       raisedHands: [],
       facingMode: 'user',
       emailAttachments: [],
+      chatAttachments: [],   
     };
   },
 
@@ -1596,12 +1630,18 @@ export default {
 
     sendMessage() {
       const text = (this.newMessage || '').trim();
-      if (!text) return;
+      if (!text && this.chatAttachments.length === 0) return;
 
       const message = {
         sender: this.userName,
-        text: text,
-        timestamp: Date.now()
+        text,
+        timestamp: Date.now(),
+        attachments: this.chatAttachments.map(a => ({
+          name: a.name,
+          mimeType: a.mimeType,
+          previewUrl: a.previewUrl,  // images only, others null
+          size: a.size
+        }))
       };
 
       this.safeBroadcast('chat-message', {
@@ -1610,7 +1650,7 @@ export default {
       });
 
       this.newMessage = '';
-
+      this.chatAttachments = [];
       this.$nextTick(() => {
         const chatBody = this.$refs.chatBody;
         if (chatBody) {
@@ -1844,6 +1884,34 @@ export default {
       } finally {
         this.emailSending = false;
       }
+    },
+
+    handleChatAttachments(event) {
+      const files = Array.from(event.target.files);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          this.chatAttachments.push({
+            name: file.name,
+            base64: e.target.result.split(',')[1],
+            mimeType: file.type || 'application/octet-stream',
+            previewUrl: file.type.startsWith('image/') ? e.target.result : null,
+            size: file.size
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+      event.target.value = '';
+    },
+
+    removeChatAttachment(index) {
+      this.chatAttachments.splice(index, 1);
+    },
+
+    formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / 1048576).toFixed(1) + ' MB';
     },
 
     async cleanup() {
