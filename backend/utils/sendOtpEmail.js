@@ -10,18 +10,33 @@ oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
 
 //now debug//
 const createTransporter = async () => {
-  const { token } = await oauth2Client.getAccessToken();
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      type: 'OAuth2',
-      user: process.env.GMAIL_USER,
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-      accessToken: token,
-    },
+  console.log('OAuth2 config check:', {
+    clientId: process.env.GOOGLE_CLIENT_ID ? '✅ set' : '❌ MISSING',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET ? '✅ set' : '❌ MISSING',
+    refreshToken: process.env.GMAIL_REFRESH_TOKEN ? '✅ set' : '❌ MISSING',
+    user: process.env.GMAIL_USER ? '✅ set' : '❌ MISSING',
   });
+
+  try {
+    const { token } = await oauth2Client.getAccessToken();
+    console.log('Access token:', token ? '✅ obtained' : '❌ NULL');
+    if (!token) throw new Error('Access token is null');
+
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: process.env.GMAIL_USER,
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        refreshToken: process.env.GMAIL_REFRESH_TOKEN,
+        accessToken: token,
+      },
+    });
+  } catch (err) {
+    console.error('createTransporter failed:', err.message);
+    throw err;
+  }
 };
 
 const sendOtpEmail = async (toEmail, otp) => {
