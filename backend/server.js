@@ -1,5 +1,4 @@
 const express = require('express');
-app.set('trust proxy', 1);
 const mongoose = require('mongoose');
 const cors = require('cors');
 const livekitRoutes = require('./routes/livekitRoutes');
@@ -29,6 +28,8 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
+
+app.set('trust proxy', 1);
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // ✅ FIX #3: removed wildcard *.vercel.app — only your specific origins allowed
