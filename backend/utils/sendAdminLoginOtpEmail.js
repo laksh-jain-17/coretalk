@@ -8,7 +8,6 @@ const oauth2Client = new google.auth.OAuth2(
 );
 oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
 
-//now debug//
 const createTransporter = async () => {
   console.log('OAuth2 config check:', {
     clientId: process.env.GOOGLE_CLIENT_ID ? '✅ set' : '❌ MISSING',
