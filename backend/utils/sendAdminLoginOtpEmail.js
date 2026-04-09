@@ -1,17 +1,17 @@
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD,
   },
+  tls: { rejectUnauthorized: false },
 });
 
 const sendAdminLoginOtpEmail = async (toEmail, name, otp) => {
-   console.log('GMAIL_USER set:', !!process.env.GMAIL_USER);
-  console.log('GMAIL_APP_PASSWORD set:', !!process.env.GMAIL_APP_PASSWORD);
-  console.log('Sending admin OTP to:', toEmail);
   await transporter.sendMail({
     from: `"CoreTalk" <${process.env.GMAIL_USER}>`,
     to: toEmail,
@@ -23,15 +23,9 @@ const sendAdminLoginOtpEmail = async (toEmail, name, otp) => {
         <p>A login attempt was made on your CoreTalk admin account.
            Use the OTP below to complete sign-in. It expires in <strong>5 minutes</strong>.</p>
         <div style="
-          font-size: 2.5rem;
-          font-weight: bold;
-          letter-spacing: 12px;
-          color: #1e3a8a;
-          background: #f0f4ff;
-          padding: 20px;
-          border-radius: 8px;
-          text-align: center;
-          margin: 24px 0;
+          font-size: 2.5rem; font-weight: bold; letter-spacing: 12px;
+          color: #1e3a8a; background: #f0f4ff; padding: 20px;
+          border-radius: 8px; text-align: center; margin: 24px 0;
         ">${otp}</div>
         <p style="color: #888; font-size: 0.85rem;">
           If you did not attempt to log in, secure your account immediately.
