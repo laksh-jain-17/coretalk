@@ -32,6 +32,11 @@ export default {
       title: '',
       isHost: false,
       isAdmin: localStorage.getItem("isAdmin") === "true",
+	  isWaiting: false,
+	  waitingTimer: null,
+      waitingResult: null,   // null | 'admitted' | 'denied'
+      waitingSocket: null,
+      pendingRoomId: null,
     };
   },
   methods: {
@@ -42,39 +47,29 @@ export default {
       this.$router.push(`/Settings`);
     },
     checkuser() {
-      if (this.roomId === '') {
-        this.message = 'Fill your Room ID';
-        return;
-      }
-      const token = localStorage.getItem('token');
-      if (!token) {
-        this.message = "Please login first";
-        return;
-      }
-      this.$axios.post('https://coretalk-backend-1067959155765.asia-south1.run.app/api/auth/join', {
-        roomId: this.roomId
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      })
-      .then(res => {
-        const roomid = res.data.roomid;
-        localStorage.setItem('token', res.data.token);
-        localStorage.setItem('meetingtitle', this.title);
-        this.$router.push(`/MeetingRoom/${roomid}`);
-      })
-      .catch(err => {
-        if (err.response) {
-          console.error(err.response.data.msg);
-          this.message = "Failed to join";
-        } else {
-          this.message = "Network error";
-          console.error("Network error");
-        }
-      });
-    },
+  		if (this.roomId === '') {
+    		this.message = 'Fill your Room ID';
+    		return;
+  		}
+  		const token = localStorage.getItem('token');
+  		if (!token) {
+    		this.message = 'Please login first';
+    		return;
+  		}
+  		this.$axios.post('https://coretalk-backend-1067959155765.asia-south1.run.app/api/auth/join',
+    		{ roomId: this.roomId },
+    		{ headers: { Authorization: `Bearer ${token}` } }
+  		)
+  		.then(res => {
+    		localStorage.setItem('token', res.data.token);
+    		localStorage.setItem('meetingtitle', this.title);
+    		this.pendingRoomId = res.data.roomid;
+    		this.startWaiting(res.data.roomid);
+  		})
+  		.catch(err => {
+    		this.message = err.response ? 'Failed to join' : 'Network error';
+  		});
+	},
     createroom() {
       localStorage.setItem('isHost', 'true');
       this.showdown = true;
@@ -108,10 +103,78 @@ export default {
         }
       });
     },
+	startWaiting(roomId) {
+  		this.isWaiting = true;
+  		this.waitingResult = null;
+  		this.message = '';
+
+  		// Connect a temporary socket just for admission signalling
+  		const { io } = await import('socket.io-client');   // or use your existing import
+  		this.waitingSocket = io('https://coretalk-backend-1067959155765.asia-south1.run.app', {
+    		transports: ['websocket'],
+    		forceNew: true
+  		});
+
+  		const token = localStorage.getItem('token');
+  		const { jwtDecode } = await import('jwt-decode');
+  		const decoded = jwtDecode(token);
+  		const userName = decoded.name || decoded.username || decoded.email || 'Participant';
+  		const userId = decoded.id || decoded.userId || `user_${Date.now()}`;
+
+  		this.waitingSocket.on('connect', () => {
+    		this.waitingSocket.emit('participant-waiting', {
+      			roomId,
+      			userId,
+      			userName
+    		});
+  		});
+
+  		this.waitingSocket.on('admission-result', ({ admitted }) => {
+    		clearTimeout(this.waitingTimer);
+    		this.waitingSocket.disconnect();
+    		this.waitingSocket = null;
+
+    		if (admitted) {
+      			this.waitingResult = 'admitted';
+      			setTimeout(() => {
+        			this.isWaiting = false;
+        			this.$router.push(`/MeetingRoom/${roomId}`);
+      			}, 800);
+    		} else {
+      			this.waitingResult = 'denied';
+      			this.isWaiting = false;
+      			this.message = 'The host did not admit you to this meeting.';
+    		}
+  		});
+
+  // 8-second timeout — auto-reject
+  		this.waitingTimer = setTimeout(() => {
+    		if (this.waitingSocket) {
+      			this.waitingSocket.disconnect();
+      			this.waitingSocket = null;
+    		}
+    		this.isWaiting = false;
+    		this.waitingResult = 'denied';
+    		this.message = 'Request timed out. The host did not respond in time.';
+  		}, 8000);
+	},
+
+	cancelWaiting() {
+  		clearTimeout(this.waitingTimer);
+  		if (this.waitingSocket) {
+    		this.waitingSocket.disconnect();
+    		this.waitingSocket = null;
+  		}
+  		this.isWaiting = false;
+  		this.waitingResult = null;
+  		this.message = '';
+	},
+	  
     showdash() {
       this.$router.push('/Admin');
     },
   },
+	
   async mounted() {
     const token = localStorage.getItem('token');
     if (!token) {
