@@ -15,6 +15,46 @@
           <button type="submit">Enter</button>
           <button type="button" @click="createroom">Create your room</button>
         </form>
+		  <!-- Waiting overlay -->
+		<transition name="fade">
+  			<div v-if="isWaiting" style="
+    			position: absolute; inset: 0;
+    			display: flex; flex-direction: column;
+    			align-items: center; justify-content: center;
+    			background: rgba(245,245,245,0.97);
+    			border-radius: 8px;
+    			gap: 20px;
+    			z-index: 10;
+  			">
+    		<!-- Spinner -->
+    		<div style="
+      			width: 48px; height: 48px;
+      			border: 4px solid #e0e0e0;
+     		    border-top-color: #1e3a8a;
+      			border-radius: 50%;
+      			animation: spin 0.9s linear infinite;
+    		"></div>
+
+    		<p style="font-size: 15px; font-weight: 600; color: #1e3a8a; margin: 0;">
+      			Waiting for host to admit you…
+    		</p>
+
+    		<!-- 8-second countdown bar -->
+    		<div style="width: 200px; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden;">
+      			<div style="
+        			height: 100%; background: #1e3a8a; border-radius: 3px;
+        			animation: countdown 8s linear forwards;
+        			transform-origin: left;
+      			"></div>
+    		</div>
+
+    		<button @click="cancelWaiting" style="
+      			padding: 8px 20px; background: transparent;
+     			order: 1px solid #ccc; border-radius: 6px;
+      			color: #666; font-size: 13px; cursor: pointer;
+    		">Cancel</button>
+  			</div>
+		</transition>
       </div>
     </div>
   </transition>
