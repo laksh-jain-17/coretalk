@@ -388,6 +388,37 @@
         <p style="color:white;font-size:16px;margin:0">Reconnecting to meeting...</p>
       </div>
     </transition>
+    <div
+      v-for="(wp, index) in waitingParticipants"
+      :key="wp.socketId"
+      :style="{
+        position: 'fixed',
+        top: (20 + index * 84) + 'px',
+        right: '20px',
+        width: '290px',
+        background: '#ffffff',
+        border: '1px solid #e0e0e0',
+        borderRadius: '12px',
+        padding: '14px 16px',
+        zIndex: 160,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+        animation: 'slideIn 0.3s ease'
+      }"
+    >
+      <p style="margin:0 0 10px; font-size:13px; font-weight:600; color:#000;">
+        ✋ <strong>{{ wp.userName }}</strong> wants to join
+      </p>
+      <div style="display:flex; gap:8px;">
+        <button @click="admitParticipant(wp.socketId)" style="
+          flex:1; padding:8px; background:#4CAF50; color:white;
+          border:none; border-radius:8px; cursor:pointer;
+          font-size:13px; font-weight:600;">Admit</button>
+        <button @click="denyParticipant(wp.socketId)" style="
+          flex:1; padding:8px; background:#d32f2f; color:white;
+          border:none; border-radius:8px; cursor:pointer;
+          font-size:13px; font-weight:600;">Deny</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -466,7 +497,8 @@ export default {
       raisedHands: [],
       facingMode: 'user',
       emailAttachments: [],
-      chatAttachments: [],   
+      chatAttachments: [],  
+      waitingParticipants: [],
     };
   },
 
@@ -1398,6 +1430,19 @@ export default {
           });
         });
       });
+
+      this.socket.on('participant-waiting', ({ socketId, userId, userName }) => {
+        if (!this.isHost) return;
+        if (!this.waitingParticipants.find(p => p.socketId === socketId)) {
+          this.waitingParticipants.push({ socketId, userId, userName });
+        }
+      });
+
+      this.socket.on('waiting-participant-left', ({ socketId }) => {
+        this.waitingParticipants = this.waitingParticipants.filter(
+          p => p.socketId !== socketId
+        );
+      });
     },
 
     startBroadcastRetry() {
@@ -1915,6 +1960,26 @@ export default {
       return (bytes / 1048576).toFixed(1) + ' MB';
     },
 
+    admitParticipant(socketId) {
+      this.safeBroadcast('admit-participant', {
+        roomId: this.roomId,
+        socketId
+      });
+      this.waitingParticipants = this.waitingParticipants.filter(
+        p => p.socketId !== socketId
+      );
+    },
+
+    denyParticipant(socketId) {
+      this.safeBroadcast('deny-participant', {
+        roomId: this.roomId,
+        socketId
+      });
+      this.waitingParticipants = this.waitingParticipants.filter(
+        p => p.socketId !== socketId
+      );
+    },
+
     async cleanup() {
       console.log('Cleaning up resources...');
 
@@ -1988,6 +2053,8 @@ export default {
       this.emailSubject = '';
       this.emailBody = '';
       this.emailAttachments = [];
+      this.waitingParticipants = [];
+      this.chatAttachments = [];
     }
   },
 
