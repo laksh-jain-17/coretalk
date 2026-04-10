@@ -254,11 +254,10 @@
                  viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                 </svg>
-            </button>
-            </div>
-        </div>         
-      </div>           
-    </div>  
+                </button>
+              </div>
+            </div>         
+          </div>
           </li>
           <li class="dropdown">
             <button @click.stop="toggleDropdown('extras')" @mouseenter="() => setHover('extras')" @mouseleave="() => setHover(null)">
