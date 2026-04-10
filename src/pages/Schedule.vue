@@ -103,7 +103,7 @@ export default {
         }
       });
     },
-	startWaiting(roomId) {
+	async startWaiting(roomId) {
   		this.isWaiting = true;
   		this.waitingResult = null;
   		this.message = '';
