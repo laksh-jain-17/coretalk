@@ -323,6 +323,13 @@ export default {
 .fade-enter-to, .fade-leave-from {
   opacity: 1;
 }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes countdown {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
 @media (max-width: 768px) {
   #container {
     flex-direction: column;
