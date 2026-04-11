@@ -110,7 +110,7 @@ export default {
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('meetingtitle', this.title);
         this.pendingRoomId = res.data.roomid;
-        this.startWaiting(res.data.roomid);
+        this.startWaiting(res.data.roomid,res.data.name);
       })
       .catch(err => {
         this.message = err.response ? 'Failed to join' : 'Network error';
@@ -154,17 +154,22 @@ export default {
       this.waitingResult = null;
       this.message = '';
 
-      const token = localStorage.getItem('token');
-      let userName = 'Participant';
-      let userId = `user_${Date.now()}`;
+      // Fallback just in case
+      if (!userName) {
+        try {
+          const decoded = jwtDecode(localStorage.getItem('token'));
+          userName = decoded.name || 'Participant';
+        } catch (e) {
+          userName = 'Participant';
+        }
+      }
 
+      let userId = null;
       try {
-        const decoded = jwtDecode(token);
-        userName = decoded.name || decoded.username || decoded.email || 'Participant';
-        if (userName.includes('@')) userName = userName.split('@')[0];
-        userId = decoded.id || decoded.userId || userId;
+        const decoded = jwtDecode(localStorage.getItem('token'));
+        userId = decoded.id || decoded.userId || `user_${Date.now()}`;
       } catch (e) {
-        console.warn('Could not decode token for waiting room');
+        userId = `user_${Date.now()}`;
       }
       console.log('Participant name being sent:', userName);
       
