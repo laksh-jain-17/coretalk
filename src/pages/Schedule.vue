@@ -166,7 +166,8 @@ export default {
       } catch (e) {
         console.warn('Could not decode token for waiting room');
       }
-
+      console.log('Participant name being sent:', userName);
+      
       if (this.waitingSocket) {
         this.waitingSocket.disconnect();
         this.waitingSocket = null;
