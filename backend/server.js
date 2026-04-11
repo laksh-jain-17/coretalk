@@ -9,19 +9,16 @@ const helmet = require('helmet');
 const authMiddleware = require('./middleware/authMiddleware');
 const Room = require('./models/Room');
 
-// ── Rate limiting ────────────────────────────────────────────────────────────
-// npm install express-rate-limit
 const rateLimit = require('express-rate-limit');
 
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,                   // max 20 login attempts per IP per 15 min
+  windowMs: 15 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { msg: 'Too many login attempts. Please try again in 15 minutes.' }
 });
 
-// ── Helmet ───────────────────────────────────────────────────────────────────
 app.use(
   helmet({
     crossOriginOpenerPolicy: { policy: "unsafe-none" },
@@ -31,8 +28,6 @@ app.use(
 
 app.set('trust proxy', 1);
 
-// ── CORS ─────────────────────────────────────────────────────────────────────
-// ✅ FIX #3: removed wildcard *.vercel.app — only your specific origins allowed
 const allowedOrigins = [
   'http://localhost:5173',
   'https://coretalk.vercel.app',
@@ -42,9 +37,7 @@ const allowedOrigins = [
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+    if (allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error(`CORS blocked: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -54,25 +47,17 @@ app.use(cors({
 }));
 
 app.options('*', cors());
-
-// ✅ FIX #5: limit request body size to prevent oversized payload attacks
 app.use(express.json({ limit: '10kb' }));
 
-// ── Routes ───────────────────────────────────────────────────────────────────
 const authRoutes = require('./routes/authRoutes');
-
-// ✅ FIX #4: apply rate limiter specifically to login endpoint
 app.use('/api/auth/login', loginLimiter);
-
 app.use('/api/auth', authRoutes);
 app.use('/api/reviews', require('./routes/reviewRoutes'));
 
 const adminRoutes = require('./routes/adminRoutes');
 app.use('/api/admin', adminRoutes);
 
-app.get('/', (req, res) => {
-  res.send('Backend is running');
-});
+app.get('/', (req, res) => res.send('Backend is running'));
 
 app.get("/api/test-email", async (req, res) => {
   try {
@@ -85,16 +70,13 @@ app.get("/api/test-email", async (req, res) => {
 
 app.use('/api/livekit', livekitRoutes);
 
-// ── MongoDB ──────────────────────────────────────────────────────────────────
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.log('MongoDB connection error:', err.message));
 
-// ── HTTP Server ───────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
-// ── Socket.io ────────────────────────────────────────────────────────────────
 const { Server } = require('socket.io');
 const io = new Server(server, {
   cors: {
@@ -104,12 +86,13 @@ const io = new Server(server, {
   }
 });
 
-// In-memory room state
 const rooms = {};
-
 adminRoutes.setGetRooms(() => rooms);
 
-// ✅ FIX #2: helper to verify host via DB instead of trusting the client's isHost flag
+// ── In-memory waiting room state ─────────────────────────────────────────────
+// waitingRoom[roomId] = [{ socketId, userId, userName }]
+const waitingRoom = {};
+
 async function verifyIsHost(userId, roomId) {
   const room = await Room.findOne({ roomId });
   if (!room) return false;
@@ -121,25 +104,26 @@ io.on('connection', (socket) => {
   let joinedRoom = null;
   let socketUserId = null;
 
-  // ✅ FIX #2: isHost from client is IGNORED — we verify against DB
+  // ── Join room ──────────────────────────────────────────────────────────────
   socket.on('join-room', async ({ roomId, userName, userId }) => {
     if (!roomId || !userId) return;
 
     joinedRoom = roomId;
     socketUserId = userId;
 
-    // Check DB to determine if this user is actually the host
     const isHost = await verifyIsHost(userId, roomId);
 
     if (!rooms[roomId]) rooms[roomId] = [];
 
-    const existingIndex = rooms[roomId].findIndex(p => p.id === socket.id || p.userId === userId);
+    const existingIndex = rooms[roomId].findIndex(
+      p => p.id === socket.id || p.userId === userId
+    );
 
     const userData = {
       id: socket.id,
-      userId: userId,
+      userId,
       name: userName || 'Anonymous',
-      isHost,             // set from DB, not from client
+      isHost,
       joinedAt: new Date()
     };
 
@@ -154,40 +138,104 @@ io.on('connection', (socket) => {
     const existingUsers = rooms[roomId].filter(p => p.id !== socket.id);
     socket.emit('existing-users', existingUsers);
     socket.to(roomId).emit('user-joined', userData);
-  });
 
-  socket.on('signal', ({ to, signal }) => {
-    if (to && signal) {
-      io.to(to).emit('signal', { from: socket.id, signal });
+    // ✅ If host just joined, notify them of anyone already waiting
+    if (isHost && waitingRoom[roomId] && waitingRoom[roomId].length > 0) {
+      console.log(`Host joined — sending ${waitingRoom[roomId].length} waiting participant(s)`);
+      waitingRoom[roomId].forEach(wp => {
+        socket.emit('participant-waiting', {
+          socketId: wp.socketId,
+          userId: wp.userId,
+          userName: wp.userName
+        });
+      });
     }
   });
 
-  socket.on('chat-message', ({ roomId, sender, text, timestamp }) => {
-    if (joinedRoom && text) {
+  // ── Waiting room ───────────────────────────────────────────────────────────
+  socket.on('participant-waiting', ({ roomId, userId, userName }) => {
+    if (!roomId || !userId) return;
+
+    console.log(`participant-waiting: ${userName} (${userId}) for room ${roomId}`);
+
+    // Store on socket for cleanup on disconnect
+    socket.waitingRoomId = roomId;
+    socket.waitingUserId = userId;
+    socket.waitingUserName = userName;
+
+    // Add to in-memory waiting list (avoid duplicates)
+    if (!waitingRoom[roomId]) waitingRoom[roomId] = [];
+    const alreadyWaiting = waitingRoom[roomId].find(w => w.socketId === socket.id);
+    if (!alreadyWaiting) {
+      waitingRoom[roomId].push({
+        socketId: socket.id,
+        userId,
+        userName
+      });
+    }
+
+    // Forward to everyone currently in the room (host)
+    socket.to(roomId).emit('participant-waiting', {
+      socketId: socket.id,
+      userId,
+      userName
+    });
+
+    console.log(`Forwarded participant-waiting to room ${roomId}. Room members:`,
+      rooms[roomId] ? rooms[roomId].map(p => p.name) : 'none yet'
+    );
+  });
+
+  socket.on('admit-participant', ({ socketId, roomId }) => {
+    if (!socketId) return;
+    console.log(`Admitting socket: ${socketId} into room: ${roomId}`);
+
+    // Remove from waiting list
+    if (roomId && waitingRoom[roomId]) {
+      waitingRoom[roomId] = waitingRoom[roomId].filter(w => w.socketId !== socketId);
+    }
+
+    io.to(socketId).emit('admission-result', { admitted: true });
+  });
+
+  socket.on('deny-participant', ({ socketId, roomId }) => {
+    if (!socketId) return;
+    console.log(`Denying socket: ${socketId} from room: ${roomId}`);
+
+    // Remove from waiting list
+    if (roomId && waitingRoom[roomId]) {
+      waitingRoom[roomId] = waitingRoom[roomId].filter(w => w.socketId !== socketId);
+    }
+
+    io.to(socketId).emit('admission-result', { admitted: false });
+  });
+
+  // ── Other existing events ──────────────────────────────────────────────────
+  socket.on('signal', ({ to, signal }) => {
+    if (to && signal) io.to(to).emit('signal', { from: socket.id, signal });
+  });
+
+  socket.on('chat-message', ({ roomId, sender, text, timestamp, attachments }) => {
+    if (joinedRoom && (text || (attachments && attachments.length > 0))) {
       io.to(roomId).emit('chat-message', {
         sender: sender || 'Unknown',
-        text: text,
-        timestamp: timestamp || Date.now()
+        text: text || '',
+        timestamp: timestamp || Date.now(),
+        attachments: attachments || []
       });
     }
   });
 
   socket.on('hand-raised', ({ roomId, userId, userName, isRaised }) => {
-    if (roomId) {
-      io.to(roomId).emit('hand-raised', { roomId, userId, userName, isRaised });
-    }
+    if (roomId) io.to(roomId).emit('hand-raised', { roomId, userId, userName, isRaised });
   });
 
   socket.on('video-status', ({ roomId, userId, userName, isVideoOn }) => {
-    if (roomId) {
-      io.to(roomId).emit('video-status', { userId, userName, isVideoOn });
-    }
+    if (roomId) io.to(roomId).emit('video-status', { userId, userName, isVideoOn });
   });
 
   socket.on('mic-status', ({ roomId, userId, userName, isMicOn }) => {
-    if (roomId) {
-      io.to(roomId).emit('mic-status', { userId, userName, isMicOn });
-    }
+    if (roomId) io.to(roomId).emit('mic-status', { userId, userName, isMicOn });
   });
 
   socket.on('screen-share-status', (data) => {
@@ -199,11 +247,10 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ✅ FIX #2: verify host in DB before performing host socket actions
   socket.on('mute-all', async ({ roomId }) => {
     if (!roomId || !socketUserId) return;
     const isHost = await verifyIsHost(socketUserId, roomId);
-    if (!isHost) return; // silently reject — don't tell attacker why
+    if (!isHost) return;
     io.to(roomId).emit('all-muted');
   });
 
@@ -220,9 +267,34 @@ io.on('connection', (socket) => {
     if (!isHost) return;
     io.to(roomId).emit('meeting-ended');
     if (rooms[roomId]) delete rooms[roomId];
+    if (waitingRoom[roomId]) delete waitingRoom[roomId];
   });
 
+  // ── Disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', (reason) => {
+    console.log(`Socket disconnected: ${socket.id}, reason: ${reason}`);
+
+    // If this was a waiting participant, notify the host
+    if (socket.waitingRoomId) {
+      const wRoomId = socket.waitingRoomId;
+
+      // Remove from waiting list
+      if (waitingRoom[wRoomId]) {
+        waitingRoom[wRoomId] = waitingRoom[wRoomId].filter(
+          w => w.socketId !== socket.id
+        );
+        if (waitingRoom[wRoomId].length === 0) {
+          delete waitingRoom[wRoomId];
+        }
+      }
+
+      // Tell the host to remove the card
+      socket.to(wRoomId).emit('waiting-participant-left', {
+        socketId: socket.id
+      });
+    }
+
+    // Remove from active room
     if (joinedRoom && rooms[joinedRoom]) {
       rooms[joinedRoom] = rooms[joinedRoom].filter(p => p.id !== socket.id);
       if (rooms[joinedRoom].length === 0) {
@@ -235,20 +307,19 @@ io.on('connection', (socket) => {
   });
 });
 
-// ── REST API HOST CONTROLS ────────────────────────────────────────────────────
-// ✅ FIX #1: all three endpoints now require auth + DB host verification
-
+// ── REST endpoints ────────────────────────────────────────────────────────────
 app.post('/api/end-meeting', authMiddleware, async (req, res) => {
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ success: false, message: 'roomId is required' });
 
   const isHost = await verifyIsHost(req.user.id, roomId);
-  if (!isHost) return res.status(403).json({ success: false, message: 'Access denied. You are not the host.' });
+  if (!isHost) return res.status(403).json({ success: false, message: 'Access denied.' });
 
   if (rooms[roomId]) {
     io.to(roomId).emit('meeting-ended');
     delete rooms[roomId];
   }
+  if (waitingRoom[roomId]) delete waitingRoom[roomId];
   res.json({ success: true, message: 'Meeting ended' });
 });
 
@@ -257,7 +328,7 @@ app.post('/api/mute-all', authMiddleware, async (req, res) => {
   if (!roomId) return res.status(400).json({ success: false, message: 'roomId is required' });
 
   const isHost = await verifyIsHost(req.user.id, roomId);
-  if (!isHost) return res.status(403).json({ success: false, message: 'Access denied. You are not the host.' });
+  if (!isHost) return res.status(403).json({ success: false, message: 'Access denied.' });
 
   if (rooms[roomId]) io.to(roomId).emit('all-muted');
   res.json({ success: true, message: 'All participants muted' });
@@ -268,13 +339,12 @@ app.post('/api/lock-meeting', authMiddleware, async (req, res) => {
   if (!roomId) return res.status(400).json({ success: false, message: 'roomId is required' });
 
   const isHost = await verifyIsHost(req.user.id, roomId);
-  if (!isHost) return res.status(403).json({ success: false, message: 'Access denied. You are not the host.' });
+  if (!isHost) return res.status(403).json({ success: false, message: 'Access denied.' });
 
   if (rooms[roomId]) io.to(roomId).emit('meeting-locked', { locked: !!locked });
   res.json({ success: true, message: 'Meeting lock state updated' });
 });
 
-// Debug endpoint — admin only
 app.get('/api/rooms', authMiddleware, (req, res) => {
   if (!req.user || !req.user.isAdmin) {
     return res.status(403).json({ msg: 'Access denied. Admins only.' });
@@ -300,7 +370,10 @@ app.post('/api/send-email', async (req, res) => {
       .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ raw })
     });
     if (!response.ok) {
