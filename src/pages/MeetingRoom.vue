@@ -1432,9 +1432,14 @@ export default {
       });
 
       this.socket.on('participant-waiting', ({ socketId, userId, userName }) => {
-        if (!this.isHost) return;
+        console.log('HOST RECEIVED participant-waiting from:', userName, socketId);
+        if (!this.isHost) {
+          console.log('Ignoring — not host');
+          return;
+        }
         if (!this.waitingParticipants.find(p => p.socketId === socketId)) {
           this.waitingParticipants.push({ socketId, userId, userName });
+          console.log('Added to waitingParticipants:', this.waitingParticipants);
         }
       });
 
