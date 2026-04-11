@@ -100,16 +100,23 @@ router.post('/create', authMiddleware, async (req, res) => {
 
 router.post('/join', authMiddleware, async (req, res) => {
   const { roomId } = req.body;
-  if (!roomId) return res.status(400).json({ msg: 'Room ID is required' });
+  if (!roomId) 
+  {
+    return res.status(400).json({ msg: 'Room ID is required' });
+  }
   const existingRoom = await Room.findOne({ roomId });
   if (!existingRoom)
+  {
     return res.status(404).json({ msg: 'Invalid or expired room ID' });
+  }
+  const user = await User.findById(req.user.id).select('name');
+
   const token = jwt.sign(
-    { id: req.user.id, role: 'participant', roomid: existingRoom.roomId },
+    { id: req.user.id, name: user.name, role: 'participant', roomid: existingRoom.roomId },
     process.env.JWT_SECRET,
     { expiresIn: '2h' }
   );
-  res.json({ roomid: existingRoom.roomId, token });
+  res.json({ roomid: existingRoom.roomId, token, name: user.name }); // ✅ send name in response
 });
 
 // ── Forgot Password — Step 1: Send OTP ───────────────────────────────────────
