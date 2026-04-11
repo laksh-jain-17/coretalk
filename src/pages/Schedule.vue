@@ -7,7 +7,7 @@
       </div>
       <div id="rightbox">
         <p id="admin-link" v-if="isAdmin"><router-link to="/Admin">Check Admin Dashboard</router-link></p>
-	<IconMaterialSymbolsLightSettings style="font-size: 25px; color: grey;" id="settings-link" @click="entering"/>
+        <IconMaterialSymbolsLightSettings style="font-size: 25px; color: grey;" id="settings-link" @click="entering"/>
         <form id="info" @submit.prevent="checkuser">
           <input v-model="roomId" type="text" placeholder="Enter Passcode \ Room ID">
           <input v-show="showdown" v-model="title" @keypress="erase" type="text" placeholder="Enter Title like 'Meeting'">
@@ -15,54 +15,58 @@
           <button type="submit">Enter</button>
           <button type="button" @click="createroom">Create your room</button>
         </form>
-		  <!-- Waiting overlay -->
-		<transition name="fade">
-  			<div v-if="isWaiting" style="
-    			position: absolute; inset: 0;
-    			display: flex; flex-direction: column;
-    			align-items: center; justify-content: center;
-    			background: rgba(245,245,245,0.97);
-    			border-radius: 8px;
-    			gap: 20px;
-    			z-index: 10;
-  			">
-    		<!-- Spinner -->
-    		<div style="
-      			width: 48px; height: 48px;
-      			border: 4px solid #e0e0e0;
-     		    border-top-color: #1e3a8a;
-      			border-radius: 50%;
-      			animation: spin 0.9s linear infinite;
-    		"></div>
+        <!-- Waiting overlay -->
+        <transition name="fade">
+          <div v-if="isWaiting" style="
+            position: absolute; inset: 0;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: rgba(245,245,245,0.97);
+            border-radius: 8px;
+            gap: 20px;
+            z-index: 10;
+          ">
+            <!-- Spinner -->
+            <div style="
+              width: 48px; height: 48px;
+              border: 4px solid #e0e0e0;
+              border-top-color: #1e3a8a;
+              border-radius: 50%;
+              animation: spin 0.9s linear infinite;
+            "></div>
 
-    		<p style="font-size: 15px; font-weight: 600; color: #1e3a8a; margin: 0;">
-      			Waiting for host to admit you…
-    		</p>
+            <p style="font-size: 15px; font-weight: 600; color: #1e3a8a; margin: 0;">
+              Waiting for host to admit you…
+            </p>
 
-    		<!-- 8-second countdown bar -->
-    		<div style="width: 200px; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden;">
-      			<div style="
-        			height: 100%; background: #1e3a8a; border-radius: 3px;
-        			animation: countdown 8s linear forwards;
-        			transform-origin: left;
-      			"></div>
-    		</div>
+            <!-- 8-second countdown bar -->
+            <div style="width: 200px; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden;">
+              <div style="
+                height: 100%; background: #1e3a8a; border-radius: 3px;
+                animation: countdown 8s linear forwards;
+                transform-origin: left;
+              "></div>
+            </div>
 
-    		<button @click="cancelWaiting" style="
-      			padding: 8px 20px; background: transparent;
-     			order: 1px solid #ccc; border-radius: 6px;
-      			color: #666; font-size: 13px; cursor: pointer;
-    		">Cancel</button>
-  			</div>
-		</transition>
+            <button @click="cancelWaiting" style="
+              padding: 8px 20px; background: transparent;
+              border: 1px solid #ccc; border-radius: 6px;
+              color: #666; font-size: 13px; cursor: pointer;
+            ">Cancel</button>
+          </div>
+        </transition>
       </div>
     </div>
   </transition>
 </template>
+
 <script>
 import IconMaterialSymbolsLightSettings from '~icons/material-symbols-light/settings';
 import { io } from 'socket.io-client';
 import { jwtDecode } from 'jwt-decode';
+
+const BASE_URL = import.meta.env.VITE_API_URL;
+
 export default {
   name: 'Schedule',
   data() {
@@ -74,9 +78,9 @@ export default {
       title: '',
       isHost: false,
       isAdmin: localStorage.getItem("isAdmin") === "true",
-	  isWaiting: false,
-	  waitingTimer: null,
-      waitingResult: null,   // null | 'admitted' | 'denied'
+      isWaiting: false,
+      waitingTimer: null,
+      waitingResult: null,
       waitingSocket: null,
       pendingRoomId: null,
     };
@@ -89,29 +93,30 @@ export default {
       this.$router.push(`/Settings`);
     },
     checkuser() {
-  		if (this.roomId === '') {
-    		this.message = 'Fill your Room ID';
-    		return;
-  		}
-  		const token = localStorage.getItem('token');
-  		if (!token) {
-    		this.message = 'Please login first';
-    		return;
-  		}
-  		this.$axios.post('https://coretalk-backend-1067959155765.asia-south1.run.app/api/auth/join',
-    		{ roomId: this.roomId },
-    		{ headers: { Authorization: `Bearer ${token}` } }
-  		)
-  		.then(res => {
-    		localStorage.setItem('token', res.data.token);
-    		localStorage.setItem('meetingtitle', this.title);
-    		this.pendingRoomId = res.data.roomid;
-    		this.startWaiting(res.data.roomid);
-  		})
-  		.catch(err => {
-    		this.message = err.response ? 'Failed to join' : 'Network error';
-  		});
-	},
+      if (this.roomId === '') {
+        this.message = 'Fill your Room ID';
+        return;
+      }
+      const token = localStorage.getItem('token');
+      if (!token) {
+        this.message = 'Please login first';
+        return;
+      }
+      this.$axios.post(`${BASE_URL}/api/auth/join`,
+        { roomId: this.roomId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      .then(res => {
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('meetingtitle', this.title);
+        this.pendingRoomId = res.data.roomid;
+        this.startWaiting(res.data.roomid);
+      })
+      .catch(err => {
+        this.message = err.response ? 'Failed to join' : 'Network error';
+      });
+    },
+
     createroom() {
       localStorage.setItem('isHost', 'true');
       this.showdown = true;
@@ -124,10 +129,8 @@ export default {
         this.message = "Please login first";
         return;
       }
-      this.$axios.post('https://coretalk-backend-1067959155765.asia-south1.run.app/api/auth/create', {}, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+      this.$axios.post(`${BASE_URL}/api/auth/create`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
       })
       .then(res => {
         const roomid = res.data.roomid;
@@ -146,109 +149,108 @@ export default {
       });
     },
 
-	startWaiting(roomId) {
-  		this.isWaiting = true;
-  		this.waitingResult = null;
-  		this.message = '';
+    startWaiting(roomId) {
+      this.isWaiting = true;
+      this.waitingResult = null;
+      this.message = '';
 
-  		const token = localStorage.getItem('token');
-  		let userName = 'Participant';
-  		let userId = `user_${Date.now()}`;
+      const token = localStorage.getItem('token');
+      let userName = 'Participant';
+      let userId = `user_${Date.now()}`;
 
-  		try {
-    		const decoded = jwtDecode(token);
-    		userName = decoded.name || decoded.username || decoded.email || 'Participant';
-    		if (userName.includes('@')) userName = userName.split('@')[0];
-    		userId = decoded.id || decoded.userId || userId;
-  		} catch (e) {
-    		console.warn('Could not decode token for waiting room');
-  		}
+      try {
+        const decoded = jwtDecode(token);
+        userName = decoded.name || decoded.username || decoded.email || 'Participant';
+        if (userName.includes('@')) userName = userName.split('@')[0];
+        userId = decoded.id || decoded.userId || userId;
+      } catch (e) {
+        console.warn('Could not decode token for waiting room');
+      }
 
-  // Disconnect any previous waiting socket
-  		if (this.waitingSocket) {
-    		this.waitingSocket.disconnect();
-   			this.waitingSocket = null;
-  		}
+      if (this.waitingSocket) {
+        this.waitingSocket.disconnect();
+        this.waitingSocket = null;
+      }
 
-  		this.waitingSocket = io('https://coretalk-backend-1067959155765.asia-south1.run.app', {
-    		transports: ['websocket'],
-    		forceNew: true,
-    		timeout: 10000
-  		});
+      // ✅ FIXED: using same backend as host
+      this.waitingSocket = io(BASE_URL, {
+        transports: ['websocket'],
+        forceNew: true,
+        timeout: 10000
+      });
 
-  		this.waitingSocket.on('connect', () => {
-    		console.log('Waiting socket connected:', this.waitingSocket.id);
-    // Emit immediately on connect
-    		this.waitingSocket.emit('participant-waiting', {
-      			roomId,
-      			userId,
-      			userName
-    		});
-    		console.log('Emitted participant-waiting for room:', roomId);
-  		});
+      this.waitingSocket.on('connect', () => {
+        console.log('Waiting socket connected:', this.waitingSocket.id);
+        this.waitingSocket.emit('participant-waiting', {
+          roomId,
+          userId,
+          userName
+        });
+        console.log('Emitted participant-waiting for room:', roomId);
+      });
 
-  		this.waitingSocket.on('connect_error', (err) => {
-    		console.error('Waiting socket error:', err.message);
-    		clearTimeout(this.waitingTimer);
-    		this.isWaiting = false;
-    		this.message = 'Could not connect to server. Please try again.';
-   			this.waitingSocket = null;
-  		});
+      this.waitingSocket.on('connect_error', (err) => {
+        console.error('Waiting socket error:', err.message);
+        clearTimeout(this.waitingTimer);
+        this.isWaiting = false;
+        this.message = 'Could not connect to server. Please try again.';
+        this.waitingSocket = null;
+      });
 
-  		this.waitingSocket.on('admission-result', ({ admitted }) => {
-    		console.log('Admission result:', admitted);
-    		clearTimeout(this.waitingTimer);
-    		this.waitingSocket.disconnect();
-   			this.waitingSocket = null;
+      this.waitingSocket.on('admission-result', ({ admitted }) => {
+        console.log('Admission result:', admitted);
+        clearTimeout(this.waitingTimer);
+        this.waitingSocket.disconnect();
+        this.waitingSocket = null;
 
-    		if (admitted) {
-      			this.waitingResult = 'admitted';
-      			this.message = '';
-      			setTimeout(() => {
-        			this.isWaiting = false;
-        			this.$router.push(`/MeetingRoom/${roomId}`);
-      			}, 600);
-    		} else {
-     			this.waitingResult = 'denied';
-      			this.isWaiting = false;
-      			this.message = 'The host did not admit you to this meeting.';
-    		}
-  		});
+        if (admitted) {
+          this.waitingResult = 'admitted';
+          this.message = '';
+          setTimeout(() => {
+            this.isWaiting = false;
+            this.$router.push(`/MeetingRoom/${roomId}`);
+          }, 600);
+        } else {
+          this.waitingResult = 'denied';
+          this.isWaiting = false;
+          this.message = 'The host did not admit you to this meeting.';
+        }
+      });
 
-  // 8-second auto-reject
-  		this.waitingTimer = setTimeout(() => {
-    		console.log('Waiting timed out');
-    		if (this.waitingSocket) {
-      			this.waitingSocket.disconnect();
-      			this.waitingSocket = null;
-    		}
-    		if (this.isWaiting) {
-      			this.isWaiting = false;
-      			this.waitingResult = 'denied';
-      			this.message = 'No response from host. Request timed out after 8 seconds.';
-    		}
-  		}, 8000);
-	},
+      // 8-second auto-reject
+      this.waitingTimer = setTimeout(() => {
+        console.log('Waiting timed out');
+        if (this.waitingSocket) {
+          this.waitingSocket.disconnect();
+          this.waitingSocket = null;
+        }
+        if (this.isWaiting) {
+          this.isWaiting = false;
+          this.waitingResult = 'denied';
+          this.message = 'No response from host. Request timed out after 8 seconds.';
+        }
+      }, 8000);
+    },
 
-	cancelWaiting() {
-  		clearTimeout(this.waitingTimer);
-  		if (this.waitingSocket) {
-    		this.waitingSocket.emit('waiting-cancelled', {
-      			roomId: this.pendingRoomId
-    		});
-    		this.waitingSocket.disconnect();
-    		this.waitingSocket = null;
-  		}
-  		this.isWaiting = false;
-  		this.waitingResult = null;
-  		this.message = '';
-	},
-	  
+    cancelWaiting() {
+      clearTimeout(this.waitingTimer);
+      if (this.waitingSocket) {
+        this.waitingSocket.emit('waiting-cancelled', {
+          roomId: this.pendingRoomId
+        });
+        this.waitingSocket.disconnect();
+        this.waitingSocket = null;
+      }
+      this.isWaiting = false;
+      this.waitingResult = null;
+      this.message = '';
+    },
+
     showdash() {
       this.$router.push('/Admin');
     },
   },
-	
+
   async mounted() {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -256,10 +258,8 @@ export default {
       return;
     }
     try {
-      const res = await this.$axios.get('https://coretalk-backend-1067959155765.asia-south1.run.app/api/auth/schedule', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const res = await this.$axios.get(`${BASE_URL}/api/auth/schedule`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
       this.user = res.data.user;
     } catch (err) {
@@ -269,6 +269,7 @@ export default {
   }
 };
 </script>
+
 <style>
 #container {
   display: flex;
@@ -331,14 +332,14 @@ export default {
   cursor: pointer;
   transition: background-color 0.3s ease;
 }
-#admin-link{
-  position:absolute;
-  top:30px;
+#admin-link {
+  position: absolute;
+  top: 30px;
 }
-#settings-link{
-  position:absolute;
-  top:30px;
-  right:60px;
+#settings-link {
+  position: absolute;
+  top: 30px;
+  right: 60px;
 }
 #rightbox button:hover {
   background-color: white;
@@ -374,5 +375,3 @@ export default {
   }
 }
 </style>
-
-
