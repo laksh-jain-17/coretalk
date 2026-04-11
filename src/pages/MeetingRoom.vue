@@ -406,7 +406,7 @@
       }"
     >
       <p style="margin:0 0 10px; font-size:13px; font-weight:600; color:#000;">
-        ✋ <strong>{{ wp.userName }}</strong> wants to join
+         <strong>{{ wp.userName }}</strong> wants to join
       </p>
       <div style="display:flex; gap:8px;">
         <button @click="admitParticipant(wp.socketId)" style="
