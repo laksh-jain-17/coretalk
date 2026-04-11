@@ -61,6 +61,8 @@
 </template>
 <script>
 import IconMaterialSymbolsLightSettings from '~icons/material-symbols-light/settings';
+import { io } from 'socket.io-client';
+import { jwtDecode } from 'jwt-decode';
 export default {
   name: 'Schedule',
   data() {
@@ -143,65 +145,97 @@ export default {
         }
       });
     },
-	async startWaiting(roomId) {
+
+	startWaiting(roomId) {
   		this.isWaiting = true;
   		this.waitingResult = null;
   		this.message = '';
 
-  		// Connect a temporary socket just for admission signalling
-  		const { io } = await import('socket.io-client');   // or use your existing import
+  		const token = localStorage.getItem('token');
+  		let userName = 'Participant';
+  		let userId = `user_${Date.now()}`;
+
+  		try {
+    		const decoded = jwtDecode(token);
+    		userName = decoded.name || decoded.username || decoded.email || 'Participant';
+    		if (userName.includes('@')) userName = userName.split('@')[0];
+    		userId = decoded.id || decoded.userId || userId;
+  		} catch (e) {
+    		console.warn('Could not decode token for waiting room');
+  		}
+
+  // Disconnect any previous waiting socket
+  		if (this.waitingSocket) {
+    		this.waitingSocket.disconnect();
+   			this.waitingSocket = null;
+  		}
+
   		this.waitingSocket = io('https://coretalk-backend-1067959155765.asia-south1.run.app', {
     		transports: ['websocket'],
-    		forceNew: true
+    		forceNew: true,
+    		timeout: 10000
   		});
 
-  		const token = localStorage.getItem('token');
-  		const { jwtDecode } = await import('jwt-decode');
-  		const decoded = jwtDecode(token);
-  		const userName = decoded.name || decoded.username || decoded.email || 'Participant';
-  		const userId = decoded.id || decoded.userId || `user_${Date.now()}`;
-
   		this.waitingSocket.on('connect', () => {
+    		console.log('Waiting socket connected:', this.waitingSocket.id);
+    // Emit immediately on connect
     		this.waitingSocket.emit('participant-waiting', {
       			roomId,
       			userId,
       			userName
     		});
+    		console.log('Emitted participant-waiting for room:', roomId);
+  		});
+
+  		this.waitingSocket.on('connect_error', (err) => {
+    		console.error('Waiting socket error:', err.message);
+    		clearTimeout(this.waitingTimer);
+    		this.isWaiting = false;
+    		this.message = 'Could not connect to server. Please try again.';
+   			this.waitingSocket = null;
   		});
 
   		this.waitingSocket.on('admission-result', ({ admitted }) => {
+    		console.log('Admission result:', admitted);
     		clearTimeout(this.waitingTimer);
     		this.waitingSocket.disconnect();
-    		this.waitingSocket = null;
+   			this.waitingSocket = null;
 
     		if (admitted) {
       			this.waitingResult = 'admitted';
+      			this.message = '';
       			setTimeout(() => {
         			this.isWaiting = false;
         			this.$router.push(`/MeetingRoom/${roomId}`);
-      			}, 800);
+      			}, 600);
     		} else {
-      			this.waitingResult = 'denied';
+     			this.waitingResult = 'denied';
       			this.isWaiting = false;
       			this.message = 'The host did not admit you to this meeting.';
     		}
   		});
 
-  // 8-second timeout — auto-reject
+  // 8-second auto-reject
   		this.waitingTimer = setTimeout(() => {
+    		console.log('Waiting timed out');
     		if (this.waitingSocket) {
       			this.waitingSocket.disconnect();
       			this.waitingSocket = null;
     		}
-    		this.isWaiting = false;
-    		this.waitingResult = 'denied';
-    		this.message = 'Request timed out. The host did not respond in time.';
+    		if (this.isWaiting) {
+      			this.isWaiting = false;
+      			this.waitingResult = 'denied';
+      			this.message = 'No response from host. Request timed out after 8 seconds.';
+    		}
   		}, 8000);
 	},
 
 	cancelWaiting() {
   		clearTimeout(this.waitingTimer);
   		if (this.waitingSocket) {
+    		this.waitingSocket.emit('waiting-cancelled', {
+      			roomId: this.pendingRoomId
+    		});
     		this.waitingSocket.disconnect();
     		this.waitingSocket = null;
   		}
