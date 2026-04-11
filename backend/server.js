@@ -152,38 +152,36 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ── Waiting room ───────────────────────────────────────────────────────────
+  // In backend/index.js — replace your participant-waiting handler:
+
   socket.on('participant-waiting', ({ roomId, userId, userName }) => {
     if (!roomId || !userId) return;
 
     console.log(`participant-waiting: ${userName} (${userId}) for room ${roomId}`);
 
-    // Store on socket for cleanup on disconnect
     socket.waitingRoomId = roomId;
     socket.waitingUserId = userId;
     socket.waitingUserName = userName;
 
-    // Add to in-memory waiting list (avoid duplicates)
     if (!waitingRoom[roomId]) waitingRoom[roomId] = [];
     const alreadyWaiting = waitingRoom[roomId].find(w => w.socketId === socket.id);
     if (!alreadyWaiting) {
-      waitingRoom[roomId].push({
+      waitingRoom[roomId].push({ socketId: socket.id, userId, userName });
+    }
+
+    // ✅ THE FIX: find the host's socket ID and emit directly to them
+    const hostEntry = rooms[roomId]?.find(p => p.isHost);
+    if (hostEntry) {
+      console.log(`Emitting participant-waiting directly to host socket: ${hostEntry.id}`);
+      io.to(hostEntry.id).emit('participant-waiting', {   // ← io.to(socketId), not socket.to(roomId)
         socketId: socket.id,
         userId,
         userName
       });
+    } else {
+      console.warn(`No host found in room ${roomId} yet. Participant is queued.`);
+    // Host will receive it when they join (the join-room handler already handles this ✓)
     }
-
-    // Forward to everyone currently in the room (host)
-    socket.to(roomId).emit('participant-waiting', {
-      socketId: socket.id,
-      userId,
-      userName
-    });
-
-    console.log(`Forwarded participant-waiting to room ${roomId}. Room members:`,
-      rooms[roomId] ? rooms[roomId].map(p => p.name) : 'none yet'
-    );
   });
 
   socket.on('admit-participant', ({ socketId, roomId }) => {
