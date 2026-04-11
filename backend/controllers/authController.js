@@ -10,6 +10,7 @@ const hashOtp     = (otp) => crypto.createHash('sha256').update(otp).digest('hex
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     if (!email || !password)
       return res.status(400).json({ message: 'Email and password are required.' });
 
@@ -21,14 +22,19 @@ const login = async (req, res) => {
     if (!isMatch)
       return res.status(401).json({ message: 'Invalid email or password.' });
 
-    // ✅ Point 3 — admin gets OTP challenge instead of direct token
+    // Admin gets OTP challenge instead of direct token
     if (user.isAdmin) {
       const otp = generateOtp();
-      user.adminLoginOtp      = hashOtp(otp);
-      user.adminLoginOtpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 min
+      user.adminLoginOtp       = hashOtp(otp);
+      user.adminLoginOtpExpiry = new Date(Date.now() + 5 * 60 * 1000);
       await user.save();
 
-      await sendAdminLoginOtpEmail(user.email, user.name, otp);
+      try {
+        await sendAdminLoginOtpEmail(user.email, user.name, otp);
+      } catch (emailErr) {
+        console.error('Admin OTP email failed:', emailErr.message);
+        return res.status(500).json({ message: 'Could not send OTP email. Please try again.' });
+      }
 
       return res.status(200).json({
         requiresAdminOtp: true,
@@ -48,10 +54,10 @@ const login = async (req, res) => {
       token,
       user: { id: user._id, name: user.name, email: user.email, isAdmin: false },
     });
+
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ message: 'Server error.' });
   }
 };
-
 module.exports = { login };
