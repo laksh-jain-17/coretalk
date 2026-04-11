@@ -158,7 +158,7 @@ io.on('connection', (socket) => {
     if (!roomId || !userId) return;
 
     console.log(`participant-waiting: ${userName} (${userId}) for room ${roomId}`);
-
+    console.log('participant-waiting received — userName:', userName); 
     socket.waitingRoomId = roomId;
     socket.waitingUserId = userId;
     socket.waitingUserName = userName;
