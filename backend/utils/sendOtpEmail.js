@@ -1,4 +1,3 @@
-const nodemailer = require('nodemailer');
 const { google } = require('googleapis');
 
 const oauth2Client = new google.auth.OAuth2(
@@ -8,58 +7,46 @@ const oauth2Client = new google.auth.OAuth2(
 );
 oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
 
-const createTransporter = async () => {
-  console.log('OAuth2 config check:', {
-    clientId: process.env.GOOGLE_CLIENT_ID ? '✅ set' : '❌ MISSING',
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET ? '✅ set' : '❌ MISSING',
-    refreshToken: process.env.GMAIL_REFRESH_TOKEN ? '✅ set' : '❌ MISSING',
-    user: process.env.GMAIL_USER ? '✅ set' : '❌ MISSING',
-  });
-
-  try {
-    const { token } = await oauth2Client.getAccessToken();
-    console.log('Access token:', token ? '✅ obtained' : '❌ NULL');
-    if (!token) throw new Error('Access token is null');
-
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        type: 'OAuth2',
-        user: process.env.GMAIL_USER,
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-        accessToken: token,
-      },
-    });
-  } catch (err) {
-    console.error('createTransporter failed:', err.message);
-    throw err;
-  }
-};
-
 const sendOtpEmail = async (toEmail, otp) => {
-  const transporter = await createTransporter();
-  await transporter.sendMail({
-    from: `"CoreTalk" <${process.env.GMAIL_USER}>`,
-    to: toEmail,
-    subject: 'Your CoreTalk Password Reset OTP',
-    html: `
-      <div style="font-family: helvetica, sans-serif; max-width: 480px; margin: auto;">
-        <h2 style="color: #1e3a8a;">CoreTalk Password Reset</h2>
-        <p>Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
-        <div style="
-          font-size: 2.5rem; font-weight: bold; letter-spacing: 12px;
-          color: #1e3a8a; background: #f0f4ff; padding: 20px;
-          border-radius: 8px; text-align: center; margin: 24px 0;
-        ">${otp}</div>
-        <p style="color: #888; font-size: 0.85rem;">
-          If you did not request this, you can safely ignore this email.
-          Never share this OTP with anyone.
-        </p>
-      </div>
-    `,
+  const { token } = await oauth2Client.getAccessToken();
+
+  const emailLines = [
+    `To: ${toEmail}`,
+    `From: "CoreTalk" <${process.env.GMAIL_USER}>`,
+    `Subject: Your CoreTalk Password Reset OTP`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/html; charset=utf-8`,
+    ``,
+    `<div style="font-family: helvetica, sans-serif; max-width: 480px; margin: auto;">
+      <h2 style="color: #1e3a8a;">CoreTalk Password Reset</h2>
+      <p>Use the OTP below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+      <div style="font-size: 2.5rem; font-weight: bold; letter-spacing: 12px;
+        color: #1e3a8a; background: #f0f4ff; padding: 20px;
+        border-radius: 8px; text-align: center; margin: 24px 0;">${otp}</div>
+      <p style="color: #888; font-size: 0.85rem;">
+        If you did not request this, you can safely ignore this email.
+        Never share this OTP with anyone.
+      </p>
+    </div>`
+  ];
+
+  const raw = Buffer.from(emailLines.join('\n'))
+    .toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ raw })
   });
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err.error?.message || 'Gmail API error');
+  }
 };
 
 module.exports = sendOtpEmail;
