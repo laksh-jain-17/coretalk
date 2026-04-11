@@ -15,6 +15,7 @@ const sendOtpEmail = require('../utils/sendOtpEmail');
 const sendPasswordChangeEmail = require('../utils/sendPasswordChangeEmail');
 const sendAdminLoginOtpEmail = require('../utils/sendAdminLoginOtpEmail');
 const rateLimit = require('express-rate-limit');
+const isDisposableEmail = require('../utils/validateEmail');
 
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -32,6 +33,8 @@ router.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password)
     return res.status(400).json({ message: 'All fields are required' });
+  if (isDisposableEmail(email))
+    return res.status(400).json({ message: 'Please use a real email address.' });
   if (name.length > 50)
     return res.status(400).json({ message: 'Name too long (max 50 chars)' });
   if (email.length > 100)
