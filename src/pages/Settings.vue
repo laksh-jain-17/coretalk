@@ -121,7 +121,9 @@
                 <span class="faq-icon">{{ openFaq === `${gi}-${qi}` ? '−' : '+' }}</span>
               </button>
               <div class="faq-answer" :class="{ open: openFaq === `${gi}-${qi}` }">
-                <p>{{ item.a }}</p>
+                <div class="faq-answer-inner">
+                  <p>{{ item.a }}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -377,15 +379,20 @@ export default {
 </script>
 
 <style scoped>
+/* ── Base ── */
 .settings-page {
   background-color: white;
   min-height: 100vh;
-  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 32px 20px 60px;
+  box-sizing: border-box;
 }
 
 .container {
   max-width: 800px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .page-title {
@@ -395,17 +402,19 @@ export default {
   color: #1a1a1a;
 }
 
+/* ── Sections ── */
+/* NOTE: overflow is NOT set to hidden here so FAQ accordion is never clipped */
 .section {
-  margin-bottom: 30px;
+  margin-bottom: 28px;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: 10px;
 }
 
 .section-header {
   background-color: #f5f5f5;
-  padding: 15px 20px;
+  padding: 14px 20px;
   border-bottom: 1px solid #e0e0e0;
+  border-radius: 10px 10px 0 0;
 }
 
 .section-header.danger {
@@ -414,7 +423,7 @@ export default {
 
 .section-header h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   color: #333;
 }
 
@@ -422,7 +431,7 @@ export default {
   padding: 20px;
 }
 
-/* Profile */
+/* ── Profile ── */
 .profile-content {
   display: flex;
   align-items: center;
@@ -465,15 +474,17 @@ export default {
 .profile-value {
   color: #1a1a1a;
   font-size: 15px;
+  word-break: break-all;
 }
 
-/* Tabs */
+/* ── Tabs ── */
 .tabs {
   display: flex;
   gap: 8px;
   margin-bottom: 20px;
   border-bottom: 1px solid #e0e0e0;
   padding-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .tab-btn {
@@ -494,7 +505,7 @@ export default {
   border-color: #2563eb;
 }
 
-/* Form */
+/* ── Form ── */
 .form-group {
   margin-bottom: 20px;
 }
@@ -523,7 +534,7 @@ label {
   border-color: #2563eb;
 }
 
-/* Buttons */
+/* ── Buttons ── */
 .btn {
   padding: 10px 20px;
   border-radius: 6px;
@@ -558,11 +569,12 @@ label {
   color: #dc2626;
   margin-bottom: 15px;
   line-height: 1.5;
+  font-size: 14px;
 }
 
-/* FAQ */
+/* ── FAQ ── */
 .faq-content {
-  padding: 10px 20px;
+  padding: 10px 20px 4px;
 }
 
 .faq-group {
@@ -570,12 +582,12 @@ label {
 }
 
 .faq-group-title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   color: #2563eb;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   margin-top: 0;
 }
 
@@ -591,12 +603,13 @@ label {
   background: none;
   border: none;
   padding: 14px 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: #1a1a1a;
   cursor: pointer;
   text-align: left;
   gap: 12px;
+  font-family: inherit;
 }
 
 .faq-question:hover {
@@ -610,14 +623,19 @@ label {
   line-height: 1;
 }
 
+/* accordion — uses grid trick so height animates smoothly without JS */
 .faq-answer {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
 }
 
 .faq-answer.open {
-  max-height: 200px;
+  grid-template-rows: 1fr;
+}
+
+.faq-answer-inner {
+  overflow: hidden;
 }
 
 .faq-answer p {
@@ -626,5 +644,112 @@ label {
   color: #555;
   font-size: 14px;
   line-height: 1.6;
+}
+
+/* ── Tablet (≤ 768px) ── */
+@media (max-width: 768px) {
+  .settings-page {
+    padding: 20px 14px 50px;
+  }
+
+  .page-title {
+    font-size: 26px;
+    margin-bottom: 22px;
+  }
+
+  .section-header h2 {
+    font-size: 16px;
+  }
+
+  .section-content {
+    padding: 16px;
+  }
+
+  .faq-content {
+    padding: 8px 16px 4px;
+  }
+
+  .avatar {
+    width: 54px;
+    height: 54px;
+    font-size: 22px;
+  }
+
+  .profile-value {
+    font-size: 14px;
+  }
+
+  .tab-btn {
+    font-size: 13px;
+    padding: 7px 12px;
+  }
+
+  .faq-question {
+    font-size: 13px;
+  }
+
+  .btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* ── Mobile (≤ 480px) ── */
+@media (max-width: 480px) {
+  .settings-page {
+    padding: 16px 10px 40px;
+  }
+
+  .page-title {
+    font-size: 22px;
+    margin-bottom: 18px;
+  }
+
+  .profile-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .profile-field {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .profile-label {
+    width: auto;
+  }
+
+  .tabs {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .tab-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .section-content {
+    padding: 14px 12px;
+  }
+
+  .faq-content {
+    padding: 6px 12px 4px;
+  }
+
+  .faq-question {
+    font-size: 13px;
+    padding: 12px 0;
+  }
+
+  .section-header {
+    padding: 12px 14px;
+  }
+
+  .section-header h2 {
+    font-size: 15px;
+  }
 }
 </style>
