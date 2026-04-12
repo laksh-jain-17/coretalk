@@ -16,7 +16,7 @@ onMounted(async() => {
   {
     try{
       const res = await axios.get('http://localhost:5000/api/auth/profile',{
-        headers: {Authorization: `Bearer {$token}`}
+        headers: { Authorization: `Bearer ${token}` }
       })
       user.value = res.data.user
     }
@@ -35,6 +35,19 @@ onMounted(async() => {
   </div>
 </template>
 
-<style scoped>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
+html, body {
+  height: 100%;
+  overflow-y: auto;
+}
+
+#app {
+  min-height: 100%;
+}
 </style>
