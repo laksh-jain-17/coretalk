@@ -15,6 +15,7 @@
               <li>Auto-closing trays while inactive.</li>
               <li>Wider video feed.</li>
               <li>Lightweight and reliable application.</li>
+              <li>More security measures added.</li>
               <li>User customization allowed.</li>
             </ol>
             <p>Version v2.</p>
