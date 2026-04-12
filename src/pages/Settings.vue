@@ -283,7 +283,7 @@ export default {
     } catch (error) {
       console.error('Error loading profile:', error)
     }
-  }
+  },
 
     toggleFaq(gi, qi) {
       const key = `${gi}-${qi}`
