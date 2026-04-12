@@ -270,18 +270,20 @@ export default {
     async loadUserProfile() {
       try {
         const token = localStorage.getItem('token')
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/me`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const data = await response.json()
+        console.log('Profile data:', data) // ← add this temporarily to see what comes back
         if (response.ok) {
-          this.userName = data.name || data.username || ''
-          this.userEmail = data.email || ''
+      // try all possible field name variations your backend might return
+          this.userName = data.name || data.username || data.user?.name || data.user?.username || ''
+          this.userEmail = data.email || data.user?.email || ''
         }
-      } catch (error) {
-        console.error('Error loading profile:', error)
-      }
-    },
+    } catch (error) {
+      console.error('Error loading profile:', error)
+    }
+  }
 
     toggleFaq(gi, qi) {
       const key = `${gi}-${qi}`
