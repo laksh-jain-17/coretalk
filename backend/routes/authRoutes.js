@@ -291,16 +291,6 @@ router.post('/google-login', async (req, res) => {
   }
 });
 
-router.get('/me', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('name email')
-    if (!user) return res.status(404).json({ msg: 'User not found' })
-    res.json({ name: user.name, email: user.email })
-  } catch (err) {
-    res.status(500).json({ msg: 'Server error' })
-  }
-});
-
 // ── Report ────────────────────────────────────────────────────────────────────
 router.post('/report', authMiddleware, async (req, res) => {
   try {
