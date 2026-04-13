@@ -13,7 +13,7 @@
         <button @click="toggleFullscreen" :class="{ 'active-feature': isFullscreen }">
           {{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
         </button>
-        <button @click="emailEnact">Gmail Enact</button>
+        <button v-if="!isGuest" @click="emailEnact">Gmail Enact</button>
       </div>
     </transition>
 
@@ -499,6 +499,7 @@ export default {
       emailAttachments: [],
       chatAttachments: [],  
       waitingParticipants: [],
+      isGuest: localStorage.getItem('isGuest') === 'true',
     };
   },
 
