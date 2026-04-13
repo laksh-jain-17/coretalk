@@ -202,6 +202,7 @@ export default {
         if (res.data.token) {
           localStorage.setItem('token', res.data.token);
           localStorage.setItem('username', res.data.user.name || res.data.user.email);
+          localStorage.removeItem('isGuest'); 
 
           if (res.data.user.isAdmin) {
             localStorage.setItem('isAdmin', 'true');
@@ -260,6 +261,7 @@ export default {
         // Normal user flow
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('username', res.data.user.name || this.email);
+        localStorage.removeItem('isGuest'); 
 
         if (res.data.user.isAdmin) {
           localStorage.setItem('isAdmin', 'true');
@@ -293,6 +295,7 @@ export default {
           localStorage.setItem('token', res.data.token);
           localStorage.setItem('username', res.data.user.name || this.adminEmail);
           localStorage.setItem('isAdmin', 'true');
+          localStorage.removeItem('isGuest'); 
           this.$router.push('/Schedule');
         }
       } catch (err) {
