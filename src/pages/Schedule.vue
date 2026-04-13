@@ -6,14 +6,16 @@
         <p>Take benefit of our online meeting platform with numerous features to the full extent.</p>
       </div>
       <div id="rightbox">
-        <p id="admin-link" v-if="isAdmin"><router-link to="/Admin">Check Admin Dashboard</router-link></p>
+        <p id="admin-link" v-if="isAdmin && !isGuest">
+          <router-link to="/Admin">Check Admin Dashboard</router-link>
+        </p>
         <IconMaterialSymbolsLightSettings style="font-size: 25px; color: grey;" id="settings-link" @click="entering"/>
         <form id="info" @submit.prevent="checkuser">
           <input v-model="roomId" type="text" placeholder="Enter Passcode \ Room ID">
           <input v-show="showdown" v-model="title" @keypress="erase" type="text" placeholder="Enter Title like 'Meeting'">
           <p v-if="message" style="color:red; font-weight:bold;">{{ message }}</p>
           <button type="submit">Enter</button>
-          <button type="button" @click="createroom">Create your room</button>
+          <button type="button" v-if="!isGuest" @click="createroom">Create your room</button>
         </form>
         <!-- Waiting overlay -->
         <transition name="fade">
@@ -83,6 +85,7 @@ export default {
       waitingResult: null,
       waitingSocket: null,
       pendingRoomId: null,
+      isGuest: localStorage.getItem('isGuest') === 'true',
     };
   },
   methods: {
@@ -97,9 +100,19 @@ export default {
         this.message = 'Fill your Room ID';
         return;
       }
+       const isGuest = localStorage.getItem('isGuest') === 'true';
       const token = localStorage.getItem('token');
-      if (!token) {
+      if (!token && !token) {
         this.message = 'Please login first';
+        return;
+      }
+      if (isGuest) {
+    // Guests join without a token — set name and go straight to waiting
+        const guestName = localStorage.getItem('username') || 'Guest';
+        localStorage.setItem('isHost', 'false');
+        localStorage.setItem('meetingtitle', '');
+        this.pendingRoomId = this.roomId;
+        this.startWaiting(this.roomId, guestName);
         return;
       }
       this.$axios.post(`${BASE_URL}/api/auth/join`,
@@ -258,6 +271,11 @@ export default {
   },
 
   async mounted() {
+    const isGuest = localStorage.getItem('isGuest') === 'true';
+    if (isGuest) {
+      this.user = { name: localStorage.getItem('username') };
+      return; 
+    }
     const token = localStorage.getItem('token');
     if (!token) {
       this.message = "Please login first";
