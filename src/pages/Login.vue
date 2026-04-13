@@ -99,7 +99,8 @@
     </div>
 
     <!-- Guest name modal -->
-<div v-if="showGuestModal" style="
+  </transition>
+  <div v-if="showGuestModal" style="
   position:fixed;inset:0;background:rgba(0,0,0,0.45);
   display:flex;align-items:center;justify-content:center;z-index:200;">
   <div style="background:white;border-radius:12px;padding:32px;width:320px;text-align:center;">
@@ -126,7 +127,6 @@
     </div>
   </div>
 </div>
-  </transition>
 </template>
 
 <script>
