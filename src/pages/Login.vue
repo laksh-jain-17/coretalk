@@ -45,6 +45,10 @@
             {{ googleLoading ? 'Signing in...' : 'Sign in with Google' }}
           </button>
 
+          <button type="button" @click="showGuestModal = true" :disabled="loading || googleLoading">
+            Continue as Guest
+          </button>
+
           <p id="last">Forget Password <router-link to="/Forget">Click here</router-link></p>
         </form>
 
@@ -92,6 +96,35 @@
 
       </div>
     </div>
+
+    <!-- Guest name modal -->
+<div v-if="showGuestModal" style="
+  position:fixed;inset:0;background:rgba(0,0,0,0.45);
+  display:flex;align-items:center;justify-content:center;z-index:200;">
+  <div style="background:white;border-radius:12px;padding:32px;width:320px;text-align:center;">
+    <h3 style="margin:0 0 8px;color:#1e3a8a;">Join as Guest</h3>
+    <p style="font-size:0.9rem;color:#666;margin-bottom:16px;">Enter a display name to continue</p>
+    <input
+      v-model="guestName"
+      type="text"
+      placeholder="Your name"
+      maxlength="30"
+      style="width:100%;padding:12px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:1rem;box-sizing:border-box;margin-bottom:12px;"
+      @keyup.enter="loginAsGuest"
+    />
+    <p v-if="guestError" style="color:red;font-size:0.85rem;margin-bottom:10px;">{{ guestError }}</p>
+    <div style="display:flex;gap:8px;">
+      <button type="button" @click="showGuestModal=false;guestName='';guestError=''"
+        style="flex:1;padding:11px;background:white;border:1.5px solid #e0e0e0;border-radius:8px;cursor:pointer;font-size:0.9rem;">
+        Cancel
+      </button>
+      <button type="button" @click="loginAsGuest"
+        style="flex:1;padding:11px;background:#1e3a8a;color:white;border:none;border-radius:8px;cursor:pointer;font-size:0.9rem;font-weight:600;">
+        Continue
+      </button>
+    </div>
+  </div>
+</div>
   </transition>
 </template>
 
@@ -114,6 +147,9 @@ export default {
       adminOtp: '',
       otpLoading: false,
       otpMessage: '',
+      showGuestModal: false,
+      guestName: '',
+      guestError: '',
     };
   },
 
@@ -282,6 +318,18 @@ export default {
 
     eraseOtp() {
       this.otpMessage = '';
+    },
+
+    loginAsGuest() {
+      if (!this.guestName.trim()) {
+        this.guestError = 'Please enter a name.';
+        return;
+      }
+      localStorage.setItem('isGuest', 'true');
+      localStorage.setItem('username', this.guestName.trim());
+      // No token needed — guest is identified by isGuest flag
+      this.showGuestModal = false;
+      this.$router.push('/Schedule');
     },
   },
 };
