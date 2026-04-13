@@ -6,11 +6,11 @@
       <div id="button-drawer">
         <!-- <button class="btn-secondary" @click="rejoined">Rejoin</button> -->
         <button class="btn-primary" @click="returned">Return to Schedule</button>
-        <button class="btn-logout" @click="logoutuser">Log Out</button>
+        <button v-if="!isGuest" class="btn-logout" @click="logoutuser">Log Out</button>
       </div>
     </div>
 
-    <div id="feedback-box">
+    <div id="feedback-box" v-if="!isGuest">
       <h3>How was your meeting?</h3><br>
       <p>If you want to express something or have any issue then write a review.</p>
 
@@ -26,6 +26,11 @@ import axios from 'axios';
 
 export default {
   name: 'Ending',
+  data() {
+    return {
+      isGuest: localStorage.getItem('isGuest') === 'true',
+    };
+  },
   mounted() {
     window.jistory.pushState(null,'',window.location.href);
     window.addEventListener('popstate',this.preventBack);
