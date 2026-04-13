@@ -162,7 +162,7 @@ export default {
       });
     },
 
-    startWaiting(roomId) {
+    startWaiting(roomId, userName) {
       this.isWaiting = true;
       this.waitingResult = null;
       this.message = '';
@@ -273,9 +273,13 @@ export default {
   async mounted() {
     const isGuest = localStorage.getItem('isGuest') === 'true';
     if (isGuest) {
-      this.user = { name: localStorage.getItem('username') };
-      return; 
+        this.userName = localStorage.getItem('username') || 'Guest';
+        this.userId = `guest_${Date.now()}`;
+        this.isHost = false;
+    } else {
+        if (!this.initUserFromToken()) return;
     }
+    this.roomId = this.computedRoomId;
     const token = localStorage.getItem('token');
     if (!token) {
       this.message = "Please login first";
