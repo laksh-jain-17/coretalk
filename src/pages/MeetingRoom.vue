@@ -2080,8 +2080,13 @@ export default {
   async mounted() {
     console.log('=== MEETING ROOM MOUNTING ===');
 
-    if (!this.initUserFromToken()) {
-      return;
+    const isGuest = localStorage.getItem('isGuest') === 'true';
+    if (isGuest) {
+        this.userName = localStorage.getItem('username') || 'Guest';
+        this.userId = `guest_${Date.now()}`;
+        this.isHost = false;
+    } else {
+        if (!this.initUserFromToken()) return;
     }
 
     this.roomId = this.computedRoomId;
