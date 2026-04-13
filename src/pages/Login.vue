@@ -37,13 +37,14 @@
             {{ loading ? 'Logging in...' : 'Login Now' }}
           </button>
 
-          <div class="divider"><span>OR</span></div>
 
           <button type="button" id="google-signin-button" @click="signInWithGoogle" :disabled="loading || googleLoading">
             <span v-if="googleLoading" class="spinner dark"></span>
             <img v-else src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20" alt="Google" />
             {{ googleLoading ? 'Signing in...' : 'Sign in with Google' }}
           </button>
+
+          <div class="divider"><span>OR</span></div>
 
           <button type="button" @click="showGuestModal = true" :disabled="loading || googleLoading">
             Continue as Guest
