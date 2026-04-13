@@ -273,17 +273,13 @@ export default {
   async mounted() {
     const isGuest = localStorage.getItem('isGuest') === 'true';
     if (isGuest) {
-        this.userName = localStorage.getItem('username') || 'Guest';
-        this.userId = `guest_${Date.now()}`;
-        this.isHost = false;
-    } else {
-        if (!this.initUserFromToken()) return;
+        this.user = { name: localStorage.getItem('username') };
+        return;  // guests don't need the API call, just stop here
     }
-    this.roomId = this.computedRoomId;
     const token = localStorage.getItem('token');
     if (!token) {
-      this.message = "Please login first";
-      return;
+        this.message = "Please login first";
+        return;
     }
     try {
       const res = await this.$axios.get(`${BASE_URL}/api/auth/schedule`, {
