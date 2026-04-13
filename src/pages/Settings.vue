@@ -4,7 +4,7 @@
       <h1 class="page-title">Settings</h1>
 
       <!-- User Profile Section -->
-      <div class="section">
+      <div class="section" v-if="!isGuest">
         <div class="section-header">
           <h2>Profile</h2>
         </div>
@@ -26,7 +26,7 @@
       </div>
 
       <!-- Complaint Section -->
-      <div class="section">
+      <div class="section" v-if="!isGuest">
         <div class="section-header">
           <h2>Complaint / Report</h2>
         </div>
@@ -131,7 +131,7 @@
       </div>
 
       <!-- Delete Account Section -->
-      <div class="section">
+      <div class="section" v-if="!isGuest">
         <div class="section-header danger">
           <h2>Delete Account</h2>
         </div>
@@ -164,6 +164,7 @@ export default {
       reportReason: '',
 
       openFaq: null,
+      isGuest: localStorage.getItem('isGuest') === 'true',
 
       faqGroups: [
         {
