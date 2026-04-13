@@ -102,7 +102,7 @@ export default {
       }
        const isGuest = localStorage.getItem('isGuest') === 'true';
       const token = localStorage.getItem('token');
-      if (!token && !token) {
+      if (!token && !isGuest) {
         this.message = 'Please login first';
         return;
       }
