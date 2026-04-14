@@ -178,7 +178,7 @@ export default {
         `&redirect_uri=${redirectUri}` +
         `&response_type=id_token` +
         `&scope=${scope}` +
-        `&nonce=${Math.random().toString(36).slice(2)}` +
+        `&nonce=${Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,"0")).join("")}` +
         `&prompt=select_account`;
     },
 
