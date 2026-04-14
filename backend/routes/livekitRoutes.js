@@ -4,35 +4,41 @@ const router = express.Router();
 const authMiddleware = require('../middleware/authMiddleware');
 const Room = require('../models/Room');
 
-// FIX #5: Protect the token endpoint with authMiddleware.
-// Also derive isHost from the database — never trust the client payload.
 router.post('/token', authMiddleware, async (req, res) => {
   const { roomName, participantName } = req.body;
 
+  // Validate request body
   if (!roomName || !participantName) {
     return res.status(400).json({
-      error: 'roomName and participantName required'
+      error: 'roomName and participantName are required'
     });
   }
 
+  // Validate environment variables
   if (!process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_API_SECRET || !process.env.LIVEKIT_URL) {
+    console.error('Missing LiveKit env vars:', {
+      hasKey: !!process.env.LIVEKIT_API_KEY,
+      hasSecret: !!process.env.LIVEKIT_API_SECRET,
+      hasUrl: !!process.env.LIVEKIT_URL,
+    });
     return res.status(500).json({
       error: 'Server configuration error - missing LiveKit credentials'
     });
   }
 
   try {
-    // Derive isHost from DB, never from req.body
+    // Derive isHost from DB — never trust the client
     const room = await Room.findOne({ roomId: roomName });
     const isHost = room ? room.host.toString() === req.user.id : false;
 
+    // Create access token
     const at = new AccessToken(
       process.env.LIVEKIT_API_KEY,
       process.env.LIVEKIT_API_SECRET,
       {
         identity: req.user.id,
         name: participantName,
-        metadata: JSON.stringify({ isHost })
+        metadata: JSON.stringify({ isHost }),
       }
     );
 
@@ -42,33 +48,26 @@ router.post('/token', authMiddleware, async (req, res) => {
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
-      canUpdateOwnMetadata: true
+      canUpdateOwnMetadata: true,
     });
 
-    let token = await at.toJwt();
+    const token = await at.toJwt();
 
-    if (typeof token !== 'string') {
-      if (typeof token === 'object' && token !== null) {
-        if (token.token) token = token.token;
-        else if (token.jwt) token = token.jwt;
-        else if (token.value) token = token.value;
-        else token = String(token);
-      } else {
-        token = String(token);
-      }
-    }
-
-    if (token === '[object Object]' || token.split('.').length !== 3) {
+    // Validate the generated token
+    if (!token || typeof token !== 'string' || token.split('.').length !== 3) {
+      console.error('Invalid token generated:', token);
       return res.status(500).json({ error: 'Token generation failed - invalid format' });
     }
 
-    res.json({ token, url: process.env.LIVEKIT_URL });
+    return res.status(200).json({
+      token,
+      url: process.env.LIVEKIT_URL,
+    });
 
   } catch (error) {
     console.error('Error generating LiveKit token:', error.message);
-    res.status(500).json({ error: 'Failed to generate token' });
+    return res.status(500).json({ error: 'Failed to generate token' });
   }
 });
-
 
 module.exports = router;
