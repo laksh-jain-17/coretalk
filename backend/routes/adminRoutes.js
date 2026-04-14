@@ -5,11 +5,11 @@ const Review = require('../models/Review');
 const Room = require('../models/Room');
 const authMiddleware = require('../middleware/authMiddleware');
 const adminOnly = require('../middleware/adminOnly');
+const mongoose = require('mongoose');
 
-// Shorthand: all admin routes require auth + admin role
 const adminGuard = [authMiddleware, adminOnly];
 
-// ============ USERS MANAGEMENT ============
+// Users Management
 router.get('/users', adminGuard, async (req, res) => {
   try {
     const users = await User.find().select('-password');
@@ -21,8 +21,14 @@ router.get('/users', adminGuard, async (req, res) => {
 });
 
 router.delete('/users/:id', adminGuard, async (req, res) => {
+  // FIX #11: Validate the ObjectId format before querying MongoDB.
+  // An invalid id causes Mongoose to throw a CastError which leaks internals.
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ msg: 'Invalid user ID format' });
+  }
   try {
-    await User.findByIdAndDelete(req.params.id);
+    const deleted = await User.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ msg: 'User not found' });
     res.json({ msg: 'User deleted successfully' });
   } catch (err) {
     console.error('Error deleting user:', err);
@@ -30,13 +36,13 @@ router.delete('/users/:id', adminGuard, async (req, res) => {
   }
 });
 
-// ============ FEEDBACK/REVIEWS ============
+// Feedback/Reviews
 router.get('/feedback', adminGuard, async (req, res) => {
   try {
     const reviews = await Review.find()
       .populate('user', 'name email')
       .sort({ createdAt: -1 });
-    
+
     const formattedReviews = reviews.map(review => ({
       _id: review._id,
       userName: review.user ? review.user.name : 'Unknown User',
@@ -44,7 +50,7 @@ router.get('/feedback', adminGuard, async (req, res) => {
       comment: review.comment,
       createdAt: review.createdAt
     }));
-    
+
     res.json(formattedReviews);
   } catch (err) {
     console.error('Error fetching feedback:', err);
@@ -52,11 +58,11 @@ router.get('/feedback', adminGuard, async (req, res) => {
   }
 });
 
-// ============ USAGE METRICS ============
+// Usage Metrics
 router.get('/usage-metrics', adminGuard, async (req, res) => {
   try {
     const currentYear = new Date().getFullYear();
-    
+
     const monthlyStats = await Room.aggregate([
       {
         $match: {
@@ -77,7 +83,7 @@ router.get('/usage-metrics', adminGuard, async (req, res) => {
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
+
     const usageData = monthNames.map((month, index) => {
       const monthData = monthlyStats.find(stat => stat._id === index + 1);
       return {
@@ -93,7 +99,7 @@ router.get('/usage-metrics', adminGuard, async (req, res) => {
   }
 });
 
-// ============ ACTIVE MEETINGS ============
+// Active Meetings
 let getRoomsFunction = null;
 
 router.setGetRooms = (fn) => {
@@ -107,7 +113,7 @@ router.get('/active-meetings', adminGuard, (req, res) => {
     }
 
     const rooms = getRoomsFunction();
-    
+
     const activeMeetings = Object.entries(rooms).map(([roomId, participants]) => {
       const host = participants.find(p => p.isHost);
       return {
