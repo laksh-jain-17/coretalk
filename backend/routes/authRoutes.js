@@ -28,7 +28,7 @@ const otpLimiter = rateLimit({
 const generateOtp = () => String(crypto.randomInt(100000, 999999));
 const hashOtp = (otp) => crypto.createHash('sha256').update(otp).digest('hex');
 
-// ── Register ──────────────────────────────────────────────────────────────────
+// Register
 router.post('/register', async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password)
@@ -46,21 +46,24 @@ router.post('/register', async (req, res) => {
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser)
-      return res.status(400).json({ message: 'Email already registered' });
-    const hashedPassword = await bcrypt.hash(password, 8);
+      // FIX #15: Generic message to prevent email enumeration.
+      return res.status(400).json({ message: 'Registration failed. Please check your details.' });
+
+    // FIX #9: Consistent bcrypt work factor of 12 (was 8 here, 10 elsewhere).
+    const hashedPassword = await bcrypt.hash(password, 12);
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
     return res.status(201).json({ message: 'User created' });
   } catch (err) {
     console.error('Registration error', err);
-    return res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: 'Server error' });
   }
 });
 
-// ── Login ─────────────────────────────────────────────────────────────────────
+// Login
 router.post('/login', login);
 
-// ── Profile ───────────────────────────────────────────────────────────────────
+// Profile
 router.get('/profile', authMiddleware, (req, res) => {
   res.json({ msg: 'Protected user', user: req.user });
 });
@@ -80,7 +83,7 @@ router.get('/schedule', authMiddleware, async (req, res) => {
   }
 });
 
-// ── Rooms ─────────────────────────────────────────────────────────────────────
+// Rooms
 router.post('/create', authMiddleware, async (req, res) => {
   try {
     const roomid = uuidv4();
@@ -100,13 +103,11 @@ router.post('/create', authMiddleware, async (req, res) => {
 
 router.post('/join', authMiddleware, async (req, res) => {
   const { roomId } = req.body;
-  if (!roomId) 
-  {
+  if (!roomId) {
     return res.status(400).json({ msg: 'Room ID is required' });
   }
   const existingRoom = await Room.findOne({ roomId });
-  if (!existingRoom)
-  {
+  if (!existingRoom) {
     return res.status(404).json({ msg: 'Invalid or expired room ID' });
   }
   const user = await User.findById(req.user.id).select('name');
@@ -116,10 +117,10 @@ router.post('/join', authMiddleware, async (req, res) => {
     process.env.JWT_SECRET,
     { expiresIn: '2h' }
   );
-  res.json({ roomid: existingRoom.roomId, token, name: user.name }); // ✅ send name in response
+  res.json({ roomid: existingRoom.roomId, token, name: user.name });
 });
 
-// ── Forgot Password — Step 1: Send OTP ───────────────────────────────────────
+// Forgot Password — Step 1: Send OTP
 router.post('/forget-request', otpLimiter, async (req, res) => {
   try {
     const { email } = req.body;
@@ -133,6 +134,7 @@ router.post('/forget-request', otpLimiter, async (req, res) => {
       await user.save();
       await sendOtpEmail(email, otp);
     }
+    // Always return same message to avoid email enumeration
     return res.json({
       success: true,
       message: 'If that email is registered, an OTP has been sent to it.'
@@ -143,7 +145,7 @@ router.post('/forget-request', otpLimiter, async (req, res) => {
   }
 });
 
-// ── Forgot Password — Step 2: Verify OTP ─────────────────────────────────────
+// Forgot Password — Step 2: Verify OTP
 router.post('/forget-verify', otpLimiter, async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -156,6 +158,13 @@ router.post('/forget-verify', otpLimiter, async (req, res) => {
     });
     if (!user)
       return res.status(400).json({ success: false, message: 'Invalid or expired OTP.' });
+
+    // FIX #13: Invalidate the OTP immediately after successful verification
+    // so it cannot be reused within the expiry window.
+    user.resetOtp = null;
+    user.resetOtpExpiry = null;
+    await user.save();
+
     const resetSessionToken = jwt.sign(
       { id: user._id, purpose: 'password-reset' },
       process.env.JWT_SECRET,
@@ -168,7 +177,7 @@ router.post('/forget-verify', otpLimiter, async (req, res) => {
   }
 });
 
-// ── Forgot Password — Step 3: Reset Password ─────────────────────────────────
+// Forgot Password — Step 3: Reset Password
 router.post('/forget-reset', otpLimiter, async (req, res) => {
   try {
     const { resetSessionToken, newPassword } = req.body;
@@ -187,11 +196,12 @@ router.post('/forget-reset', otpLimiter, async (req, res) => {
     const user = await User.findById(payload.id);
     if (!user)
       return res.status(404).json({ success: false, message: 'User not found.' });
-    user.password = await bcrypt.hash(newPassword, 10);
+
+    // FIX #9: Consistent bcrypt work factor of 12.
+    user.password = await bcrypt.hash(newPassword, 12);
     user.resetOtp = null;
     user.resetOtpExpiry = null;
     await user.save();
-    // ✅ Point 2 — confirmation email, fire and forget
     sendPasswordChangeEmail(user.email, user.name).catch(err =>
       console.error('Password change email failed (non-fatal):', err)
     );
@@ -202,7 +212,7 @@ router.post('/forget-reset', otpLimiter, async (req, res) => {
   }
 });
 
-// ── Admin Login OTP Verify ────────────────────────────────────────────────────
+// Admin Login OTP Verify
 router.post('/admin-login-verify', otpLimiter, async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -234,7 +244,7 @@ router.post('/admin-login-verify', otpLimiter, async (req, res) => {
   }
 });
 
-// ── Host actions ──────────────────────────────────────────────────────────────
+// Host actions
 router.post('/end-meeting', authMiddleware, hostOnly, async (req, res) => {
   try {
     const roomId = req.user.roomid;
@@ -255,7 +265,7 @@ router.post('/lock-meeting', authMiddleware, hostOnly, (req, res) => {
   res.json({ msg: 'Meeting is locked' });
 });
 
-// ── Google OAuth ──────────────────────────────────────────────────────────────
+// Google OAuth
 router.post('/google-login', async (req, res) => {
   try {
     const { credential } = req.body;
@@ -269,7 +279,8 @@ router.post('/google-login', async (req, res) => {
     const { email, name, sub: googleId } = payload;
     let user = await User.findOne({ email });
     if (!user) {
-      const randomPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
+      // FIX #9: Consistent bcrypt work factor of 12 for random passwords too.
+      const randomPassword = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 12);
       user = new User({ name, email, password: randomPassword, googleId, isAdmin: false });
       await user.save();
     } else if (!user.googleId) {
@@ -291,7 +302,7 @@ router.post('/google-login', async (req, res) => {
   }
 });
 
-// ── Report ────────────────────────────────────────────────────────────────────
+// Report
 router.post('/report', authMiddleware, async (req, res) => {
   try {
     const { username, reason } = req.body;
@@ -310,7 +321,7 @@ router.post('/report', authMiddleware, async (req, res) => {
   }
 });
 
-// ── Delete account ────────────────────────────────────────────────────────────
+// Delete account
 router.delete('/delete-account', authMiddleware, async (req, res) => {
   try {
     await User.findByIdAndDelete(req.user.id);
