@@ -999,21 +999,31 @@ export default {
 
     async getLivekitToken() {
       try {
+        const authToken = localStorage.getItem('token');
+        if (!authToken) {
+          console.error('No auth token found in localStorage');
+          this.$router.push('/Login');
+          return null;
+        }
+ 
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/livekit/token`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`   // ✅ THIS WAS MISSING
+          },
           body: JSON.stringify({
             roomName: this.roomId,
             participantName: this.userName,
-            userId: this.userId,
-            isHost: this.isHost
           })
         });
-
+ 
         if (!response.ok) {
-          throw new Error('Failed to get LiveKit token');
+          const errBody = await response.json().catch(() => ({}));
+          console.error('LiveKit token request failed:', response.status, errBody);
+          throw new Error(`Failed to get LiveKit token: ${response.status}`);
         }
-
+ 
         const data = await response.json();
         console.log('Raw token response:', data);
         return data;
@@ -1023,7 +1033,7 @@ export default {
         return null;
       }
     },
-
+    
     async initLivekit() {
       console.log('=== INITIALIZING LIVEKIT ===');
 
