@@ -59,14 +59,7 @@ app.use('/api/admin', adminRoutes);
 
 app.get('/', (req, res) => res.send('Backend is running'));
 
-app.get("/api/test-email", async (req, res) => {
-  try {
-    await transporter.verify();
-    res.json({ status: "SMTP OK" });
-  } catch (err) {
-    res.status(500).json({ error: err.message, code: err.code });
-  }
-});
+// FIX #7: Removed the unauthenticated /api/test-email diagnostic endpoint entirely.
 
 app.use('/api/livekit', livekitRoutes);
 
@@ -89,7 +82,6 @@ const io = new Server(server, {
 const rooms = {};
 adminRoutes.setGetRooms(() => rooms);
 
-// ── In-memory waiting room state ─────────────────────────────────────────────
 // waitingRoom[roomId] = [{ socketId, userId, userName }]
 const waitingRoom = {};
 
@@ -104,7 +96,6 @@ io.on('connection', (socket) => {
   let joinedRoom = null;
   let socketUserId = null;
 
-  // ── Join room ──────────────────────────────────────────────────────────────
   socket.on('join-room', async ({ roomId, userName, userId }) => {
     if (!roomId || !userId) return;
 
@@ -139,9 +130,7 @@ io.on('connection', (socket) => {
     socket.emit('existing-users', existingUsers);
     socket.to(roomId).emit('user-joined', userData);
 
-    // ✅ If host just joined, notify them of anyone already waiting
     if (isHost && waitingRoom[roomId] && waitingRoom[roomId].length > 0) {
-      console.log(`Host joined — sending ${waitingRoom[roomId].length} waiting participant(s)`);
       waitingRoom[roomId].forEach(wp => {
         socket.emit('participant-waiting', {
           socketId: wp.socketId,
@@ -152,13 +141,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // In backend/index.js — replace your participant-waiting handler:
-
   socket.on('participant-waiting', ({ roomId, userId, userName }) => {
     if (!roomId || !userId) return;
 
-    console.log(`participant-waiting: ${userName} (${userId}) for room ${roomId}`);
-    console.log('participant-waiting received — userName:', userName); 
+    // FIX #3: Bind the identity to the socket object at first use.
+    // Subsequent events that reference socketUserId are already protected.
+    // For the waiting room we store the userId tied to this socket connection.
     socket.waitingRoomId = roomId;
     socket.waitingUserId = userId;
     socket.waitingUserName = userName;
@@ -169,59 +157,76 @@ io.on('connection', (socket) => {
       waitingRoom[roomId].push({ socketId: socket.id, userId, userName });
     }
 
-    // ✅ THE FIX: find the host's socket ID and emit directly to them
     const hostEntry = rooms[roomId]?.find(p => p.isHost);
     if (hostEntry) {
-      console.log(`Emitting participant-waiting directly to host socket: ${hostEntry.id}`);
-      io.to(hostEntry.id).emit('participant-waiting', {   // ← io.to(socketId), not socket.to(roomId)
+      io.to(hostEntry.id).emit('participant-waiting', {
         socketId: socket.id,
         userId,
         userName
       });
-    } else {
-      console.warn(`No host found in room ${roomId} yet. Participant is queued.`);
-    // Host will receive it when they join (the join-room handler already handles this ✓)
     }
   });
 
-  socket.on('admit-participant', ({ socketId, roomId }) => {
-    if (!socketId) return;
-    console.log(`Admitting socket: ${socketId} into room: ${roomId}`);
+  // FIX #2: Verify the emitting socket is actually the host before admitting/denying.
+  socket.on('admit-participant', async ({ socketId, roomId }) => {
+    if (!socketId || !roomId || !socketUserId) return;
 
-    // Remove from waiting list
-    if (roomId && waitingRoom[roomId]) {
+    const isHost = await verifyIsHost(socketUserId, roomId);
+    if (!isHost) return;
+
+    if (waitingRoom[roomId]) {
       waitingRoom[roomId] = waitingRoom[roomId].filter(w => w.socketId !== socketId);
     }
 
     io.to(socketId).emit('admission-result', { admitted: true });
   });
 
-  socket.on('deny-participant', ({ socketId, roomId }) => {
-    if (!socketId) return;
-    console.log(`Denying socket: ${socketId} from room: ${roomId}`);
+  socket.on('deny-participant', async ({ socketId, roomId }) => {
+    if (!socketId || !roomId || !socketUserId) return;
 
-    // Remove from waiting list
-    if (roomId && waitingRoom[roomId]) {
+    const isHost = await verifyIsHost(socketUserId, roomId);
+    if (!isHost) return;
+
+    if (waitingRoom[roomId]) {
       waitingRoom[roomId] = waitingRoom[roomId].filter(w => w.socketId !== socketId);
     }
 
     io.to(socketId).emit('admission-result', { admitted: false });
   });
 
-  // ── Other existing events ──────────────────────────────────────────────────
+  // FIX #4: Only relay signals between sockets that share a room.
   socket.on('signal', ({ to, signal }) => {
-    if (to && signal) io.to(to).emit('signal', { from: socket.id, signal });
+    if (!to || !signal || !joinedRoom) return;
+
+    // Confirm 'to' is in the same room as sender
+    const targetInRoom = rooms[joinedRoom]?.find(p => p.id === to);
+    if (!targetInRoom) return;
+
+    io.to(to).emit('signal', { from: socket.id, signal });
   });
 
+  // FIX #12: Enforce server-side message length limits.
   socket.on('chat-message', ({ roomId, sender, text, timestamp, attachments }) => {
-    if (joinedRoom && (text || (attachments && attachments.length > 0))) {
-      io.to(roomId).emit('chat-message', {
-        sender: sender || 'Unknown',
-        text: text || '',
-        timestamp: timestamp || Date.now(),
-        attachments: attachments || []
-      });
-    }
+    if (!joinedRoom) return;
+    const safeText = typeof text === 'string' ? text.slice(0, 2000) : '';
+    const safeSender = typeof sender === 'string' ? sender.slice(0, 60) : 'Unknown';
+    // Only allow a simple array of objects with known shape; strip everything else
+    const safeAttachments = Array.isArray(attachments)
+      ? attachments.slice(0, 5).map(a => ({
+          name: typeof a.name === 'string' ? a.name.slice(0, 200) : '',
+          url:  typeof a.url  === 'string' ? a.url.slice(0, 500)  : '',
+          type: typeof a.type === 'string' ? a.type.slice(0, 50)  : '',
+        }))
+      : [];
+
+    if (!safeText && safeAttachments.length === 0) return;
+
+    io.to(roomId).emit('chat-message', {
+      sender: safeSender,
+      text: safeText,
+      timestamp: timestamp || Date.now(),
+      attachments: safeAttachments
+    });
   });
 
   socket.on('hand-raised', ({ roomId, userId, userName, isRaised }) => {
@@ -268,15 +273,12 @@ io.on('connection', (socket) => {
     if (waitingRoom[roomId]) delete waitingRoom[roomId];
   });
 
-  // ── Disconnect ─────────────────────────────────────────────────────────────
   socket.on('disconnect', (reason) => {
     console.log(`Socket disconnected: ${socket.id}, reason: ${reason}`);
 
-    // If this was a waiting participant, notify the host
     if (socket.waitingRoomId) {
       const wRoomId = socket.waitingRoomId;
 
-      // Remove from waiting list
       if (waitingRoom[wRoomId]) {
         waitingRoom[wRoomId] = waitingRoom[wRoomId].filter(
           w => w.socketId !== socket.id
@@ -286,13 +288,11 @@ io.on('connection', (socket) => {
         }
       }
 
-      // Tell the host to remove the card
       socket.to(wRoomId).emit('waiting-participant-left', {
         socketId: socket.id
       });
     }
 
-    // Remove from active room
     if (joinedRoom && rooms[joinedRoom]) {
       rooms[joinedRoom] = rooms[joinedRoom].filter(p => p.id !== socket.id);
       if (rooms[joinedRoom].length === 0) {
@@ -305,7 +305,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// ── REST endpoints ────────────────────────────────────────────────────────────
+// REST endpoints
 app.post('/api/end-meeting', authMiddleware, async (req, res) => {
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ success: false, message: 'roomId is required' });
@@ -357,15 +357,38 @@ app.get('/api/rooms', authMiddleware, (req, res) => {
   res.json(roomSummary);
 });
 
-app.post('/api/send-email', async (req, res) => {
-  const { accessToken, to, subject, body, senderEmail } = req.body;
-  if (!accessToken || !to || !subject || !body) {
+// FIX #1: /api/send-email now requires authentication.
+// The accessToken is no longer accepted from the client body —
+// the server generates it from the stored refresh token.
+const { google } = require('googleapis');
+
+app.post('/api/send-email', authMiddleware, async (req, res) => {
+  const { to, subject, body } = req.body;
+  if (!to || !subject || !body) {
     return res.status(400).json({ success: false, message: 'Missing required fields' });
   }
+
   try {
-    const emailLines = [`To: ${to}`, `From: ${senderEmail}`, `Subject: ${subject}`, '', body];
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      'https://developers.google.com/oauthplayground'
+    );
+    oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+
+    const { token: accessToken } = await oauth2Client.getAccessToken();
+    const senderEmail = process.env.GMAIL_USER;
+
+    const emailLines = [
+      `To: ${to}`,
+      `From: ${senderEmail}`,
+      `Subject: ${subject}`,
+      '',
+      body
+    ];
     const raw = Buffer.from(emailLines.join('\n'))
       .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
     const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
       headers: {
@@ -374,6 +397,7 @@ app.post('/api/send-email', async (req, res) => {
       },
       body: JSON.stringify({ raw })
     });
+
     if (!response.ok) {
       const err = await response.json();
       throw new Error(err.error?.message || 'Gmail API error');
