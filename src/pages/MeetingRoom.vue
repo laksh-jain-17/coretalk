@@ -412,7 +412,7 @@
         <button @click="admitParticipant(wp.socketId)" style="
           flex:1; padding:8px; background:#4CAF50; color:white;
           border:none; border-radius:8px; cursor:pointer;
-          font-size:13px; font-weight:600;">Admit</button>
+          font-size:13px; font-weight:600;">Accept</button>
         <button @click="denyParticipant(wp.socketId)" style="
           flex:1; padding:8px; background:#d32f2f; color:white;
           border:none; border-radius:8px; cursor:pointer;
