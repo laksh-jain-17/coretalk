@@ -344,6 +344,7 @@ export default {
 /* ---- all your existing styles stay exactly the same ---- */
 #use-link {
     text-decoration:underline;
+    color: white;
 }
 /* ✅ Admin OTP Screen Additions */
 .otp-screen {
