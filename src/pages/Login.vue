@@ -5,6 +5,7 @@
         <div v-if="welcomeText">
           <h1>Welcome to CoreTalk</h1>
           <p>Take benefit of the our online meeting platform with numerous features.</p>
+          <p id="use-link"><router-link to="/HowToUse">How to use</router-link></p>
         </div>
         <div v-else>
           <div id="new_updates">
@@ -341,7 +342,9 @@ export default {
 
 <style>
 /* ---- all your existing styles stay exactly the same ---- */
-
+#use-link {
+    text-decoration:underline;
+}
 /* ✅ Admin OTP Screen Additions */
 .otp-screen {
   display: flex;
