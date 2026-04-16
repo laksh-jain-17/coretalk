@@ -47,7 +47,7 @@
           <div class="divider"><span>OR</span></div>
 
           <button type="button" @click="showGuestModal = true" :disabled="loading || googleLoading">
-            Continue as Guest
+            Sign in as Guest
           </button>
 
           <p id="last">Forget Password <router-link to="/Forget">Click here</router-link></p>
