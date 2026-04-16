@@ -68,12 +68,12 @@
 
 // Tiny helper so we can keep the data readable
 const IMG = {
-  login:    'YOUR_LOGIN_SCREENSHOT_BASE64',    // Image 1  – Login / Register page
-  schedule: 'YOUR_SCHEDULE_SCREENSHOT_BASE64', // Image 2  – Schedule home (Enter / Create)
-  create:   'YOUR_CREATE_SCREENSHOT_BASE64',   // Image 3  – Title input appears
-  title:    'YOUR_TITLE_SCREENSHOT_BASE64',    // Image 4  – Title filled in
-  meetInfo: 'YOUR_MEETINFO_SCREENSHOT_BASE64', // Image 5  – Meeting Info modal
-  ending:   'YOUR_ENDING_SCREENSHOT_BASE64',   // Image 6  – Ending / review page
+  login:    '/screenshots/1.png',    // Image 1  – Login / Register page
+  schedule: '/screenshots/2.png', // Image 2  – Schedule home (Enter / Create)
+  create:   '/screenshots/3.png',   // Image 3  – Title input appears
+  title:    '/screenshots/4.png',    // Image 4  – Title filled in
+  meetInfo: '/screenshots/5.png', // Image 5  – Meeting Info modal
+  ending:   '/screenshots/6.png',   // Image 6  – Ending / review page
 };
 
 export default {
