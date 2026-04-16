@@ -500,6 +500,7 @@ export default {
       chatAttachments: [],  
       waitingParticipants: [],
       isGuest: localStorage.getItem('isGuest') === 'true',
+      isCleanedUp: false,
     };
   },
 
@@ -953,7 +954,11 @@ export default {
       const token = localStorage.getItem('token');
       if (!token) {
         console.error('No token found');
-        this.$router.push('/Login');
+        if (this.$router) {
+          this.$router.push('/Login');
+        } else {
+          window.location.href = '/Login';
+        }
         return false;
       }
 
@@ -1002,7 +1007,11 @@ export default {
         const authToken = localStorage.getItem('token');
         if (!authToken) {
           console.error('No auth token found in localStorage');
-          this.$router.push('/Login');
+          if (this.$router) {
+            this.$router.push('/Login');
+          } else {
+            window.location.href = '/Login';
+          }
           return null;
         }
  
@@ -1156,8 +1165,7 @@ export default {
       this.livekitRoom.on(RoomEvent.Disconnected, async (reason) => {
         console.log('LiveKit disconnected, reason:', reason);
         this.connectionStatus = 'disconnected';
-
-        if (reason === 'leave' || reason === 'room_deleted') return;
+        if (reason === 1 || reason === 'leave' || reason === 'room_deleted') return;
 
         setTimeout(async () => {
           console.log('Attempting to rejoin room...');
@@ -1761,25 +1769,29 @@ export default {
 
     leave() {
       this.cleanup();
-      this.$router.push('/Ending');
+      if (this.$router) {
+        this.$router.push('/Ending');
+      } else {
+        window.location.href = '/Ending'; // fallback
+      }
     },
 
     async endMeeting() {
-      if (!this.isHost) {
-        alert('Only host can end the meeting');
-        return;
-      }
-
+      if (!this.isHost) return;
       try {
+        const authToken = localStorage.getItem('token'); // ADD THIS
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`  // ADD THIS
+          },
           body: JSON.stringify({ roomId: this.roomId })
         });
-
         if (res.ok) {
           this.cleanup();
-          this.$router.push('/Ending');
+          if (this.$router) this.$router.push('/Ending');
+          else window.location.href = '/Ending';
         }
       } catch (err) {
         console.error('Error ending meeting:', err);
@@ -1787,26 +1799,23 @@ export default {
     },
 
     async muteAll() {
-      if (!this.isHost) {
-        alert('Only host can mute all participants');
-        return;
-      }
-
+      if (!this.isHost) return;
       try {
+        const authToken = localStorage.getItem('token'); // ADD THIS
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`  // ADD THIS
+          },
           body: JSON.stringify({ roomId: this.roomId })
         });
-
-        if (res.ok) {
-          console.log('All participants muted');
-        }
+        if (res.ok) console.log('All participants muted');
       } catch (err) {
-        console.error('Error muting all participants:', err);
+        console.error('Error muting all:', err);
       }
     },
-
+    
     async recording() {
       if (!this.isHost) {
         alert('Only host can start recording');
@@ -1997,6 +2006,8 @@ export default {
     },
 
     async cleanup() {
+      if (this.isCleanedUp) return;  // ADD THIS
+      this.isCleanedUp = true;
       console.log('Cleaning up resources...');
 
       if (this.broadcastRetryTimer) {
