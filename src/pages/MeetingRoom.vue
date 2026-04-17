@@ -22,11 +22,17 @@
       <!-- Grid Container for All Participants -->
       <div id="grid-container" :class="gridClass">
         <!-- Local User (You) -->
-        <div class="participant-tile local-participant">
-          <video ref="localVideo" autoplay muted playsinline></video>
+      <div class="participant-tile local-participant">
+        <video
+          ref="localVideo"
+          autoplay
+          muted
+          playsinline
+          :style="{ display: (videoon || isScreenSharing) ? 'block' : 'none' }"
+        ></video>
           <button
-            v-if="isMobile && videoon"
-            @click="flipCamera"
+              v-if="isMobile && (videoon || isScreenSharing)"
+              @click="flipCamera"
             style="
               position: absolute; top: 10px; right: 10px; z-index: 3;
               background: rgba(0,0,0,0.5); border: none; border-radius: 50%;
@@ -35,7 +41,7 @@
             "
           >🔄</button>
 
-          <div v-if="!videoon" class="video-placeholder">
+          <div v-if="!videoon && !isScreenSharing" class="video-placeholder">
             <div class="avatar-circle">{{ userInitials }}</div>
           </div>
 
@@ -1265,24 +1271,24 @@ export default {
         if (tile) {
           const videoElement = tile.querySelector('video');
           if (videoElement) {
-            if (videoElement.srcObject) {
-              console.log('Video already attached for', participant.identity);
-              return;
-            }
+            // Detach any existing tracks first to avoid stale stream layering
             track.attach(videoElement);
-            console.log('Video attached for', participant.identity);
+
+            // Update hasVideo so the placeholder avatar hides
+            const p = this.participants.find(p => p.id === participant.identity);
+            if (p) p.hasVideo = true;
+
+            console.log('Video/screen attached for', participant.identity, 'source:', track.source);
             return;
           }
         }
-
         attempts++;
         if (attempts < maxAttempts) {
           setTimeout(tryAttach, 150);
         } else {
-          console.warn('Could not find tile for', participant.identity, 'after', maxAttempts, 'attempts');
+          console.warn('Could not find tile for', participant.identity);
         }
       };
-
       this.$nextTick(tryAttach);
     },
 
@@ -1294,25 +1300,28 @@ export default {
     },
 
     updateRemoteTrackDisplay(participant) {
-      // FIXED: use getTrack instead of getTrackPublication
       let hasVideo = false;
       let hasMic = false;
 
       if (typeof participant.getTrack === 'function') {
-        const videoPublication = participant.getTrack(Track.Source.Camera);
-        hasVideo = !!(videoPublication && !videoPublication.isMuted);
+        const cameraPublication = participant.getTrack(Track.Source.Camera);
+        const screenPublication = participant.getTrack(Track.Source.ScreenShare);
+        // Either camera OR screen share counts as "has video"
+        hasVideo = !!(cameraPublication && !cameraPublication.isMuted) ||
+               !!(screenPublication && !screenPublication.isMuted);
 
         const audioPublication = participant.getTrack(Track.Source.Microphone);
         hasMic = !!(audioPublication && !audioPublication.isMuted);
       } else {
-        // Fallback: iterate trackPublications
         const pubs = participant.trackPublications;
         if (pubs) {
           const entries = typeof pubs.values === 'function'
             ? [...pubs.values()]
             : Object.values(pubs);
           for (const pub of entries) {
-            if (pub.source === Track.Source.Camera) hasVideo = !pub.isMuted;
+            if (pub.source === Track.Source.Camera || pub.source === Track.Source.ScreenShare) {
+              if (!pub.isMuted) hasVideo = true;
+            }
             if (pub.source === Track.Source.Microphone) hasMic = !pub.isMuted;
           }
         }
@@ -1326,7 +1335,7 @@ export default {
         setTimeout(() => this.updateRemoteTrackDisplay(participant), 200);
       }
     },
-
+    
     initSocket() {
       console.log('Initializing socket connection...');
 
@@ -1606,7 +1615,7 @@ export default {
     },
 
     async sharescreen() {
-      if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
+       if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
         alert('Not connected to meeting room');
         return;
       }
@@ -1616,7 +1625,15 @@ export default {
           await this.livekitRoom.localParticipant.setScreenShareEnabled(true);
           this.isScreenSharing = true;
           await this.$nextTick();
-          // FIXED: use updated helper that avoids getTrackPublication
+
+          // Always show screen share locally, even if camera is off
+          const videoElement = this.$refs.localVideo;
+          if (videoElement) {
+            // Ensure the video element is visible even if videoon is false
+            videoElement.style.display = 'block';
+            // Force srcObject to null before attaching to avoid stale stream
+            videoElement.srcObject = null;
+            }
           this.attachLocalScreenTrack();
         } else {
           await this.stopScreenShare();
@@ -1638,11 +1655,15 @@ export default {
         this.isScreenSharing = false;
 
         const videoElement = this.$refs.localVideo;
+        if (videoElement) {
+          videoElement.srcObject = null;
+        }
+
         if (this.videoon && videoElement) {
-          // FIXED: use updated helper
           this.attachLocalCameraTrack();
         } else if (videoElement) {
-          videoElement.srcObject = null;
+          // Camera is off — hide the video element so the avatar shows
+          videoElement.style.display = 'none';
         }
       } catch (error) {
         console.error('Error stopping screen share:', error);
