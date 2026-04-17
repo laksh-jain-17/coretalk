@@ -420,7 +420,7 @@
           border:none; border-radius:8px; cursor:pointer;
           font-size:13px; font-weight:600;">Accept</button>
         <button @click="denyParticipant(wp.socketId)" style="
-          flex:1; padding:8px; background:#d32f2f; color:white;
+          flex:1; padding:8px; background:#0d0907; color:white;
           border:none; border-radius:8px; cursor:pointer;
           font-size:13px; font-weight:600;">Deny</button>
       </div>
