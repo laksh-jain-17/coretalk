@@ -1409,6 +1409,12 @@ export default {
         alert('Meeting has been locked by the host');
       });
 
+      this.socket.on('meeting-ended', () => {
+        this.cleanup();
+        if (this.$router) this.$router.push('/Ending');
+        else window.location.href = '/Ending';
+      });
+
       this.socket.on('all-muted', () => {
         if (!this.isHost && this.micon) {
           this.toggleMic();
@@ -1838,11 +1844,6 @@ export default {
     },
     
     async recording() {
-      if (!this.isHost) {
-        alert('Only host can start recording');
-        return;
-      }
-
       this.record = !this.record;
 
       if (this.record) {
@@ -1852,8 +1853,30 @@ export default {
             audio: true
           });
 
+          // Mix microphone audio into the recording alongside the screen
+          let combinedStream = screenStream;
+          try {
+            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const audioCtx = new AudioContext();
+            const destination = audioCtx.createMediaStreamDestination();
+
+            // Add system/tab audio from screen capture if present
+            if (screenStream.getAudioTracks().length > 0) {
+              audioCtx.createMediaStreamSource(screenStream).connect(destination);
+            }
+            // Add microphone
+            audioCtx.createMediaStreamSource(micStream).connect(destination);
+
+            combinedStream = new MediaStream([
+              ...screenStream.getVideoTracks(),
+              ...destination.stream.getAudioTracks()
+            ]);
+          } catch (micErr) {
+            console.warn('Mic unavailable for recording, using screen audio only:', micErr);
+          }
+
           this.recordedChunks = [];
-          this.mediaRecorder = new MediaRecorder(screenStream, { mimeType: 'video/webm' });
+          this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
 
           this.mediaRecorder.ondataavailable = (e) => {
             if (e.data && e.data.size > 0) {
