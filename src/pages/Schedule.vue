@@ -208,6 +208,11 @@ export default {
         console.log('Emitted participant-waiting for room:', roomId);
       });
 
+      this.waitingSocket.on('reconnect', () => {
+        console.log('Waiting socket reconnected, re-emitting participant-waiting');
+        this.waitingSocket.emit('participant-waiting', { roomId, userId, userName });  
+      });
+
       this.waitingSocket.on('connect_error', (err) => {
         console.error('Waiting socket error:', err.message);
         clearTimeout(this.waitingTimer);
