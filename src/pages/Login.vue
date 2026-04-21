@@ -14,7 +14,7 @@
             </div>
             <ol>
               <li>More security measures added.</li>
-              <li>User customization allowed.</li>
+              <li>File attachment in chatbox.</li>
               <li>OTP-based authentication is enabled.</li>
               <li>FAQ is available.</li>
               <li>Sign in as guest account is provided.</li>
