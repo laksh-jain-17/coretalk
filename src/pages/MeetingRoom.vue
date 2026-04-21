@@ -1967,39 +1967,86 @@ export default {
     },
 
     async sendEmail() {
-      if (!this.emailTo || !this.emailSubject || !this.emailBody) {
-        alert('Please fill in all fields');
-        return;
+  // Guard: Gmail must be connected
+  if (!this.gmailAccessToken) {
+    alert('Gmail not connected. Please click "Gmail Enact" first.');
+    return;
+  }
+
+  // Guard: required fields
+  if (!this.emailTo || !this.emailSubject || !this.emailBody) {
+    alert('Please fill in To, Subject, and Message fields.');
+    return;
+  }
+
+  // Guard: basic email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(this.emailTo.trim())) {
+    alert('Please enter a valid recipient email address.');
+    return;
+  }
+
+  this.emailSending = true;
+
+  try {
+    const authToken = localStorage.getItem('token');
+    const senderEmail =
+      localStorage.getItem('username') ||
+      this.userName ||
+      '';
+
+    // Sanitize attachments — drop any with missing base64
+    const attachments = (this.emailAttachments || [])
+      .map(a => ({
+        name: a.name || 'attachment',
+        base64: a.base64 || '',
+        mimeType: a.mimeType || 'application/octet-stream',
+      }))
+      .filter(a => a.base64.length > 0);
+
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/send-email`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          accessToken: this.gmailAccessToken,
+          senderEmail,
+          to: this.emailTo.trim(),
+          subject: this.emailSubject.trim(),
+          body: this.emailBody.trim(),
+          attachments,
+        }),
       }
-      this.emailSending = true;
+    );
+
+    if (!response.ok) {
+      // Try to surface the backend error message
+      let errMsg = `Server error (${response.status})`;
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/send-email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            accessToken: this.gmailAccessToken,
-            senderEmail: localStorage.getItem('username'),
-            to: this.emailTo,
-            subject: this.emailSubject,
-            body: this.emailBody,
-            attachments: this.emailAttachments
-          })
-        });
-        if (response.ok) {
-          this.emailTo = '';
-          this.emailSubject = '';
-          this.emailBody = '';
-          this.emailAttachments = [];
-          this.showEmailPanel = false;
-        } else {
-          throw new Error('Failed to send');
-        }
-      } catch (err) {
-        alert('Failed to send email: ' + err.message);
-      } finally {
-        this.emailSending = false;
-      }
-    },
+        const errData = await response.json();
+        errMsg = errData.message || errData.error || errMsg;
+      } catch (_) {}
+      throw new Error(errMsg);
+    }
+
+    // Success — reset form
+    this.emailTo = '';
+    this.emailSubject = '';
+    this.emailBody = '';
+    this.emailAttachments = [];
+    this.showEmailPanel = false;
+    alert('Email sent successfully!');
+  } catch (err) {
+    console.error('sendEmail error:', err);
+    alert('Failed to send email: ' + err.message);
+  } finally {
+    this.emailSending = false;
+  }
+},
 
     handleChatAttachments(event) {
       const files = Array.from(event.target.files);
