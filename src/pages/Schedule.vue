@@ -167,24 +167,34 @@ export default {
       this.waitingResult = null;
       this.message = '';
 
-      // Fallback just in case
       if (!userName) {
         try {
           const decoded = jwtDecode(localStorage.getItem('token'));
           userName = decoded.name || 'Participant';
-        } catch (e) {
-          userName = 'Participant';
-        }
+      } catch (e) {
+        userName = 'Participant';
       }
+    }
 
-      let userId = null;
+  // ✅ FIX: stable userId — guest gets a persistent guestId, not Date.now() every time
+    let userId = null;
+    const isGuest = localStorage.getItem('isGuest') === 'true';
+
+    if (isGuest) {
+      let guestId = localStorage.getItem('guestId');
+      if (!guestId) {
+        guestId = `guest_${Date.now()}`;
+        localStorage.setItem('guestId', guestId);
+      }
+      userId = guestId;
+    } else {
       try {
         const decoded = jwtDecode(localStorage.getItem('token'));
         userId = decoded.id || decoded.userId || `user_${Date.now()}`;
       } catch (e) {
         userId = `user_${Date.now()}`;
       }
-      console.log('Participant name being sent:', userName);
+    }
       
       if (this.waitingSocket) {
         this.waitingSocket.disconnect();
