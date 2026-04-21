@@ -2229,13 +2229,14 @@ export default {
     console.log('=== MEETING ROOM MOUNTING ===');
 
     const isGuest = localStorage.getItem('isGuest') === 'true';
-    if (isGuest) {
-        this.userName = localStorage.getItem('username') || 'Guest';
-        this.userId = `guest_${Date.now()}`;
-        this.isHost = false;
-    } else {
-        if (!this.initUserFromToken()) return;
-    }
+  if (isGuest) {
+    this.userName = localStorage.getItem('username') || 'Guest';
+    // ✅ FIX: reuse the stable guestId set in startWaiting(), don't generate a new one
+    this.userId = localStorage.getItem('guestId') || `guest_${Date.now()}`;
+    this.isHost = false;
+  } else {
+    if (!this.initUserFromToken()) return;
+  }
 
     this.roomId = this.computedRoomId;
     this.title = localStorage.getItem('meetingtitle') || 'Meeting Room';
