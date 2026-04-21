@@ -1009,45 +1009,81 @@ export default {
     },
 
     async getLivekitToken() {
-      try {
-        const authToken = localStorage.getItem('token');
-        if (!authToken) {
-          console.error('No auth token found in localStorage');
-          if (this.$router) {
-            this.$router.push('/Login');
-          } else {
-            window.location.href = '/Login';
-          }
-          return null;
-        }
- 
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/livekit/token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`   // ✅ THIS WAS MISSING
-          },
-          body: JSON.stringify({
-            roomName: this.roomId,
-            participantName: this.userName,
-          })
-        });
- 
-        if (!response.ok) {
-          const errBody = await response.json().catch(() => ({}));
-          console.error('LiveKit token request failed:', response.status, errBody);
-          throw new Error(`Failed to get LiveKit token: ${response.status}`);
-        }
- 
-        const data = await response.json();
-        console.log('Raw token response:', data);
-        return data;
-      } catch (error) {
-        console.error('Error getting LiveKit token:', error);
-        alert('Failed to connect to meeting room');
+  try {
+    const isGuest = localStorage.getItem('isGuest') === 'true';
+
+    // ✅ FIX: guests use a separate unauthenticated endpoint
+    if (isGuest) {
+      const guestId = localStorage.getItem('guestId');
+      const guestName = localStorage.getItem('username') || 'Guest';
+
+      if (!guestId) {
+        console.error('No guestId found — was startWaiting() called first?');
+        alert('Session error. Please rejoin the meeting.');
         return null;
       }
-    },
+
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/livekit/guest-token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomName: this.roomId,
+            participantName: guestName,
+            guestId,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        console.error('Guest LiveKit token failed:', response.status, errBody);
+        throw new Error(`Failed to get guest LiveKit token: ${response.status}`);
+      }
+
+      return await response.json();
+    }
+
+    // Registered user — existing logic unchanged
+    const authToken = localStorage.getItem('token');
+    if (!authToken) {
+      console.error('No auth token found in localStorage');
+      if (this.$router) this.$router.push('/Login');
+      else window.location.href = '/Login';
+      return null;
+    }
+
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/livekit/token`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          roomName: this.roomId,
+          participantName: this.userName,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => ({}));
+      console.error('LiveKit token request failed:', response.status, errBody);
+      throw new Error(`Failed to get LiveKit token: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Raw token response:', data);
+    return data;
+  } catch (error) {
+    console.error('Error getting LiveKit token:', error);
+    alert('Failed to connect to meeting room');
+    return null;
+  }
+},
     
     async initLivekit() {
       console.log('=== INITIALIZING LIVEKIT ===');
