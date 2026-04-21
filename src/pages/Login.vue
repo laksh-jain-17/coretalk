@@ -13,13 +13,15 @@
               <h1>What's new ?</h1>
             </div>
             <ol>
-              <li>Auto-closing trays while inactive.</li>
-              <li>Wider video feed.</li>
-              <li>Lightweight and reliable application.</li>
               <li>More security measures added.</li>
               <li>User customization allowed.</li>
+              <li>OTP-based authentication is enabled.<li>
+              <li>FAQ is available.</li>
+              <li>Sign in as guest account is provided.</li>
+              <li>Gmail Enact feature.</li>
+              <li>Bug fixes.</li>
             </ol>
-            <p>Version v2.</p>
+            <p>Version v3.</p>
           </div>
         </div>
       </div>
