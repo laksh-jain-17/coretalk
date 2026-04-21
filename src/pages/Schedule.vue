@@ -232,24 +232,35 @@ export default {
       });
 
       this.waitingSocket.on('admission-result', ({ admitted }) => {
-        console.log('Admission result:', admitted);
-        clearTimeout(this.waitingTimer);
-        this.waitingSocket.disconnect();
-        this.waitingSocket = null;
+  console.log('Admission result:', admitted);
+  clearTimeout(this.waitingTimer);
 
-        if (admitted) {
-          this.waitingResult = 'admitted';
-          this.message = '';
-          setTimeout(() => {
-            this.isWaiting = false;
-            this.$router.push(`/MeetingRoom/${roomId}`);
-          }, 600);
-        } else {
-          this.waitingResult = 'denied';
-          this.isWaiting = false;
-          this.message = 'The host did not admit you to this meeting.';
+  if (admitted) {
+    this.waitingResult = 'admitted';
+    this.message = '';
+
+    // ✅ FIX: navigate first, then disconnect — server cleanup runs after MeetingRoom mounts
+    setTimeout(() => {
+      this.isWaiting = false;
+      this.$router.push(`/MeetingRoom/${roomId}`).then(() => {
+        if (this.waitingSocket) {
+          this.waitingSocket.disconnect();
+          this.waitingSocket = null;
         }
       });
+    }, 600);
+
+  } else {
+    // Denied — safe to disconnect immediately, no MeetingRoom to worry about
+    if (this.waitingSocket) {
+      this.waitingSocket.disconnect();
+      this.waitingSocket = null;
+    }
+    this.waitingResult = 'denied';
+    this.isWaiting = false;
+    this.message = 'The host did not admit you to this meeting.';
+  }
+});
 
       // 8-second auto-reject
       this.waitingTimer = setTimeout(() => {
