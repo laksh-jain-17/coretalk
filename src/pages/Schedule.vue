@@ -45,7 +45,7 @@
             <div style="width: 200px; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden;">
               <div style="
                 height: 100%; background: #1e3a8a; border-radius: 3px;
-                animation: countdown 8s linear forwards;
+                animation: countdown 15s linear forwards;
                 transform-origin: left;
               "></div>
             </div>
@@ -248,7 +248,7 @@ export default {
           this.waitingResult = 'denied';
           this.message = 'No response from host. Request timed out after 8 seconds.';
         }
-      }, 8000);
+      }, 15000);
     },
 
     cancelWaiting() {
