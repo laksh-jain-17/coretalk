@@ -169,16 +169,26 @@ io.on('connection', (socket) => {
 
   // FIX #2: Verify the emitting socket is actually the host before admitting/denying.
   socket.on('admit-participant', async ({ socketId, roomId }) => {
-    if (!socketId || !roomId || !socketUserId) return;
+    if (!socketId || !roomId) return;
 
-    const isHost = await verifyIsHost(socketUserId, roomId);
-    if (!isHost) return;
+    // Check if the emitting socket is the host from the in-memory rooms object
+    const hostEntry = rooms[roomId]?.find(p => p.id === socket.id && p.isHost);
+    if (!hostEntry) {
+      // Fallback: try socketUserId DB check
+      if (socketUserId) {
+        const isHost = await verifyIsHost(socketUserId, roomId);
+        if (!isHost) return;
+      } else {
+        return; // can't verify, reject
+      }
+    }
 
     if (waitingRoom[roomId]) {
       waitingRoom[roomId] = waitingRoom[roomId].filter(w => w.socketId !== socketId);
     }
 
     io.to(socketId).emit('admission-result', { admitted: true });
+    console.log('Admitted socket:', socketId);
   });
 
   socket.on('deny-participant', async ({ socketId, roomId }) => {
