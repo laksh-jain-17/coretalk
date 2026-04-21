@@ -70,4 +70,49 @@ router.post('/token', authMiddleware, async (req, res) => {
   }
 });
 
+// ✅ NEW: guest token — no authMiddleware, identity comes from the admitted guestId
+router.post('/guest-token', async (req, res) => {
+  const { roomName, participantName, guestId } = req.body;
+
+  if (!roomName || !guestId) {
+    return res.status(400).json({ error: 'roomName and guestId are required' });
+  }
+
+  if (!process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_API_SECRET || !process.env.LIVEKIT_URL) {
+    return res.status(500).json({ error: 'Server configuration error' });
+  }
+
+  try {
+    const at = new AccessToken(
+      process.env.LIVEKIT_API_KEY,
+      process.env.LIVEKIT_API_SECRET,
+      {
+        identity: guestId,                        // stable — matches what the host admitted
+        name: participantName || 'Guest',
+        metadata: JSON.stringify({ isHost: false }),
+      }
+    );
+
+    at.addGrant({
+      roomJoin: true,
+      room: roomName,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+      canUpdateOwnMetadata: true,
+    });
+
+    const token = await at.toJwt();
+
+    if (!token || typeof token !== 'string' || token.split('.').length !== 3) {
+      return res.status(500).json({ error: 'Token generation failed' });
+    }
+
+    return res.status(200).json({ token, url: process.env.LIVEKIT_URL });
+  } catch (error) {
+    console.error('Error generating guest LiveKit token:', error.message);
+    return res.status(500).json({ error: 'Failed to generate token' });
+  }
+});
+
 module.exports = router;
