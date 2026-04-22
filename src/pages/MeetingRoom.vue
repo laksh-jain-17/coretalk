@@ -211,6 +211,23 @@
                 <div v-for="(msg, index) in messages" :key="index" class="message">
                   <div class="message-sender">{{ msg.sender }}</div>
                   <div class="message-text">{{ msg.text }}</div>
+                  <div v-if="msg.attachments && msg.attachments.length > 0">
+                    <div v-for="(att, i) in msg.attachments" :key="i">
+                    <img
+                      v-if="att.mimeType && att.mimeType.startsWith('image/')"
+                      :src="'data:' + att.mimeType + ';base64,' + att.base64"
+                      style="max-width:200px; border-radius:8px; margin-top:6px;"
+                    />
+                    <a
+                    v-else
+                      :href="'data:' + att.mimeType + ';base64,' + att.base64"
+                      :download="att.name"
+                       style="display:block; margin-top:6px; color:#3730a3;"
+                    >    
+                    📎 {{ att.name }} ({{ formatFileSize(att.size) }})
+                  </a>
+                  </div>
+                </div>
                   <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
                 </div>
               </div>
@@ -1773,6 +1790,7 @@ export default {
           name: a.name,
           mimeType: a.mimeType,
           previewUrl: a.previewUrl,  // images only, others null
+          base64: a.base64, 
           size: a.size
         }))
       };
