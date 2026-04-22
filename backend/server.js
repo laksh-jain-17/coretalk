@@ -371,38 +371,32 @@ app.get('/api/rooms', authMiddleware, (req, res) => {
 // The accessToken is no longer accepted from the client body —
 // the server generates it from the stored refresh token.
 const { google } = require('googleapis');
-
 app.post('/api/send-email', async (req, res) => {
-  const { to, subject, body } = req.body;
-  if (!to || !subject || !body) {
+  const { to, subject, body, accessToken, senderEmail } = req.body;
+
+  if (!to || !subject || !body || !accessToken || !senderEmail) {
     return res.status(400).json({ success: false, message: 'Missing required fields' });
   }
 
   try {
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      'https://developers.google.com/oauthplayground'
-    );
-    oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
-
-    const { token: accessToken } = await oauth2Client.getAccessToken();
-    const senderEmail = process.env.GMAIL_USER;
-
     const emailLines = [
       `To: ${to}`,
-      `From: ${senderEmail}`,
+      `From: ${senderEmail}`,  // ← user's actual email
       `Subject: ${subject}`,
       '',
       body
     ];
+
     const raw = Buffer.from(emailLines.join('\n'))
-      .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
 
     const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${accessToken}`,  // ← user's token
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ raw })
@@ -412,9 +406,11 @@ app.post('/api/send-email', async (req, res) => {
       const err = await response.json();
       throw new Error(err.error?.message || 'Gmail API error');
     }
+
     res.json({ success: true, message: 'Email sent successfully' });
   } catch (error) {
     console.error('Email send error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
