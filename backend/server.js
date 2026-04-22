@@ -372,7 +372,7 @@ app.get('/api/rooms', authMiddleware, (req, res) => {
 // the server generates it from the stored refresh token.
 const { google } = require('googleapis');
 
-app.post('/api/send-email', authMiddleware, async (req, res) => {
+app.post('/api/send-email', async (req, res) => {
   const { to, subject, body } = req.body;
   if (!to || !subject || !body) {
     return res.status(400).json({ success: false, message: 'Missing required fields' });
