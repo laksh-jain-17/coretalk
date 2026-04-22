@@ -222,12 +222,13 @@ io.on('connection', (socket) => {
     const safeSender = typeof sender === 'string' ? sender.slice(0, 60) : 'Unknown';
     // Only allow a simple array of objects with known shape; strip everything else
     const safeAttachments = Array.isArray(attachments)
-      ? attachments.slice(0, 5).map(a => ({
-          name: typeof a.name === 'string' ? a.name.slice(0, 200) : '',
-          url:  typeof a.url  === 'string' ? a.url.slice(0, 500)  : '',
-          type: typeof a.type === 'string' ? a.type.slice(0, 50)  : '',
-        }))
-      : [];
+  ? attachments.slice(0, 5).map(a => ({
+      name:     typeof a.name     === 'string' ? a.name.slice(0, 200)     : '',
+      mimeType: typeof a.mimeType === 'string' ? a.mimeType.slice(0, 100) : '',
+      base64:   typeof a.base64   === 'string' && a.base64.length < 2_800_000 ? a.base64 : '',
+      size:     typeof a.size     === 'number' ? a.size                   : 0,
+    }))
+  : [];
 
     if (!safeText && safeAttachments.length === 0) return;
 
