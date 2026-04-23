@@ -1428,16 +1428,17 @@ export default {
         this.isSocketConnected = false;
       });
 
-      this.socket.on('chat-message', ({ sender, text, timestamp }) => {
+      this.socket.on('chat-message', ({ sender, text, timestamp, attachments }) => {
         const message = {
           sender: sender || 'Unknown',
           text: text || '',
-          timestamp: timestamp || Date.now()
+          timestamp: timestamp || Date.now(),
+          attachments: attachments || []   // ← ADD THIS
         };
         this.messages.push(message);
 
         if (this.activePanel !== 'chat') {
-          this.unreadMessages++;
+            this.unreadMessages++;
         }
 
         this.$nextTick(() => {
