@@ -257,7 +257,7 @@
                 </div>
                 <!-- Input row -->
                 <div style="display:flex; padding:12px; gap:8px; align-items:center;">
-                  <label style="cursor:pointer; color:#888; font-size:20px; line-height:1; flex-shrink:0;"
+                  <label v-if="!isGuest" style="cursor:pointer; color:#888; font-size:20px; line-height:1; flex-shrink:0;"
                    title="Attach file">
                   📎
                   <input type="file" multiple style="display:none;"
