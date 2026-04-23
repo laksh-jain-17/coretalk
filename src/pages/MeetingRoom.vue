@@ -224,7 +224,7 @@
                       :download="att.name"
                        style="display:block; margin-top:6px; color:#3730a3;"
                     >    
-                    📎 {{ att.name }} ({{ formatFileSize(att.size) }})
+                    + {{ att.name }} ({{ formatFileSize(att.size) }})
                   </a>
                   </div>
                 </div>
@@ -259,7 +259,7 @@
                 <div style="display:flex; padding:12px; gap:8px; align-items:center;">
                   <label v-if="!isGuest" style="cursor:pointer; color:#888; font-size:20px; line-height:1; flex-shrink:0;"
                    title="Attach file">
-                  📎
+                  +
                   <input type="file" multiple style="display:none;"
                    @change="handleChatAttachments" accept="*/*" />
                   </label>
