@@ -17,9 +17,9 @@
         <button @click="showWhiteboard = !showWhiteboard" :class="{ 'active-feature': showWhiteboard }">
             {{ showWhiteboard ? 'Whiteboard ON' : 'Whiteboard' }}
         </button>
-        <button @click="showAiNotes = !showAiNotes" :class="{ 'active-feature': showAiNotes }">
+        <!--button @click="showAiNotes = !showAiNotes" :class="{ 'active-feature': showAiNotes }">
             {{ showAiNotes ? 'AI Notes ON' : 'AI Notes' }}
-        </button>
+        </button-->
       </div>
     </transition>
 
