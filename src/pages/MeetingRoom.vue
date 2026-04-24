@@ -14,6 +14,12 @@
           {{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}
         </button>
         <button v-if="!isGuest" @click="emailEnact">Gmail Enact</button>
+        <button @click="showWhiteboard = !showWhiteboard" :class="{ 'active-feature': showWhiteboard }">
+            {{ showWhiteboard ? 'Whiteboard ON' : 'Whiteboard' }}
+        </button>
+        <button @click="showAiNotes = !showAiNotes" :class="{ 'active-feature': showAiNotes }">
+            {{ showAiNotes ? 'AI Notes ON' : 'AI Notes' }}
+        </button>
       </div>
     </transition>
 
@@ -442,6 +448,8 @@
           font-size:13px; font-weight:600;">Deny</button>
       </div>
     </div>
+    <WhiteboardPanel v-if="showWhiteboard" :socket="socket" :roomId="roomId" @close="showWhiteboard = false"/>
+    <AiNotesPanel v-if="showAiNotes" :roomTitle="title" @close="showAiNotes = false"/>
   </div>
 </template>
 
@@ -449,9 +457,12 @@
 import { jwtDecode } from 'jwt-decode';
 import { io } from 'socket.io-client';
 import { Room, RoomEvent, Track, ConnectionState } from 'livekit-client';
-
 export default {
   name: 'MeetingRoom',
+  components: {
+    WhiteboardPanel,
+    AiNotesPanel,
+  },
   data() {
     return {
       isHost: false,
@@ -524,6 +535,8 @@ export default {
       waitingParticipants: [],
       isGuest: localStorage.getItem('isGuest') === 'true',
       isCleanedUp: false,
+      showWhiteboard: false,
+      showAiNotes: false,
     };
   },
 
@@ -2228,6 +2241,8 @@ export default {
       this.emailAttachments = [];
       this.waitingParticipants = [];
       this.chatAttachments = [];
+      this.showWhiteboard = false;
+      this.showAiNotes = false;
     }
   },
 
