@@ -12,6 +12,9 @@ const userSchema = new mongoose.Schema({
     resetOtpExpiry: { type: Date,   default: null },
     adminLoginOtp:        { type: String, default: null }, // hashed
     adminLoginOtpExpiry:  { type: Date,   default: null },
+    emailVerifyToken: {type:String, default:null},
+    emailVerifyExpiry: {type:Date, default:null},
+    isVerified: {type:Boolean, default:false},
 }, {
     timestamps: true
 });
