@@ -261,6 +261,21 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('wb:stroke', (data) => {
+    if (!data || !data.roomId) return;
+    // Only relay to others in the same room
+    const targetInRoom = rooms[data.roomId]?.find(p => p.id === socket.id);
+    if (!targetInRoom) return;
+    socket.to(data.roomId).emit('wb:stroke', data);
+  });
+
+  socket.on('wb:clear', ({ roomId }) => {
+    if (!roomId) return;
+    const targetInRoom = rooms[roomId]?.find(p => p.id === socket.id);
+    if (!targetInRoom) return;
+    socket.to(roomId).emit('wb:clear');
+  });
+
   socket.on('mute-all', async ({ roomId }) => {
     if (!roomId || !socketUserId) return;
     const isHost = await verifyIsHost(socketUserId, roomId);
