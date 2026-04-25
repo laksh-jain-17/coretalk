@@ -327,7 +327,7 @@ router.post('/google-login', async (req, res) => {
     if (!user) {
       // FIX #9: Consistent bcrypt work factor of 12 for random passwords too.
       const randomPassword = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 12);
-      user = new User({ name, email, password: randomPassword, googleId, isAdmin: false });
+      user = new User({ name, email, password: randomPassword, googleId, isAdmin: false, isVerified: true });
       await user.save();
     } else if (!user.googleId) {
       user.googleId = googleId;
