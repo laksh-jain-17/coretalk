@@ -79,6 +79,33 @@ router.post('/register', async (req, res) => {
   }
 });
 
+router.get('/verify-email/:token', async (req, res) => {
+  try {
+    const hashedToken = crypto.createHash('sha256').update(req.params.token).digest('hex');
+
+    const user = await User.findOne({
+      emailVerifyToken: hashedToken,
+      emailVerifyExpiry: { $gt: new Date() },
+    });
+
+    if (!user) {
+      // Redirect to frontend with error — link expired or already used
+      return res.redirect(`${process.env.FRONTEND_URL}/login?verified=invalid`);
+    }
+
+    user.isVerified = true;
+    user.emailVerifyToken = null;
+    user.emailVerifyExpiry = null;
+    await user.save();
+
+    // Redirect to login page with success flag
+    return res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
+  } catch (err) {
+    console.error('Email verify error:', err);
+    return res.redirect(`${process.env.FRONTEND_URL}/login?verified=invalid`);
+  }
+});
+
 // Login
 router.post('/login', login);
 
