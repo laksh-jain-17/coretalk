@@ -16,6 +16,7 @@ const sendPasswordChangeEmail = require('../utils/sendPasswordChangeEmail');
 const sendAdminLoginOtpEmail = require('../utils/sendAdminLoginOtpEmail');
 const rateLimit = require('express-rate-limit');
 const isDisposableEmail = require('../utils/validateEmail');
+const sendVerificationEmail = require('../utils/sendVerificationEmail');
 
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -46,14 +47,32 @@ router.post('/register', async (req, res) => {
   try {
     const existingUser = await User.findOne({ email });
     if (existingUser)
-      // FIX #15: Generic message to prevent email enumeration.
       return res.status(400).json({ message: 'Registration failed. Please check your details.' });
 
-    // FIX #9: Consistent bcrypt work factor of 12 (was 8 here, 10 elsewhere).
     const hashedPassword = await bcrypt.hash(password, 12);
-    const newUser = new User({ name, email, password: hashedPassword });
+
+    // ✅ Generate a secure token (same pattern as your OTP logic, just longer)
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+      isVerified: false,
+      emailVerifyToken: hashedToken,
+      emailVerifyExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+    });
     await newUser.save();
-    return res.status(201).json({ message: 'User created' });
+
+    // Send email — non-fatal, don't block registration response
+    sendVerificationEmail(email, rawToken).catch(err =>
+      console.error('Verification email failed (non-fatal):', err)
+    );
+
+    return res.status(201).json({
+      message: 'Account created! Please check your email to verify your account before logging in.',
+    });
   } catch (err) {
     console.error('Registration error', err);
     return res.status(500).json({ message: 'Server error' });
