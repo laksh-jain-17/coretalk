@@ -1,18 +1,20 @@
 const nodemailer = require('nodemailer');
+
 const transporter = nodemailer.createTransport({
 	service: 'gmail',
-	auth: { 
-		user:process.env.EMAIL_USER,
+	auth: {
+		user: process.env.EMAIL_USER,
 		pass: process.env.EMAIL_PASS,
 	},
 });
+
 const sendVerificationEmail = async (toEmail, token) => {
 	const verifyUrl = `${process.env.BACKEND_URL}/api/auth/verify-email/${token}`;
 	await transporter.sendMail({
-		from: "CoreTalk" <${process.env.EMAIL_USER}>`,
+		from: `"CoreTalk" <${process.env.EMAIL_USER}>`,
 		to: toEmail,
 		subject: 'Verify your CoreTalk account',
-		html:`
+		html: `
 			<div style="font-family:sans-serif;max-width:480px;margin:auto">
 				<h2 style="color:#6366f1">Welcome To Coretalk</h2>
 				<p>Click the button below to verify your email and activate your account.</p>
@@ -23,12 +25,12 @@ const sendVerificationEmail = async (toEmail, token) => {
 						Verify My Email
 				</a>
 				<p style="color:#666;font-size:13px">
-					This link expires in <strong>24 hours</string>.<br>
+					This link expires in <strong>24 hours</strong>.<br>
 					If you didn't sign up for CoreTalk, you can safely ignore this email.
 				</p>
 			</div>
-			`,
-		});
-	};
+		`,
+	});
+};
+
 module.exports = sendVerificationEmail;
-			
