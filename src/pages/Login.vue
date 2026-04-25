@@ -34,6 +34,10 @@
           <p>It's FREE & takes less than a minute.</p>
           <input v-model="email" @keypress="erase" type="email" placeholder="Email address" :disabled="loading" />
           <input v-model="password" @keypress="erase" type="password" placeholder="Password" :disabled="loading" />
+          <p v-if="verifyMessage"
+             :style="{ color: verifySuccess ? 'green' : 'red', fontWeight: 'bold', paddingLeft: '5px' }">
+              {{ verifyMessage }}
+          </p>
           <p v-if="message" style="color:red; font-weight:bold; padding-left:5px;">{{ message }}</p>
           <button type="submit" :disabled="loading || googleLoading">
             <span v-if="loading" class="spinner"></span>
@@ -154,11 +158,16 @@ export default {
       showGuestModal: false,
       guestName: '',
       guestError: '',
+      verifyMessage: '',    
+      verifySuccess: false, 
     };
   },
 
   mounted() {
     this.show = true;
+     const verified = this.$route.query.verified;
+  if (verified === 'true')    { this.verifyMessage = ' Email verified! You can now log in.'; this.verifySuccess = true; }
+  if (verified === 'invalid') { this.verifyMessage = ' Verification link is invalid or expired. Please register again.'; }
     this.interval = setInterval(() => {
       this.welcomeText = !this.welcomeText;
     }, 10000);
@@ -275,7 +284,11 @@ export default {
         this.$router.push('/Schedule');
       } catch (err) {
         console.error('Login error', err);
-        this.message = err.response?.data?.message || err.response?.data?.msg || 'Login failed. Please try again.';
+         if (err.response?.data?.unverified) {
+    this.message = '📧 Please verify your email before logging in. Check your inbox.';
+  } else {
+    this.message = err.response?.data?.message || err.response?.data?.msg || 'Login failed. Please try again.';
+  }
       } finally {
         this.loading = false;
       }
