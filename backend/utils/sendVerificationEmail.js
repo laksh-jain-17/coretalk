@@ -3,15 +3,15 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransport({
 	service: 'gmail',
 	auth: {
-		user: process.env.EMAIL_USER,
-		pass: process.env.EMAIL_PASS,
+		user: process.env.GMAIL_USER,
+		pass: process.env.GMAIL_APP_PASSWORD,
 	},
 });
 
 const sendVerificationEmail = async (toEmail, token) => {
 	const verifyUrl = `${process.env.BACKEND_URL}/api/auth/verify-email/${token}`;
 	await transporter.sendMail({
-		from: `"CoreTalk" <${process.env.EMAIL_USER}>`,
+		from: `"CoreTalk" <${process.env.GMAIL_USER}>`,
 		to: toEmail,
 		subject: 'Verify your CoreTalk account',
 		html: `
