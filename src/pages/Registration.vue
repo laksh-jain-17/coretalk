@@ -6,23 +6,30 @@
             <p>Take benefit of the our online meeting platform with numerous features to the full extent.</p>
         </div>
         <div id="rightbox">
-            <!--h1>Registration page</h1-->
-            <form id="info" @submit.prevent="loginuser">
-                <!--p>Don't have an account? <a href="#">Create a new one.</a></p-->
-                <!--p>It's FREE & takes less than a minute.</p-->
+            <!-- ✅ Show success state after registration -->
+            <div v-if="registered" id="success-box">
+                <div id="success-icon">✉️</div>
+                <h2>Check your email!</h2>
+                <p>We've sent a verification link to <strong>{{ submittedEmail }}</strong>. Click the link in the email to activate your account.</p>
+                <p id="spam-note">Don't see it? Check your spam folder.</p>
+                <a href="/Login" id="back-to-login">Go to Login →</a>
+            </div>
+
+            <form v-else id="info" @submit.prevent="loginuser">
                 <input v-model="name" type="text" placeholder="Enter full name">
                 <input v-model="email" type="email" placeholder="Email address">
                 <input v-model="password" type="password" placeholder="Password">
                 <input v-model="confirm_password" type="password" placeholder="Confirm Password">
                 <p v-if="message" style="color:red; font-weight:bold;">{{ message }}</p>
-                <button type="submit">Register Now</button>
-                <!--button id="google-login">Login with Google</button-->
-                <!--p id="last">Forget Password <a href="#">Click here</a></p-->
+                <button type="submit" :disabled="loading">
+                    {{ loading ? 'Registering...' : 'Register Now' }}
+                </button>
             </form>
         </div>
     </div>
     </transition>
 </template>
+
 <script>
     export default{
         data(){
@@ -32,7 +39,10 @@
                 message : '',
                 name : '',
                 confirm_password : '',
-                show : false
+                show : false,
+                registered: false,   // ✅ NEW: tracks successful registration
+                submittedEmail: '',  // ✅ NEW: show which email we sent to
+                loading: false,      // ✅ NEW: prevent double-submit
             }; 
         },
         mounted(){
@@ -40,30 +50,28 @@
         },
         methods:{
           async loginuser(){
-            if(!this.email || !this.password)
-            {
-              console.log("Empty details");
+            this.message = '';
+
+            if(!this.name || !this.email || !this.password){
               this.message = "Fill your details which are empty";
               return;
             }
             const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if(!regex.test(this.email))
-            {
+            if(!regex.test(this.email)){
               this.message = "Fill your email address properly";
               return;
             }
-            if(this.password.length < 6)
-            {
+            if(this.password.length < 6){
               this.message = "Password should be more than 6 characters";
               return;
             }
-            if(this.password != this.confirm_password)
-            {
+            if(this.password != this.confirm_password){
                 this.message = "Password doesn't match";
                 return;
             }
+
+            this.loading = true;
             try{
-              console.log("Registering user with " , this.name, this.email, this.password);
               const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/register`, {
                 method:'POST',
                 headers:{ 'Content-Type':'application/json' },
@@ -74,23 +82,28 @@
                 })
               });
               const data = await response.json();
-              if(response.ok)
-              {
-                console.log("Email " + this.email + "Password " + this.password)
-                window.location.href = "/Login";
-              }
-              else{
-                this.message = "Login failed";
+
+              if(response.ok){
+                // ✅ FIX: Don't redirect to login. Show "check your email" screen.
+                this.submittedEmail = this.email;
+                this.registered = true;
+              } else {
+                // Show the actual error from backend (e.g. "Registration failed...")
+                this.message = data.message || "Registration failed. Please try again.";
               }
             }
-            catch(err)
-            {
-              console.error("Login error " , err);
+            catch(err){
+              console.error("Registration error", err);
+              this.message = "Something went wrong. Please try again.";
+            }
+            finally {
+              this.loading = false;
             }
           }
         }
     };
 </script>
+
 <style>
 #container {
   display: flex;
@@ -99,7 +112,7 @@
 }
 #leftbox {
   width: 65%;
-  background-color: #1e3a8a; /* Deep blue */
+  background-color: #1e3a8a;
   color: white;
   display: flex;
   flex-direction: column;
@@ -138,11 +151,52 @@
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
-#rightbox h1{
-  font-family:helvetica;
-  position:absolute;
-  top:50px;
+
+/* ✅ Success box styles */
+#success-box {
+  width: 100%;
+  max-width: 400px;
+  background-color: white;
+  padding: 50px 40px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  text-align: center;
 }
+#success-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+#success-box h2 {
+  font-size: 1.5rem;
+  margin-bottom: 12px;
+  color: #1e3a8a;
+}
+#success-box p {
+  color: #444;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+#spam-note {
+  color: #888 !important;
+  font-size: 0.82rem !important;
+}
+#back-to-login {
+  display: inline-block;
+  margin-top: 20px;
+  color: #1e3a8a;
+  font-weight: bold;
+  text-decoration: none;
+  border: 2px solid #1e3a8a;
+  padding: 10px 24px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+#back-to-login:hover {
+  background-color: #1e3a8a;
+  color: white;
+}
+
 #rightbox p{
   color:gray;
   font-size:12px;
@@ -160,6 +214,7 @@
   margin: 10px 0;
   border: 1px solid #ccc;
   border-radius: 6px;
+  box-sizing: border-box;
 }
 #rightbox button {
   width: 100%;
@@ -176,12 +231,11 @@
   cursor: pointer;
   transition: background-color 0.3s ease;
 }
-#rightbox button#google-login{
-  background-color:white;
-  color:black;
-  border:1px solid black;
+#rightbox button:disabled {
+  background-color: #555;
+  cursor: not-allowed;
 }
-#rightbox button:hover {
+#rightbox button:hover:not(:disabled) {
   background-color:white;
   color:black;
   border:1px solid black;
@@ -199,10 +253,6 @@
 .fade-enter-to, .fade-leave-from{
     opacity:1;
 }
-#rightbox button#google-login:hover{
-  background-color:black;
-  color:white;
-}
 @media (max-width: 768px) {
   #container {
     flex-direction: column;
@@ -213,8 +263,4 @@
     padding: 40px;
   }
 }
-
 </style>
-
-
-
