@@ -106,6 +106,31 @@ router.setGetRooms = (fn) => {
   getRoomsFunction = fn;
 };
 
+// GET /api/admin/guest-stats
+router.get('/guest-stats', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    // Guest = no googleId, registered via email (adjust to your definition)
+    const totalGuests = await User.countDocuments({ googleId: null });
+
+    // "Active" = currently in a room (has a live Room entry where host matches)
+    const activeRooms = await Room.find({});
+    const activeHostIds = activeRooms.map(r => r.host.toString());
+    const activeGuests = await User.countDocuments({
+      googleId: null,
+      _id: { $in: activeHostIds }
+    });
+
+    res.json({
+      totalGuests,
+      activeGuests,
+      inactiveGuests: totalGuests - activeGuests,
+    });
+  } catch (err) {
+    console.error('guest-stats error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 router.get('/active-meetings', adminGuard, (req, res) => {
   try {
     if (!getRoomsFunction) {
