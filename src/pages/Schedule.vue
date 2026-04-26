@@ -17,6 +17,29 @@
           <button type="submit">Enter</button>
           <button type="button" v-if="!isGuest" @click="createroom">Create your room</button>
         </form>
+
+        <transition name="fade">
+          <div v-if="createdRoomId" style="
+              position: absolute; inset: 0;
+              display: flex; flex-direction: column;
+              align-items: center; justify-content: center;
+              background: rgba(245,245,245,0.97);
+              border-radius: 8px;
+              gap: 14px;
+              z-index: 10;
+          ">
+            <p style="margin:0; color:#666; font-size:13px; font-weight:500;">Your Room ID</p>
+            <p style="
+              margin: 0;
+              font-size: 28px;
+              font-weight: 700;
+              letter-spacing: 4px;
+              color: #1e3a8a;
+              font-family: monospace;
+            ">{{ createdRoomId }}</p>
+            <p style="margin:0; color:#999; font-size:12px;">Share this with participants · Joining in 2s…</p>
+          </div>
+        </transition>
         <!-- Waiting overlay -->
         <transition name="fade">
           <div v-if="isWaiting" style="
@@ -86,6 +109,7 @@ export default {
       waitingSocket: null,
       pendingRoomId: null,
       isGuest: localStorage.getItem('isGuest') === 'true',
+      createdRoomId: '',
     };
   },
   methods: {
@@ -149,7 +173,10 @@ export default {
         const roomid = res.data.roomid;
         localStorage.setItem('roomid', roomid);
         localStorage.setItem('meetingtitle', this.title);
-        this.$router.push(`/MeetingRoom/${roomid}`);
+        this.createdRoomId = roomid;         // ✅ show it before navigating
+        setTimeout(() => {
+          this.$router.push(`/MeetingRoom/${roomid}`);
+        }, 2500);                            // 2.5s so host can read/copy it
       })
       .catch(err => {
         if (err.response) {
