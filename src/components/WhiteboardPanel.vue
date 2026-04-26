@@ -37,7 +37,7 @@
           🗑
         </button>
         <button class="wb-btn wb-btn-green" @click="downloadCanvas" title="Download PNG">
-          ↓
+          Download
         </button>
       </div>
       <button class="wb-close" @click="$emit('close')">✕</button>
