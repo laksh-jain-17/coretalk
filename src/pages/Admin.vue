@@ -6,18 +6,18 @@
         <p class="admin-email">Admin Menu</p>
       </div>
       <button @click="showSection('users')" :class="{ active: activeSection === 'users' }">
-        👥 Users Management
+         Users Management
       </button>
       <button @click="showSection('meetings')" :class="{ active: activeSection === 'meetings' }">
-        📹 Active Meetings
+         Active Meetings
       </button>
       <button @click="showSection('usage')" :class="{ active: activeSection === 'usage' }">
-        📊 Usage Analytics
+         Usage Analytics
       </button>
       <button @click="showSection('feedback')" :class="{ active: activeSection === 'feedback' }">
-        💬 Feedback & Reviews
+         Feedback & Reviews
       </button>
-      <button @click="logoutAdmin" class="logout-btn">🚪 Logout</button>
+      <button @click="logoutAdmin" class="logout-btn"> Logout</button>
     </aside>
 
     <div class="main-content">
@@ -39,6 +39,15 @@
               <h3>{{ users.length }}</h3>
               <p>Total Users</p>
             </div>
+            <!-- ✅ NEW: Verified vs Unverified counts -->
+            <div class="stat-card stat-card--green">
+              <h3>{{ users.filter(u => u.isVerified).length }}</h3>
+              <p>Verified</p>
+            </div>
+            <div class="stat-card stat-card--red">
+              <h3>{{ users.filter(u => !u.isVerified).length }}</h3>
+              <p>Unverified</p>
+            </div>
           </div>
 
           <div class="table-container">
@@ -47,23 +56,26 @@
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
+                  <th>Status</th>
                   <th>Registration Date</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="users.length === 0">
-                  <td colspan="4" class="no-data">No users found</td>
+                  <td colspan="5" class="no-data">No users found</td>
                 </tr>
                 <tr v-for="user in users" :key="user._id">
                   <td>{{ user.name }}</td>
                   <td>{{ user.email }}</td>
+                  <td>
+                    <span :class="user.isVerified ? 'badge-verified' : 'badge-unverified'">
+                      {{ user.isVerified ? '✔ Verified' : '✘ Unverified' }}
+                    </span>
+                  </td>
                   <td>{{ formatDate(user.createdAt) }}</td>
                   <td>
-                    <button 
-                      @click="deleteUser(user._id, user.name)" 
-                      class="btn-delete"
-                    >
+                    <button @click="deleteUser(user._id, user.name)" class="btn-delete">
                       🗑️ Delete
                     </button>
                   </td>
@@ -131,16 +143,32 @@
         <div v-if="activeSection === 'usage'" class="section-container">
           <div class="section-header">
             <h2>📊 Usage Analytics</h2>
-            <p class="section-desc">Monthly meeting statistics for {{ new Date().getFullYear() }}</p>
+            <p class="section-desc">Platform statistics for {{ new Date().getFullYear() }}</p>
           </div>
 
+          <!-- ✅ NEW: Guest account stats -->
+          <div class="stats-cards" style="margin-bottom: 30px;">
+            <div class="stat-card">
+              <h3>{{ guestStats.totalGuests ?? '—' }}</h3>
+              <p>Guest Accounts Created</p>
+            </div>
+            <div class="stat-card stat-card--green">
+              <h3>{{ guestStats.activeGuests ?? '—' }}</h3>
+              <p>Active Guest Accounts</p>
+            </div>
+            <div class="stat-card stat-card--red">
+              <h3>{{ guestStats.inactiveGuests ?? '—' }}</h3>
+              <p>Inactive Guest Accounts</p>
+            </div>
+            <div class="stat-card">
+              <h3>{{ totalMeetingsThisYear }}</h3>
+              <p>Total Meetings This Year</p>
+            </div>
+          </div>
+
+          <!-- Chart -->
           <div class="chart-container">
             <canvas id="usageChart"></canvas>
-          </div>
-
-          <div class="usage-summary">
-            <h3>Summary</h3>
-            <p>Total Meetings This Year: <strong>{{ totalMeetingsThisYear }}</strong></p>
           </div>
         </div>
 
@@ -162,11 +190,7 @@
             <div v-if="feedbacks.length === 0" class="no-data">
               No feedback submitted yet
             </div>
-            <div 
-              v-for="feedback in feedbacks" 
-              :key="feedback._id" 
-              class="feedback-card"
-            >
+            <div v-for="feedback in feedbacks" :key="feedback._id" class="feedback-card">
               <div class="feedback-header">
                 <div>
                   <strong>{{ feedback.userName }}</strong>
@@ -219,7 +243,13 @@ export default {
       refreshInterval: null,
       showParticipantsModal: false,
       selectedMeeting: null,
-      usageData: []
+      usageData: [],
+      // ✅ NEW: guest stats object
+      guestStats: {
+        totalGuests: null,
+        activeGuests: null,
+        inactiveGuests: null,
+      },
     };
   },
   computed: {
@@ -228,7 +258,7 @@ export default {
     },
     totalMeetingsThisYear() {
       return this.usageData.reduce((sum, m) => sum + m.totalMeetings, 0);
-    }
+    },
   },
   methods: {
     showSection(section) {
@@ -238,8 +268,8 @@ export default {
 
     async loadSectionData(section) {
       try {
-        const token = localStorage.getItem('token');
-        
+        const token = localStorage.getItem("token");
+
         switch (section) {
           case "users":
             this.users = await this.fetchData("/api/admin/users", token);
@@ -251,7 +281,11 @@ export default {
             this.meetings = await this.fetchData("/api/admin/active-meetings", token);
             break;
           case "usage":
-            this.usageData = await this.fetchData("/api/admin/usage-metrics", token);
+            // ✅ Fetch usage metrics and guest stats in parallel
+            [this.usageData, this.guestStats] = await Promise.all([
+              this.fetchData("/api/admin/usage-metrics", token),
+              this.fetchData("/api/admin/guest-stats", token),
+            ]);
             await this.loadUsageChart();
             break;
         }
@@ -263,9 +297,7 @@ export default {
 
     async fetchData(endpoint, token) {
       const res = await fetch(`${import.meta.env.VITE_API_URL}${endpoint}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Failed to fetch ${endpoint}`);
       return await res.json();
@@ -273,23 +305,21 @@ export default {
 
     async deleteUser(userId, userName) {
       if (!confirm(`Are you sure you want to delete user "${userName}"?`)) return;
-      
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`https://coretalk-backend-1067959155765.asia-south1.run.app/api/admin/users/${userId}`, {
-          method: "DELETE",
-          headers: {
-            'Authorization': `Bearer ${token}`
+        const token = localStorage.getItem("token");
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/admin/users/${userId}`,
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
           }
-        });
-        
-        if (!res.ok) throw new Error('Failed to delete user');
-        
-        alert('User deleted successfully');
+        );
+        if (!res.ok) throw new Error("Failed to delete user");
+        alert("User deleted successfully");
         this.users = await this.fetchData("/api/admin/users", token);
       } catch (err) {
-        console.error('Error deleting user:', err);
-        alert('Failed to delete user');
+        console.error("Error deleting user:", err);
+        alert("Failed to delete user");
       }
     },
 
@@ -304,14 +334,13 @@ export default {
     },
 
     formatDate(dateString) {
-      if (!dateString) return 'N/A';
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      if (!dateString) return "N/A";
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
     },
 
@@ -322,14 +351,12 @@ export default {
 
     async loadUsageChart() {
       await this.$nextTick();
-      
       const ctx = document.getElementById("usageChart");
       if (!ctx) return;
-
       if (this.chartInstance) this.chartInstance.destroy();
 
-      const labels = this.usageData.map(d => d.month);
-      const chartData = this.usageData.map(d => d.totalMeetings);
+      const labels = this.usageData.map((d) => d.month);
+      const chartData = this.usageData.map((d) => d.totalMeetings);
 
       this.chartInstance = new Chart(ctx, {
         type: "bar",
@@ -342,27 +369,19 @@ export default {
               backgroundColor: "#0056b3",
               borderColor: "#003d82",
               borderWidth: 2,
-              borderRadius: 5
+              borderRadius: 5,
             },
           ],
         },
         options: {
           responsive: true,
           maintainAspectRatio: true,
-          scales: { 
-            y: { 
-              beginAtZero: true,
-              ticks: {
-                stepSize: 1
-              }
-            } 
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } },
           },
           plugins: {
-            legend: {
-              display: true,
-              position: 'top'
-            }
-          }
+            legend: { display: true, position: "top" },
+          },
         },
       });
     },
@@ -378,17 +397,16 @@ export default {
 
   async mounted() {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) {
-        alert('Please login first');
-        this.$router.push('/Login');
+        alert("Please login first");
+        this.$router.push("/Login");
         return;
       }
-      
       this.loadSectionData(this.activeSection);
       this.startAutoRefresh();
     } catch (err) {
-      console.error('Error in mounted:', err);
+      console.error("Error in mounted:", err);
     }
   },
 
@@ -407,7 +425,7 @@ export default {
 .admin-container {
   display: flex;
   height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   background-color: #f5f7fa;
   overflow: hidden;
 }
@@ -419,7 +437,7 @@ export default {
   display: flex;
   flex-direction: column;
   padding: 20px 15px;
-  box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .admin-info {
@@ -480,7 +498,7 @@ export default {
   background: white;
   padding: 30px;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .admin-header h2 {
@@ -507,7 +525,7 @@ export default {
   background: white;
   border-radius: 12px;
   padding: 30px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .section-header {
@@ -550,18 +568,31 @@ export default {
 
 .stats-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
   margin-bottom: 30px;
 }
 
+/* ✅ Base stat card */
 .stat-card {
   background: linear-gradient(135deg, #0056b3 0%, #003d82 100%);
   color: white;
   padding: 25px;
   border-radius: 10px;
   text-align: center;
-  box-shadow: 0 4px 12px rgba(0,86,179,0.2);
+  box-shadow: 0 4px 12px rgba(0, 86, 179, 0.2);
+}
+
+/* ✅ Green variant for active/verified */
+.stat-card--green {
+  background: linear-gradient(135deg, #28a745 0%, #1a7a30 100%);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2);
+}
+
+/* ✅ Red variant for inactive/unverified */
+.stat-card--red {
+  background: linear-gradient(135deg, #dc3545 0%, #a71d2a 100%);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.2);
 }
 
 .stat-card h3 {
@@ -572,7 +603,7 @@ export default {
 
 .stat-card p {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   opacity: 0.9;
 }
 
@@ -612,11 +643,13 @@ table tbody tr {
 table tbody tr:hover {
   background-color: #f8f9fa;
 }
+
 table thead th {
-  color: #fff; /* keep white headers */
+  color: #fff;
 }
+
 table tbody td {
-  color: #000; /* make data text black */
+  color: #000;
 }
 
 .no-data {
@@ -624,6 +657,27 @@ table tbody td {
   color: #999;
   font-style: italic;
   padding: 40px !important;
+}
+
+/* ✅ Verified / Unverified badges */
+.badge-verified {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.badge-unverified {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background-color: #f8d7da;
+  color: #721c24;
 }
 
 .btn-delete {
@@ -677,23 +731,6 @@ table tbody td {
   height: 400px;
 }
 
-.usage-summary {
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  border-left: 4px solid #0056b3;
-}
-
-.usage-summary h3 {
-  margin: 0 0 10px 0;
-  color: #0056b3;
-}
-
-.usage-summary p {
-  margin: 0;
-  font-size: 16px;
-}
-
 .feedback-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -703,13 +740,13 @@ table tbody td {
 .feedback-card {
   background: #f8f9fa;
   border-left: 4px solid #0056b3;
-  border-radius: 8px;
+  border-radius: 0 8px 8px 0;
   padding: 20px;
   transition: all 0.3s ease;
 }
 
 .feedback-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transform: translateY(-4px);
 }
 
@@ -744,7 +781,7 @@ table tbody td {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -759,7 +796,7 @@ table tbody td {
   width: 90%;
   max-height: 80vh;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
 }
 
 .modal-header {
@@ -793,7 +830,7 @@ table tbody td {
 }
 
 .modal-close:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .modal-body {
@@ -862,5 +899,4 @@ table tbody td {
     grid-template-columns: 1fr;
   }
 }
-
 </style>
