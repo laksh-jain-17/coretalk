@@ -9,7 +9,7 @@ const Room = require('../models/Room');
 const Report = require('../models/Report');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');
+//const { v4: uuidv4 } = require('uuid');
 const { OAuth2Client } = require('google-auth-library');
 const sendOtpEmail = require('../utils/sendOtpEmail');
 const sendPasswordChangeEmail = require('../utils/sendPasswordChangeEmail');
@@ -17,6 +17,12 @@ const sendAdminLoginOtpEmail = require('../utils/sendAdminLoginOtpEmail');
 const rateLimit = require('express-rate-limit');
 const isDisposableEmail = require('../utils/validateEmail');
 const sendVerificationEmail = require('../utils/sendVerificationEmail');
+
+const generateRoomId = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz';
+  const seg = (n) => Array.from({ length: n }, () => chars[Math.floor(Math.random() * 26)]).join('');
+  return `${seg(3)}-${seg(4)}-${seg(3)}`; // e.g. "xkq-mtvz-bnr"
+};
 
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -132,7 +138,8 @@ router.get('/schedule', authMiddleware, async (req, res) => {
 // Rooms
 router.post('/create', authMiddleware, async (req, res) => {
   try {
-    const roomid = uuidv4();
+    //const roomid = uuidv4();//
+    const roomid = generateRoomId();
     const newRoom = new Room({ roomId: roomid, host: req.user.id, createdAt: new Date() });
     await newRoom.save();
     const token = jwt.sign(
