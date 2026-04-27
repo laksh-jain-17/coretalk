@@ -72,7 +72,7 @@ const IMG = {
   schedule: '/screenshots/2.png', // Image 2  – Schedule home (Enter / Create)
   create:   '/screenshots/3.png',   // Image 3  – Title input appears
   title:    '/screenshots/4.png',    // Image 4  – Title filled in
-  meetInfo: '/screenshots/5.png', // Image 5  – Meeting Info modal
+  meetInfo: '/screenshots/meetingroom_code.png', // Image 5  – Meeting Info modal
   ending:   '/screenshots/6.png',   // Image 6  – Ending / review page
 };
 
