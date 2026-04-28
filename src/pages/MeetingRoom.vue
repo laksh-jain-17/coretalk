@@ -376,7 +376,7 @@
     <!-- Email Panel -->
     <div v-if="showEmailPanel" id="email-box">
       <div class="email-header">
-        <span>📧 Gmail</span>
+        <span>Gmail</span>
         <button @click="showEmailPanel = false">✕</button>
       </div>
 
@@ -386,12 +386,12 @@
           class="email-tab-btn"
           :class="{ active: emailActiveTab === 'compose' }"
           @click="emailActiveTab = 'compose'"
-        >✏️ Compose</button>
+        >Compose</button>
         <button
           class="email-tab-btn"
           :class="{ active: emailActiveTab === 'inbox' }"
           @click="emailActiveTab = 'inbox'; fetchInbox()"
-        >📥 Inbox</button>
+        >Inbox</button>
       </div>
 
       <!-- Compose Tab -->
