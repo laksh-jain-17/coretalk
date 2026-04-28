@@ -1910,6 +1910,8 @@ export default {
 
     leave() {
       this.cleanup();
+      //To exit fullscreen mode while exiting the meeting//
+      exitFullscreen();
       if (this.$router) {
         this.$router.push('/Ending');
       } else {
@@ -1931,6 +1933,8 @@ export default {
         });
         if (res.ok) {
           this.cleanup();
+          //To exit fullscreen mode while exiting the meeting//
+          exitFullscreen();
           if (this.$router) this.$router.push('/Ending');
           else window.location.href = '/Ending';
         }
