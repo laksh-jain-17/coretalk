@@ -376,32 +376,71 @@
     <!-- Email Panel -->
     <div v-if="showEmailPanel" id="email-box">
       <div class="email-header">
-        <span>New Email</span>
+        <span>📧 Gmail</span>
         <button @click="showEmailPanel = false">✕</button>
       </div>
-      <div class="email-body-panel">
-        <input v-model="emailTo" type="email" placeholder="To" class="email-field" />
-        <input v-model="emailSubject" type="text" placeholder="Subject" class="email-field" />
-        <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
-        <!-- Attachment row -->
-        <div class="email-attach-row">
-          <label class="email-attach-btn">
-            📎 Attach files
-            <input type="file" multiple ref="emailFileInput" @change="handleEmailAttachments" style="display:none" />
-          </label>
-          <div class="email-attach-list">
-            <span v-for="(f, i) in emailAttachments" :key="i" class="email-attach-chip">
-              {{ f.name }}
-              <button @click="removeAttachment(i)">✕</button>
-            </span>
+
+      <!-- Tabs -->
+      <div class="email-tabs">
+        <button
+          class="email-tab-btn"
+          :class="{ active: emailActiveTab === 'compose' }"
+          @click="emailActiveTab = 'compose'"
+        >✏️ Compose</button>
+        <button
+          class="email-tab-btn"
+          :class="{ active: emailActiveTab === 'inbox' }"
+          @click="emailActiveTab = 'inbox'; fetchInbox()"
+        >📥 Inbox</button>
+      </div>
+
+      <!-- Compose Tab -->
+      <template v-if="emailActiveTab === 'compose'">
+        <div class="email-body-panel">
+          <input v-model="emailTo" type="email" placeholder="To" class="email-field" />
+          <input v-model="emailSubject" type="text" placeholder="Subject" class="email-field" />
+          <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
+          <div class="email-attach-row">
+            <label class="email-attach-btn">
+              📎 Attach files
+              <input type="file" multiple ref="emailFileInput" @change="handleEmailAttachments" style="display:none" />
+            </label>
+            <div class="email-attach-list">
+              <span v-for="(f, i) in emailAttachments" :key="i" class="email-attach-chip">
+                {{ f.name }}
+                <button @click="removeAttachment(i)">✕</button>
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="email-footer">
-        <button @click="sendEmail" :disabled="emailSending" class="email-send-btn">
-          {{ emailSending ? 'Sending...' : 'Send' }}
-        </button>
-      </div>
+        <div class="email-footer">
+          <button @click="sendEmail" :disabled="emailSending" class="email-send-btn">
+            {{ emailSending ? 'Sending...' : 'Send' }}
+          </button>
+        </div>
+      </template>
+
+      <!-- Inbox Tab -->
+      <template v-if="emailActiveTab === 'inbox'">
+        <div class="email-inbox-panel">
+          <div v-if="inboxLoading" class="email-inbox-loading">Loading...</div>
+          <div v-else-if="inboxError" class="email-inbox-error">{{ inboxError }}</div>
+          <div v-else-if="inboxMessages.length === 0" class="email-inbox-empty">No recent emails</div>
+          <div
+            v-for="msg in inboxMessages"
+            :key="msg.id"
+            class="email-inbox-item"
+            @click="selectedInboxMsg = selectedInboxMsg?.id === msg.id ? null : msg"
+          >
+            <div class="email-inbox-item-header">
+              <span class="email-inbox-from">{{ msg.from }}</span>
+              <span class="email-inbox-date">{{ msg.date }}</span>
+            </div>
+            <div class="email-inbox-subject">{{ msg.subject }}</div>
+            <div v-if="selectedInboxMsg?.id === msg.id" class="email-inbox-preview">{{ msg.snippet }}</div>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Reconnecting overlay -->
@@ -527,6 +566,11 @@ export default {
       emailSubject: '',
       emailBody: '',
       emailSending: false,
+      emailActiveTab: 'compose',
+      inboxMessages: [],
+      inboxLoading: false,
+      inboxError: null,
+      selectedInboxMsg: null,
 
       isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || !navigator.mediaDevices?.getDisplayMedia,
       connectionStatus: 'connected',
@@ -1991,7 +2035,7 @@ export default {
     initiateGmailOAuth() {
       const clientId = import.meta.env.VITE_GMAIL_CLIENT_ID;
       const redirectUri = import.meta.env.VITE_GMAIL_REDIRECT_URI;
-      const scope = 'https://www.googleapis.com/auth/gmail.send';
+      const scope = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
         `?client_id=${clientId}` +
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
@@ -2007,6 +2051,8 @@ export default {
         if (event.origin !== expectedOrigin) return;
         if (event.data?.type === 'gmail-oauth-success') {
           this.gmailAccessToken = event.data.token;
+          this.emailActiveTab = 'compose';
+          this.inboxMessages = [];
           this.showEmailPanel = true;  // ← THIS was missing
           if (popup && !popup.closed) popup.close();
         }
@@ -2034,6 +2080,57 @@ export default {
 
     removeAttachment(index) {
       this.emailAttachments.splice(index, 1);
+    },
+
+    async fetchInbox() {
+      if (!this.gmailAccessToken) return;
+      if (this.inboxLoading) return;
+      this.inboxLoading = true;
+      this.inboxError = null;
+      try {
+        // Fetch list of recent messages
+        const listRes = await fetch(
+          'https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=15&labelIds=INBOX',
+          { headers: { Authorization: `Bearer ${this.gmailAccessToken}` } }
+        );
+        if (!listRes.ok) throw new Error('Failed to fetch inbox');
+        const listData = await listRes.json();
+        const messages = listData.messages || [];
+
+        // Fetch each message header (parallel, limited fields)
+        const fetched = await Promise.all(
+          messages.map(async (m) => {
+            const r = await fetch(
+              `https://www.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+              { headers: { Authorization: `Bearer ${this.gmailAccessToken}` } }
+            );
+            if (!r.ok) return null;
+            const d = await r.json();
+            const headers = d.payload?.headers || [];
+            const get = (name) => headers.find(h => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+            const rawFrom = get('From');
+            // Simplify "Name <email>" → "Name" or just email
+            const fromMatch = rawFrom.match(/^"?([^"<]+)"?\s*</);
+            const from = fromMatch ? fromMatch[1].trim() : rawFrom.replace(/<.*>/, '').trim() || rawFrom;
+            const rawDate = get('Date');
+            let date = '';
+            try {
+              const d2 = new Date(rawDate);
+              const now = new Date();
+              const isToday = d2.toDateString() === now.toDateString();
+              date = isToday
+                ? d2.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : d2.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            } catch (_) { date = ''; }
+            return { id: m.id, from, subject: get('Subject') || '(no subject)', date, snippet: d.snippet || '' };
+          })
+        );
+        this.inboxMessages = fetched.filter(Boolean);
+      } catch (e) {
+        this.inboxError = 'Could not load inbox: ' + e.message;
+      } finally {
+        this.inboxLoading = false;
+      }
     },
 
     async sendEmail() {
@@ -3119,6 +3216,106 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 101;
+  max-height: 520px;
+  overflow: hidden;
+}
+
+.email-tabs {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+  flex-shrink: 0;
+}
+
+.email-tab-btn {
+  flex: 1;
+  padding: 9px 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.email-tab-btn.active {
+  color: #1a73e8;
+  border-bottom: 2px solid #1a73e8;
+  background: #fff;
+}
+
+.email-inbox-panel {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.email-inbox-loading,
+.email-inbox-empty,
+.email-inbox-error {
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #888;
+}
+
+.email-inbox-error { color: #d32f2f; }
+
+.email-inbox-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.email-inbox-item:hover { background: #f5f5f5; }
+.email-inbox-item:last-child { border-bottom: none; }
+
+.email-inbox-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.email-inbox-from {
+  font-size: 13px;
+  font-weight: 600;
+  color: #202124;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.email-inbox-date {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.email-inbox-subject {
+  font-size: 12px;
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.email-inbox-preview {
+  font-size: 12px;
+  color: #777;
+  margin-top: 5px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .email-header {
@@ -3147,6 +3344,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .email-field {
@@ -3163,7 +3363,7 @@ body {
 
 .email-textarea {
   width: 100%;
-  height: 120px;
+  height: 90px;
   padding: 9px 12px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
