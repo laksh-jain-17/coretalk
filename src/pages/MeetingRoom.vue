@@ -2353,7 +2353,7 @@ export default {
       this.chatAttachments = [];
       this.showWhiteboard = false;
       this.showAiNotes = false;
-      this.showDocEnact: false;
+      this.showDocEnact = false;
     }
   },
 
