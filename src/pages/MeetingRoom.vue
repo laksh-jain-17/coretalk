@@ -502,7 +502,7 @@ import { io } from 'socket.io-client';
 import { Room, RoomEvent, Track, ConnectionState } from 'livekit-client';
 import WhiteboardPanel from '../components/WhiteboardPanel.vue';
 import AiNotesPanel from '../components/AiNotesPanel.vue';
-import DocEnctPanel from '../components/DocEnactPanel.vue';
+import DocEnactPanel from '../components/DocEnactPanel.vue';
 export default {
   name: 'MeetingRoom',
   components: {
