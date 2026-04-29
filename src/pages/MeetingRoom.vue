@@ -17,6 +17,9 @@
         <button @click="showWhiteboard = !showWhiteboard" :class="{ 'active-feature': showWhiteboard }">
             {{ showWhiteboard ? 'Whiteboard ON' : 'Whiteboard' }}
         </button>
+        <button @click="showDocEnact = !showDocEnact" :class="{'active-feature':showDocEnact}">
+          {{ showDocEnact ? 'Doc Enact ON' : 'Doc Enact' }}
+        </button>
         <!--button @click="showAiNotes = !showAiNotes" :class="{ 'active-feature': showAiNotes }">
             {{ showAiNotes ? 'AI Notes ON' : 'AI Notes' }}
         </button-->
@@ -489,6 +492,7 @@
     </div>
     <WhiteboardPanel v-if="showWhiteboard" :socket="socket" :roomId="roomId" @close="showWhiteboard = false"/>
     <AiNotesPanel v-if="showAiNotes" :roomTitle="title" @close="showAiNotes = false"/>
+    <DocEnactPanel v-if="showDocEnact && livekitRoom" :livekitRoom="livekitRoom" :isHost="isHost" :userId="userId" :participants="participants" :roomId="roomId" @close="showDocEnact = false"/>
   </div>
 </template>
 
@@ -498,11 +502,13 @@ import { io } from 'socket.io-client';
 import { Room, RoomEvent, Track, ConnectionState } from 'livekit-client';
 import WhiteboardPanel from '../components/WhiteboardPanel.vue';
 import AiNotesPanel from '../components/AiNotesPanel.vue';
+import DocEnctPanel from '../components/DocEnactPanel.vue';
 export default {
   name: 'MeetingRoom',
   components: {
     WhiteboardPanel,
     AiNotesPanel,
+    DocEnactPanel,
   },
   data() {
     return {
@@ -583,6 +589,7 @@ export default {
       isCleanedUp: false,
       showWhiteboard: false,
       showAiNotes: false,
+      showDocEnact: false,
     };
   },
 
@@ -2346,6 +2353,7 @@ export default {
       this.chatAttachments = [];
       this.showWhiteboard = false;
       this.showAiNotes = false;
+      this.showDocEnact: false;
     }
   },
 
