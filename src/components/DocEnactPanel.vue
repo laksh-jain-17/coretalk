@@ -4,12 +4,14 @@
     <div class="doc-header">
       <span>📄 Doc Enact</span>
       <div class="doc-header-right">
-        <span v-if="!canEdit" class="read-only-badge">👁 View Only</span>
+        <span v-if="isHost" class="role-badge host-badge">👑 Host</span>
+        <span v-else-if="canEdit" class="role-badge edit-badge">✏️ Editor</span>
+        <span v-else class="role-badge view-badge">👁 View Only</span>
         <button @click="$emit('close')">✕</button>
       </div>
     </div>
 
-    <!-- Toolbar (editors only) -->
+    <!-- Toolbar (host + editors only) -->
     <div v-if="canEdit" class="doc-toolbar">
       <button @mousedown.prevent="fmt('bold')"><b>B</b></button>
       <button @mousedown.prevent="fmt('italic')"><i>I</i></button>
@@ -25,20 +27,25 @@
       <button @mousedown.prevent="fmt('formatBlock', 'P')">¶</button>
     </div>
 
-    <!-- Access Control (host only) -->
+    <!-- Access Control Panel (host only) -->
     <div v-if="isHost" class="doc-access-panel">
       <div class="access-header">
-        <span>🔐 Access</span>
-        <button class="grant-all-btn" @click="grantAll">Grant All</button>
-        <button class="revoke-all-btn" @click="revokeAll">Revoke All</button>
+        <span>🔐 Edit Access</span>
+        <div class="access-bulk-btns">
+          <button class="grant-all-btn" @click="grantAll">Grant All</button>
+          <button class="revoke-all-btn" @click="revokeAll">Revoke All</button>
+        </div>
       </div>
       <div class="access-list">
         <div v-if="participants.length === 0" class="no-participants">
           No other participants yet
         </div>
         <div v-for="p in participants" :key="p.id" class="access-row">
-          <span class="access-name">{{ p.name }}</span>
-          <label class="toggle-switch">
+          <div class="access-name-wrap">
+            <div class="access-avatar">{{ getInitials(p.name) }}</div>
+            <span class="access-name">{{ p.name }}</span>
+          </div>
+          <label class="toggle-switch" :title="editors.includes(p.id) ? 'Revoke edit' : 'Grant edit'">
             <input
               type="checkbox"
               :checked="editors.includes(p.id)"
@@ -50,7 +57,7 @@
       </div>
     </div>
 
-    <!-- Document Body -->
+    <!-- Document Body — ALL participants see this -->
     <div
       ref="docBody"
       class="doc-body"
@@ -75,7 +82,7 @@ export default {
   name: 'DocEnactPanel',
 
   props: {
-    livekitRoom:  { type: Object, required: true },
+    livekitRoom:  { type: Object,  required: true },
     isHost:       { type: Boolean, default: false },
     userId:       { type: String,  required: true },
     participants: { type: Array,   default: () => [] },
@@ -86,7 +93,8 @@ export default {
 
   data() {
     return {
-      editors:       [],   // participant IDs with edit access
+      // participant IDs that the host has granted edit access
+      editors:       [],
       lastContent:   '',
       debounceTimer: null,
       saveTimer:     null,
@@ -95,20 +103,22 @@ export default {
   },
 
   computed: {
+    // Host can always edit. Participants can edit only if host granted them access.
     canEdit() {
       return this.isHost || this.editors.includes(this.userId);
     },
   },
 
   mounted() {
-    // Listen for LiveKit data messages
     this.livekitRoom.on('dataReceived', this.onDataReceived);
 
-    // If host, broadcast current state so late joiners get it
-    // If participant, request state from host
     if (this.isHost) {
-      this.broadcastFullState();
+      // Host just opened the doc — broadcast the current (empty) state to everyone
+      this.$nextTick(() => {
+        this.broadcastFullState();
+      });
     } else {
+      // Participant opened the panel — request full state from host
       this.sendData({ type: 'doc-request-state' });
     }
   },
@@ -120,17 +130,17 @@ export default {
   },
 
   methods: {
-    // ==================== LIVEKIT DATA ====================
+
+    // ==================== LIVEKIT DATA LAYER ====================
 
     sendData(payload) {
       try {
         const lp = this.livekitRoom.localParticipant;
         if (!lp) return;
         const encoded = new TextEncoder().encode(JSON.stringify(payload));
-        // RELIABLE = guaranteed delivery (like TCP), good for doc sync
         lp.publishData(encoded, { reliable: true });
       } catch (err) {
-        console.error('DocEnact sendData error:', err);
+        console.error('[DocEnact] sendData error:', err);
       }
     },
 
@@ -138,44 +148,45 @@ export default {
       try {
         const text = new TextDecoder().decode(payload);
         const msg  = JSON.parse(text);
-
-        // Ignore non-doc messages
         if (!msg.type || !msg.type.startsWith('doc-')) return;
 
         switch (msg.type) {
 
+          // A participant just opened the panel and wants the current doc state
           case 'doc-request-state':
-            // Only host responds with full state
-            if (this.isHost) this.broadcastFullState();
+            // Only the host responds — they are the source of truth
+            if (this.isHost) {
+              this.broadcastFullState();
+            }
             break;
 
+          // Full doc state (content + who has edit access) — sent by host on open / request
           case 'doc-state':
-            // Full state sync (received by late joiners)
             this.editors = msg.editors || [];
             this.setContent(msg.content || '');
+            this.updateStatusAfterAccessChange();
             break;
 
+          // Incremental content update while someone is typing
           case 'doc-update':
-            // Live typing update — skip own echo
+            // Ignore echoes of our own updates
             if (msg.senderId === this.userId) return;
             this.applyRemoteUpdate(msg.content);
             break;
 
+          // Host toggled edit access for one or more participants
           case 'doc-access-changed':
             this.editors = msg.editors || [];
-            if (!this.canEdit) {
-              this.statusText = '👁 View only — no edit access';
-            } else {
-              this.statusText = '✏️ Edit access granted';
-              setTimeout(() => { this.statusText = 'Connected'; }, 2000);
-            }
+            this.updateStatusAfterAccessChange();
             break;
         }
-      } catch (err) {
-        // Not a doc message or malformed — ignore
+      } catch (_) {
+        // Not a doc message or malformed — silently ignore
       }
     },
 
+    // Sends the full doc state (content + editors list) to everyone in the room.
+    // Called by host when they open the doc, or when a participant requests state.
     broadcastFullState() {
       this.sendData({
         type:    'doc-state',
@@ -196,7 +207,7 @@ export default {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = setTimeout(() => {
         this.broadcastContent();
-      }, 300);
+      }, 150); // 150ms debounce — snappy real-time feel
     },
 
     onKeydown(e) {
@@ -206,11 +217,12 @@ export default {
       }
     },
 
+    // Broadcasts the current doc content to all participants
     broadcastContent() {
       const content = this.$refs.docBody?.innerHTML || '';
       if (content === this.lastContent) return;
       this.lastContent = content;
-      this.statusText = 'Saving...';
+      this.statusText = 'Syncing...';
 
       this.sendData({
         type:     'doc-update',
@@ -220,11 +232,12 @@ export default {
 
       clearTimeout(this.saveTimer);
       this.saveTimer = setTimeout(() => {
-        this.statusText = 'Saved ✓';
+        this.statusText = 'Synced ✓';
         setTimeout(() => { this.statusText = 'Connected'; }, 1500);
       }, 400);
     },
 
+    // Apply an incoming remote update without overwriting the local cursor position
     applyRemoteUpdate(content) {
       const saved = this.saveSelection();
       this.setContent(content);
@@ -238,32 +251,59 @@ export default {
       }
     },
 
-    // ==================== ACCESS CONTROL ====================
+    // ==================== ACCESS CONTROL (host only) ====================
 
+    // Toggle a single participant between editor / viewer
     toggleAccess(participantId) {
       if (this.editors.includes(participantId)) {
         this.editors = this.editors.filter(id => id !== participantId);
       } else {
         this.editors.push(participantId);
       }
-      this.emitAccessChange();
+      this.broadcastAccessChange();
     },
 
+    // Set specific access level for a participant
+    setAccess(participantId, level) {
+      this.editors = this.editors.filter(id => id !== participantId);
+      if (level === 'edit') {
+        this.editors.push(participantId);
+      }
+      this.broadcastAccessChange();
+    },
+
+    // Grant edit access to everyone
     grantAll() {
       this.editors = this.participants.map(p => p.id);
-      this.emitAccessChange();
+      this.broadcastAccessChange();
     },
 
+    // Revoke edit access from everyone (all go back to view-only)
     revokeAll() {
       this.editors = [];
-      this.emitAccessChange();
+      this.broadcastAccessChange();
     },
 
-    emitAccessChange() {
+    // Sends the updated editors list to all participants
+    broadcastAccessChange() {
       this.sendData({
         type:    'doc-access-changed',
         editors: this.editors,
       });
+      // Also re-send the full doc so newly granted editors get the latest content
+      this.broadcastFullState();
+    },
+
+    // Update status text based on whether this user now has edit access
+    updateStatusAfterAccessChange() {
+      if (this.isHost) return; // host status never changes
+      if (this.canEdit) {
+        this.statusText = '✏️ Edit access granted';
+        setTimeout(() => { this.statusText = 'Connected'; }, 2500);
+      } else {
+        this.statusText = '👁 View only';
+        setTimeout(() => { this.statusText = 'Connected'; }, 2500);
+      }
     },
 
     // ==================== EXPORT ====================
@@ -274,10 +314,13 @@ export default {
 <html>
 <head>
   <meta charset="utf-8"/>
+  <title>Doc Enact — ${this.roomId}</title>
   <style>
     body { font-family: 'Segoe UI', sans-serif; max-width: 800px;
            margin: 40px auto; padding: 0 24px; line-height: 1.7; color: #1a1a1a; }
-    h1 { font-size: 2em; } h2 { font-size: 1.5em; } h3 { font-size: 1.2em; }
+    h1 { font-size: 2em; margin: 0.4em 0; }
+    h2 { font-size: 1.5em; margin: 0.4em 0; }
+    h3 { font-size: 1.2em; margin: 0.4em 0; }
     ul, ol { padding-left: 24px; }
   </style>
 </head>
@@ -291,7 +334,18 @@ export default {
       URL.revokeObjectURL(a.href);
     },
 
+    // ==================== HELPERS ====================
+
+    getInitials(name) {
+      if (!name) return '?';
+      const parts = name.trim().split(' ');
+      if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    },
+
     // ==================== CURSOR PRESERVATION ====================
+    // Preserves the cursor/caret position during remote content updates
+    // so the local editor's typing position doesn't jump.
 
     saveSelection() {
       const sel = window.getSelection();
@@ -312,7 +366,7 @@ export default {
         if (!start || !end) return;
         const range = document.createRange();
         range.setStart(start.node, start.offset);
-        range.setEnd(end.node, end.offset);
+        range.setEnd(end.node,   end.offset);
         sel.removeAllRanges();
         sel.addRange(range);
       } catch (_) {}
@@ -358,7 +412,7 @@ export default {
   font-family: 'Segoe UI', sans-serif;
 }
 
-/* Header */
+/* ── Header ── */
 .doc-header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 14px 16px; background: #f5f5f5;
@@ -371,13 +425,17 @@ export default {
   cursor: pointer; color: #000; padding: 2px 6px; border-radius: 4px;
 }
 .doc-header button:hover { background: #e0e0e0; }
-.read-only-badge {
-  background: #fff3e0; color: #e65100; font-size: 11px;
-  font-weight: 600; padding: 3px 8px; border-radius: 12px;
-  border: 1px solid #ffcc80;
-}
 
-/* Toolbar */
+/* Role badges */
+.role-badge {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 9px; border-radius: 12px;
+}
+.host-badge { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
+.edit-badge { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+.view-badge { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+
+/* ── Toolbar ── */
 .doc-toolbar {
   display: flex; align-items: center; gap: 3px;
   padding: 6px 10px; background: #fafafa;
@@ -387,69 +445,87 @@ export default {
 .doc-toolbar button {
   background: none; border: 1px solid transparent;
   border-radius: 4px; padding: 4px 8px; cursor: pointer;
-  font-size: 13px; color: #333; min-width: 28px; transition: background 0.15s;
+  font-size: 13px; color: #333; min-width: 28px;
+  transition: background 0.15s;
 }
 .doc-toolbar button:hover { background: #e8e8e8; border-color: #ccc; }
 .toolbar-sep { width: 1px; height: 20px; background: #ddd; margin: 0 4px; }
 
-/* Access Panel */
+/* ── Access Panel ── */
 .doc-access-panel {
   background: #f0f4ff; border-bottom: 1px solid #d0d8f0;
   padding: 10px 14px; flex-shrink: 0;
-  max-height: 150px; overflow-y: auto;
+  max-height: 180px; overflow-y: auto;
 }
 .access-header {
   display: flex; align-items: center; gap: 8px;
   font-size: 12px; font-weight: 700; color: #3730a3; margin-bottom: 8px;
 }
+.access-bulk-btns { display: flex; gap: 6px; margin-left: auto; }
 .grant-all-btn, .revoke-all-btn {
-  font-size: 11px; padding: 3px 8px; border: none;
+  font-size: 11px; padding: 3px 10px; border: none;
   border-radius: 10px; cursor: pointer; font-weight: 600;
 }
 .grant-all-btn  { background: #4CAF50; color: white; }
 .revoke-all-btn { background: #f44336; color: white; }
+
 .access-list { display: flex; flex-direction: column; gap: 6px; }
 .access-row {
   display: flex; justify-content: space-between; align-items: center;
-  background: white; padding: 6px 10px; border-radius: 8px;
+  background: white; padding: 7px 10px; border-radius: 8px;
   border: 1px solid #d0d8f0;
+}
+.access-name-wrap { display: flex; align-items: center; gap: 8px; }
+.access-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #11998e, #38ef7d);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: white;
 }
 .access-name { font-size: 13px; color: #333; font-weight: 500; }
 .no-participants { font-size: 12px; color: #888; text-align: center; padding: 8px 0; }
 
 /* Toggle Switch */
-.toggle-switch { position: relative; width: 36px; height: 20px; display: inline-block; }
+.toggle-switch { position: relative; width: 38px; height: 20px; display: inline-block; cursor: pointer; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-slider {
-  position: absolute; cursor: pointer; inset: 0;
+  position: absolute; inset: 0;
   background: #ccc; border-radius: 20px; transition: background 0.2s;
 }
 .toggle-slider::before {
-  content: ''; position: absolute; width: 14px; height: 14px;
-  left: 3px; bottom: 3px; background: white;
-  border-radius: 50%; transition: transform 0.2s;
+  content: ''; position: absolute;
+  width: 14px; height: 14px; left: 3px; bottom: 3px;
+  background: white; border-radius: 50%; transition: transform 0.2s;
 }
 .toggle-switch input:checked + .toggle-slider { background: #4CAF50; }
-.toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
 
-/* Doc Body */
+/* ── Document Body ── */
 .doc-body {
   flex: 1; padding: 20px 24px; overflow-y: auto;
   font-size: 15px; line-height: 1.7; color: #1a1a1a;
   outline: none; min-height: 0;
 }
 .doc-body[data-placeholder]:empty::before {
-  content: attr(data-placeholder); color: #bbb; pointer-events: none;
+  content: attr(data-placeholder);
+  color: #bbb; pointer-events: none;
 }
-.doc-editable { cursor: text; }
-.doc-readonly  { cursor: default; background: #fafafa; }
+.doc-editable {
+  cursor: text;
+  border-top: 2px solid #4CAF5033;
+}
+.doc-readonly {
+  cursor: default;
+  background: #fafafa;
+  border-top: 2px solid #e0e0e0;
+}
 .doc-body :deep(h1) { font-size: 2em;   margin: 0.4em 0; }
 .doc-body :deep(h2) { font-size: 1.5em; margin: 0.4em 0; }
 .doc-body :deep(h3) { font-size: 1.2em; margin: 0.4em 0; }
 .doc-body :deep(ul),
 .doc-body :deep(ol) { padding-left: 24px; }
 
-/* Footer */
+/* ── Footer ── */
 .doc-footer {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px 14px; border-top: 1px solid #e0e0e0;
@@ -457,8 +533,9 @@ export default {
 }
 .doc-status { font-size: 11px; color: #888; }
 .doc-download-btn {
-  font-size: 12px; padding: 5px 12px; background: #3730a3;
-  color: white; border: none; border-radius: 6px;
+  font-size: 12px; padding: 5px 12px;
+  background: #3730a3; color: white;
+  border: none; border-radius: 6px;
   cursor: pointer; font-weight: 600;
 }
 .doc-download-btn:hover { background: #312e81; }
