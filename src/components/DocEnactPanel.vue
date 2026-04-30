@@ -13,18 +13,18 @@
 
     <!-- Toolbar (host + editors only) -->
     <div v-if="canEdit" class="doc-toolbar">
-      <button @mousedown.prevent="fmt('bold')"><b>B</b></button>
-      <button @mousedown.prevent="fmt('italic')"><i>I</i></button>
-      <button @mousedown.prevent="fmt('underline')"><u>U</u></button>
+      <button @click.prevent="fmt('bold')"><b>B</b></button>
+      <button @click.prevent="fmt('italic')"><i>I</i></button>
+      <button @click.prevent="fmt('underline')"><u>U</u></button>
       <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="fmt('formatBlock', 'H1')">H1</button>
-      <button @mousedown.prevent="fmt('formatBlock', 'H2')">H2</button>
-      <button @mousedown.prevent="fmt('formatBlock', 'H3')">H3</button>
+      <button @click.prevent="fmt('formatBlock', 'H1')">H1</button>
+      <button @click.prevent="fmt('formatBlock', 'H2')">H2</button>
+      <button @click.prevent="fmt('formatBlock', 'H3')">H3</button>
       <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="fmt('insertUnorderedList')">• List</button>
-      <button @mousedown.prevent="fmt('insertOrderedList')">1. List</button>
+      <button @click.prevent="fmt('insertUnorderedList')">• List</button>
+      <button @click.prevent="fmt('insertOrderedList')">1. List</button>
       <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="fmt('formatBlock', 'P')">¶</button>
+      <button @click.prevent="fmt('formatBlock', 'P')">¶</button>
     </div>
 
     <!-- Access Control Panel (host only) -->
@@ -65,6 +65,8 @@
       :class="{ 'doc-editable': canEdit, 'doc-readonly': !canEdit }"
       @input="onInput"
       @keydown="onKeydown"
+      @touchend="saveMobileSelection"
+      @mouseup="saveMobileSelection"
       spellcheck="true"
       data-placeholder="Start typing your document..."
     ></div>
@@ -99,6 +101,8 @@ export default {
       debounceTimer: null,
       saveTimer:     null,
       statusText:    'Connected',
+      isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+      savedRange:    null, // stores selection before toolbar tap on mobile
     };
   },
 
@@ -130,6 +134,14 @@ export default {
   },
 
   methods: {
+
+    // Saves current selection so toolbar buttons can restore it after tap-blur on mobile
+    saveMobileSelection() {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        this.savedRange = sel.getRangeAt(0).cloneRange();
+      }
+    },
 
     // ==================== LIVEKIT DATA LAYER ====================
 
@@ -198,6 +210,14 @@ export default {
     // ==================== EDITING ====================
 
     fmt(command, value = null) {
+      // On mobile, tapping a toolbar button blurs the contenteditable and
+      // clears the selection. We save it on 'touchstart' (before blur) and
+      // restore it here so execCommand still has a range to work with.
+      if (this.isMobile && this.savedRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(this.savedRange);
+      }
       document.execCommand(command, false, value);
       this.$refs.docBody.focus();
       this.broadcastContent();
@@ -541,6 +561,48 @@ export default {
 .doc-download-btn:hover { background: #312e81; }
 
 @media (max-width: 768px) {
-  #doc-enact-panel { width: 100%; }
+  #doc-enact-panel {
+    width: 100%;
+    left: 0;
+    /* On mobile, sit above the navbar (70px) */
+    bottom: 70px;
+  }
+
+  /* Larger touch targets for toolbar buttons */
+  .doc-toolbar button {
+    padding: 8px 10px;
+    font-size: 14px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  /* Bigger toggle for fingers */
+  .toggle-switch {
+    width: 46px;
+    height: 26px;
+  }
+  .toggle-slider::before {
+    width: 18px;
+    height: 18px;
+  }
+  .toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+  }
+
+  /* Access panel takes a bit more room on mobile */
+  .doc-access-panel {
+    max-height: 220px;
+  }
+
+  .doc-body {
+    padding: 14px 16px;
+    /* Prevent iOS zoom on focus by ensuring font is ≥ 16px */
+    font-size: 16px;
+  }
+
+  .grant-all-btn, .revoke-all-btn {
+    padding: 5px 12px;
+    font-size: 12px;
+  }
 }
 </style>
