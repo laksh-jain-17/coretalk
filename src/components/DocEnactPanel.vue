@@ -150,9 +150,20 @@ export default {
         const lp = this.livekitRoom.localParticipant;
         if (!lp) return;
         const encoded = new TextEncoder().encode(JSON.stringify(payload));
-        lp.publishData(encoded, { reliable: true });
+        // LiveKit changed publishData signature between versions:
+        //   Old API: publishData(data, DataPacket_Kind.RELIABLE) where RELIABLE = 1 (int32 enum)
+        //   New API: publishData(data, { reliable: true })
+        // Passing the options object to the old API causes "invalid int 32: object"
+        // because protobuf tries to serialize the object as an int32 enum value.
+        // We try the new API first, and fall back to the old enum value on error.
+        try {
+          lp.publishData(encoded, { reliable: true });
+        } catch (_apiErr) {
+          // Old livekit-client: DataPacket_Kind.RELIABLE === 1
+          lp.publishData(encoded, 1);
+        }
       } catch (err) {
-        console.error('[DocEnact] sendData error:', err);
+        console.error("[DocEnact] sendData error:", err);
       }
     },
 
