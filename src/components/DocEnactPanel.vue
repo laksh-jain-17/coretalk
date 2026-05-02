@@ -13,18 +13,18 @@
 
     <!-- Toolbar (host + editors only) -->
     <div v-if="canEdit" class="doc-toolbar">
-      <button @click.prevent="fmt('bold')"><b>B</b></button>
-      <button @click.prevent="fmt('italic')"><i>I</i></button>
-      <button @click.prevent="fmt('underline')"><u>U</u></button>
+      <button @mousedown.prevent="fmt('bold')"><b>B</b></button>
+      <button @mousedown.prevent="fmt('italic')"><i>I</i></button>
+      <button @mousedown.prevent="fmt('underline')"><u>U</u></button>
       <div class="toolbar-sep"></div>
-      <button @click.prevent="fmt('formatBlock', 'H1')">H1</button>
-      <button @click.prevent="fmt('formatBlock', 'H2')">H2</button>
-      <button @click.prevent="fmt('formatBlock', 'H3')">H3</button>
+      <button @mousedown.prevent="fmt('formatBlock', 'H1')">H1</button>
+      <button @mousedown.prevent="fmt('formatBlock', 'H2')">H2</button>
+      <button @mousedown.prevent="fmt('formatBlock', 'H3')">H3</button>
       <div class="toolbar-sep"></div>
-      <button @click.prevent="fmt('insertUnorderedList')">• List</button>
-      <button @click.prevent="fmt('insertOrderedList')">1. List</button>
+      <button @mousedown.prevent="fmt('insertUnorderedList')">• List</button>
+      <button @mousedown.prevent="fmt('insertOrderedList')">1. List</button>
       <div class="toolbar-sep"></div>
-      <button @click.prevent="fmt('formatBlock', 'P')">¶</button>
+      <button @mousedown.prevent="fmt('formatBlock', 'P')">¶</button>
     </div>
 
     <!-- Access Control Panel (host only) -->
@@ -57,16 +57,16 @@
       </div>
     </div>
 
-    <!-- Document Body — ALL participants see this -->
+    <!-- Document Body -->
     <div
       ref="docBody"
       class="doc-body"
-      :contenteditable="canEdit"
+      :contenteditable="canEdit ? 'true' : 'false'"
       :class="{ 'doc-editable': canEdit, 'doc-readonly': !canEdit }"
       @input="onInput"
       @keydown="onKeydown"
-      @touchend="saveMobileSelection"
       @mouseup="saveMobileSelection"
+      @touchend="saveMobileSelection"
       spellcheck="true"
       data-placeholder="Start typing your document..."
     ></div>
@@ -95,142 +95,180 @@ export default {
 
   data() {
     return {
-      // participant IDs that the host has granted edit access
       editors:       [],
       lastContent:   '',
       debounceTimer: null,
       saveTimer:     null,
-      statusText:    'Connected',
+      statusText:    'Connecting...',
       isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
-      savedRange:    null, // stores selection before toolbar tap on mobile
+      savedRange: null,
+      // Bound handler reference so we can properly remove it on unmount
+      _dataHandler: null,
     };
   },
 
   computed: {
-    // Host can always edit. Participants can edit only if host granted them access.
     canEdit() {
       return this.isHost || this.editors.includes(this.userId);
     },
   },
 
   mounted() {
-    this.livekitRoom.on('dataReceived', this.onDataReceived);
+    // Store bound reference so beforeUnmount can remove the exact same function
+    this._dataHandler = this.onDataReceived.bind(this);
+    this.livekitRoom.on('dataReceived', this._dataHandler);
 
-    if (this.isHost) {
-      // Host just opened the doc — broadcast the current (empty) state to everyone
-      this.$nextTick(() => {
+    this.$nextTick(() => {
+      if (this.isHost) {
+        // Host broadcasts current (empty) state immediately
         this.broadcastFullState();
-      });
-    } else {
-      // Participant opened the panel — request full state from host
-      this.sendData({ type: 'doc-request-state' });
-    }
+        this.statusText = 'Connected';
+      } else {
+        // Participant requests current state from host
+        // Retry a few times in case host hasn't processed the event yet
+        this.requestState();
+        this._stateRetry = setTimeout(() => this.requestState(), 1500);
+        this._stateRetry2 = setTimeout(() => this.requestState(), 4000);
+      }
+    });
   },
 
   beforeUnmount() {
-    this.livekitRoom.off('dataReceived', this.onDataReceived);
+    if (this._dataHandler) {
+      this.livekitRoom.off('dataReceived', this._dataHandler);
+      this._dataHandler = null;
+    }
     clearTimeout(this.debounceTimer);
     clearTimeout(this.saveTimer);
+    clearTimeout(this._stateRetry);
+    clearTimeout(this._stateRetry2);
   },
 
   methods: {
 
-    // Saves current selection so toolbar buttons can restore it after tap-blur on mobile
     saveMobileSelection() {
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
-        this.savedRange = sel.getRangeAt(0).cloneRange();
+        try {
+          this.savedRange = sel.getRangeAt(0).cloneRange();
+        } catch (_) {}
       }
     },
 
     // ==================== LIVEKIT DATA LAYER ====================
 
+    /**
+     * Publish a JSON payload to ALL participants in the room via LiveKit data channel.
+     * Handles both old API (enum int) and new API (options object).
+     */
     sendData(payload) {
       try {
-        const lp = this.livekitRoom.localParticipant;
-        if (!lp) return;
+        const lp = this.livekitRoom?.localParticipant;
+        if (!lp) {
+          console.warn('[DocEnact] No localParticipant — cannot send data');
+          return;
+        }
+
         const encoded = new TextEncoder().encode(JSON.stringify(payload));
-        // LiveKit changed publishData signature between versions:
-        //   Old API: publishData(data, DataPacket_Kind.RELIABLE) where RELIABLE = 1 (int32 enum)
-        //   New API: publishData(data, { reliable: true })
-        // Passing the options object to the old API causes "invalid int 32: object"
-        // because protobuf tries to serialize the object as an int32 enum value.
-        // We try the new API first, and fall back to the old enum value on error.
+
+        // Try new API first ({ reliable: true }), fall back to old API (RELIABLE = 1)
         try {
           lp.publishData(encoded, { reliable: true });
-        } catch (_apiErr) {
-          // Old livekit-client: DataPacket_Kind.RELIABLE === 1
-          lp.publishData(encoded, 1);
+        } catch (newApiErr) {
+          try {
+            lp.publishData(encoded, 1); // DataPacket_Kind.RELIABLE
+          } catch (oldApiErr) {
+            console.error('[DocEnact] publishData failed on both APIs:', oldApiErr);
+          }
         }
       } catch (err) {
-        console.error("[DocEnact] sendData error:", err);
+        console.error('[DocEnact] sendData error:', err);
       }
     },
 
-    onDataReceived(payload, participant) {
+    requestState() {
+      this.sendData({ type: 'doc-request-state', senderId: this.userId });
+    },
+
+    /**
+     * LiveKit dataReceived event fires as:
+     *   (payload: Uint8Array, participant: RemoteParticipant, kind: DataPacket_Kind)
+     *
+     * We only need payload here.
+     */
+    onDataReceived(payload /*, participant, kind */) {
       try {
-        const text = new TextDecoder().decode(payload);
-        const msg  = JSON.parse(text);
+        // payload may be a Uint8Array or already a string depending on livekit-client version
+        let text;
+        if (typeof payload === 'string') {
+          text = payload;
+        } else {
+          text = new TextDecoder().decode(payload);
+        }
+
+        const msg = JSON.parse(text);
+
+        // Only handle our own doc messages
         if (!msg.type || !msg.type.startsWith('doc-')) return;
 
         switch (msg.type) {
 
-          // A participant just opened the panel and wants the current doc state
           case 'doc-request-state':
-            // Only the host responds — they are the source of truth
+            // Only the host responds with the authoritative state
             if (this.isHost) {
               this.broadcastFullState();
             }
             break;
 
-          // Full doc state (content + who has edit access) — sent by host on open / request
           case 'doc-state':
-            this.editors = msg.editors || [];
+            this.editors = Array.isArray(msg.editors) ? msg.editors : [];
             this.setContent(msg.content || '');
+            this.statusText = 'Connected';
             this.updateStatusAfterAccessChange();
             break;
 
-          // Incremental content update while someone is typing
           case 'doc-update':
             // Ignore echoes of our own updates
             if (msg.senderId === this.userId) return;
-            this.applyRemoteUpdate(msg.content);
+            this.applyRemoteUpdate(msg.content || '');
             break;
 
-          // Host toggled edit access for one or more participants
           case 'doc-access-changed':
-            this.editors = msg.editors || [];
+            this.editors = Array.isArray(msg.editors) ? msg.editors : [];
             this.updateStatusAfterAccessChange();
             break;
         }
-      } catch (_) {
-        // Not a doc message or malformed — silently ignore
+      } catch (err) {
+        // Not a doc message or malformed JSON — silently ignore
       }
     },
 
-    // Sends the full doc state (content + editors list) to everyone in the room.
-    // Called by host when they open the doc, or when a participant requests state.
+    /**
+     * Sends the complete document state (HTML content + editors list) to everyone.
+     * Called by the host on open, on participant request, and after access changes.
+     */
     broadcastFullState() {
       this.sendData({
-        type:    'doc-state',
-        content: this.$refs.docBody?.innerHTML || '',
-        editors: this.editors,
+        type:     'doc-state',
+        content:  this.$refs.docBody?.innerHTML || '',
+        editors:  this.editors,
+        senderId: this.userId,
       });
     },
 
     // ==================== EDITING ====================
 
     fmt(command, value = null) {
-      // On mobile, tapping a toolbar button blurs the contenteditable and
-      // clears the selection. We save it on 'touchstart' (before blur) and
-      // restore it here so execCommand still has a range to work with.
+      // Restore selection lost from toolbar tap/click on mobile
       if (this.isMobile && this.savedRange) {
-        const sel = window.getSelection();
-        sel.removeAllRanges();
-        sel.addRange(this.savedRange);
+        try {
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(this.savedRange);
+        } catch (_) {}
       }
       document.execCommand(command, false, value);
-      this.$refs.docBody.focus();
+      this.$refs.docBody?.focus();
       this.broadcastContent();
     },
 
@@ -238,7 +276,7 @@ export default {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = setTimeout(() => {
         this.broadcastContent();
-      }, 150); // 150ms debounce — snappy real-time feel
+      }, 150);
     },
 
     onKeydown(e) {
@@ -248,7 +286,6 @@ export default {
       }
     },
 
-    // Broadcasts the current doc content to all participants
     broadcastContent() {
       const content = this.$refs.docBody?.innerHTML || '';
       if (content === this.lastContent) return;
@@ -268,7 +305,6 @@ export default {
       }, 400);
     },
 
-    // Apply an incoming remote update without overwriting the local cursor position
     applyRemoteUpdate(content) {
       const saved = this.saveSelection();
       this.setContent(content);
@@ -284,50 +320,42 @@ export default {
 
     // ==================== ACCESS CONTROL (host only) ====================
 
-    // Toggle a single participant between editor / viewer
     toggleAccess(participantId) {
       if (this.editors.includes(participantId)) {
         this.editors = this.editors.filter(id => id !== participantId);
       } else {
-        this.editors.push(participantId);
+        this.editors = [...this.editors, participantId];
       }
       this.broadcastAccessChange();
     },
 
-    // Set specific access level for a participant
-    setAccess(participantId, level) {
-      this.editors = this.editors.filter(id => id !== participantId);
-      if (level === 'edit') {
-        this.editors.push(participantId);
-      }
-      this.broadcastAccessChange();
-    },
-
-    // Grant edit access to everyone
     grantAll() {
       this.editors = this.participants.map(p => p.id);
       this.broadcastAccessChange();
     },
 
-    // Revoke edit access from everyone (all go back to view-only)
     revokeAll() {
       this.editors = [];
       this.broadcastAccessChange();
     },
 
-    // Sends the updated editors list to all participants
     broadcastAccessChange() {
+      // First broadcast the access change so participants update their UI
       this.sendData({
-        type:    'doc-access-changed',
-        editors: this.editors,
+        type:     'doc-access-changed',
+        editors:  this.editors,
+        senderId: this.userId,
       });
-      // Also re-send the full doc so newly granted editors get the latest content
-      this.broadcastFullState();
+      // Then send full state so newly-granted editors get latest content
+      // Small delay so the access-changed message is processed first
+      setTimeout(() => this.broadcastFullState(), 100);
     },
 
-    // Update status text based on whether this user now has edit access
     updateStatusAfterAccessChange() {
-      if (this.isHost) return; // host status never changes
+      if (this.isHost) {
+        this.statusText = 'Connected';
+        return;
+      }
       if (this.canEdit) {
         this.statusText = '✏️ Edit access granted';
         setTimeout(() => { this.statusText = 'Connected'; }, 2500);
@@ -374,18 +402,18 @@ export default {
       return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     },
 
-    // ==================== CURSOR PRESERVATION ====================
-    // Preserves the cursor/caret position during remote content updates
-    // so the local editor's typing position doesn't jump.
+    // ── Cursor preservation during remote updates ──
 
     saveSelection() {
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) return null;
-      const range = sel.getRangeAt(0);
-      return {
-        start: this.getTextOffset(this.$refs.docBody, range.startContainer, range.startOffset),
-        end:   this.getTextOffset(this.$refs.docBody, range.endContainer,   range.endOffset),
-      };
+      try {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return null;
+        const range = sel.getRangeAt(0);
+        return {
+          start: this.getTextOffset(this.$refs.docBody, range.startContainer, range.startOffset),
+          end:   this.getTextOffset(this.$refs.docBody, range.endContainer,   range.endOffset),
+        };
+      } catch (_) { return null; }
     },
 
     restoreSelection(saved) {
@@ -457,7 +485,6 @@ export default {
 }
 .doc-header button:hover { background: #e0e0e0; }
 
-/* Role badges */
 .role-badge {
   font-size: 11px; font-weight: 600;
   padding: 3px 9px; border-radius: 12px;
@@ -516,7 +543,6 @@ export default {
 .access-name { font-size: 13px; color: #333; font-weight: 500; }
 .no-participants { font-size: 12px; color: #888; text-align: center; padding: 8px 0; }
 
-/* Toggle Switch */
 .toggle-switch { position: relative; width: 38px; height: 20px; display: inline-block; cursor: pointer; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-slider {
@@ -572,48 +598,13 @@ export default {
 .doc-download-btn:hover { background: #312e81; }
 
 @media (max-width: 768px) {
-  #doc-enact-panel {
-    width: 100%;
-    left: 0;
-    /* On mobile, sit above the navbar (70px) */
-    bottom: 70px;
-  }
-
-  /* Larger touch targets for toolbar buttons */
-  .doc-toolbar button {
-    padding: 8px 10px;
-    font-size: 14px;
-    min-width: 36px;
-    min-height: 36px;
-  }
-
-  /* Bigger toggle for fingers */
-  .toggle-switch {
-    width: 46px;
-    height: 26px;
-  }
-  .toggle-slider::before {
-    width: 18px;
-    height: 18px;
-  }
-  .toggle-switch input:checked + .toggle-slider::before {
-    transform: translateX(20px);
-  }
-
-  /* Access panel takes a bit more room on mobile */
-  .doc-access-panel {
-    max-height: 220px;
-  }
-
-  .doc-body {
-    padding: 14px 16px;
-    /* Prevent iOS zoom on focus by ensuring font is ≥ 16px */
-    font-size: 16px;
-  }
-
-  .grant-all-btn, .revoke-all-btn {
-    padding: 5px 12px;
-    font-size: 12px;
-  }
+  #doc-enact-panel { width: 100%; left: 0; bottom: 70px; }
+  .doc-toolbar button { padding: 8px 10px; font-size: 14px; min-width: 36px; min-height: 36px; }
+  .toggle-switch { width: 46px; height: 26px; }
+  .toggle-slider::before { width: 18px; height: 18px; }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+  .doc-access-panel { max-height: 220px; }
+  .doc-body { padding: 14px 16px; font-size: 16px; }
+  .grant-all-btn, .revoke-all-btn { padding: 5px 12px; font-size: 12px; }
 }
 </style>
