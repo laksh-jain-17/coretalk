@@ -430,3 +430,18 @@ app.post('/api/send-email', async (req, res) => {
   }
 });
 
+socket.on('wb:stroke', (data) => {
+  socket.to(data.roomId).emit('wb:stroke', data);
+});
+
+socket.on('wb:clear', (data) => {
+  socket.to(data.roomId).emit('wb:clear', data);
+});
+
+socket.on('wb:request-state', (data) => {
+  socket.to(data.roomId).emit('wb:request-state', data);
+});
+
+socket.on('wb:state', (data) => {
+  socket.to(data.roomId).emit('wb:state', data);
+});
