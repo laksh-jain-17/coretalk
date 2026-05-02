@@ -271,6 +271,26 @@ io.on('connection', (socket) => {
     socket.to(data.roomId).emit('wb:state', data);
   });
 
+  // Doc Enact relay — used as reliable fallback alongside LiveKit data channel.
+  // Relays doc-state, doc-update, doc-access-changed, doc-request-state to the room.
+  socket.on('doc-relay', (data) => {
+    if (!data || !data.roomId || !data.type) return;
+    const senderInRoom = rooms[data.roomId]?.find(p => p.id === socket.id);
+    if (!senderInRoom) return;
+
+    const { type, roomId, ...payload } = data;
+
+    // doc-request-state: participant asking host for current doc state
+    // Send to everyone else — host will respond
+    if (type === 'doc-request-state') {
+      socket.to(roomId).emit(type, payload);
+      return;
+    }
+
+    // All other doc events: broadcast to everyone else in the room
+    socket.to(roomId).emit(type, payload);
+  });
+
   socket.on('mute-all', async ({ roomId }) => {
     if (!roomId || !socketUserId) return;
     const isHost = await verifyIsHost(socketUserId, roomId);
