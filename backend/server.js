@@ -8,7 +8,6 @@ const app = express();
 const helmet = require('helmet');
 const authMiddleware = require('./middleware/authMiddleware');
 const Room = require('./models/Room');
-
 const rateLimit = require('express-rate-limit');
 
 const loginLimiter = rateLimit({
@@ -59,8 +58,6 @@ app.use('/api/admin', adminRoutes);
 
 app.get('/', (req, res) => res.send('Backend is running'));
 
-// FIX #7: Removed the unauthenticated /api/test-email diagnostic endpoint entirely.
-
 app.use('/api/livekit', livekitRoutes);
 
 mongoose.connect(process.env.MONGO_URL)
@@ -82,7 +79,6 @@ const io = new Server(server, {
 const rooms = {};
 adminRoutes.setGetRooms(() => rooms);
 
-// waitingRoom[roomId] = [{ socketId, userId, userName }]
 const waitingRoom = {};
 
 async function verifyIsHost(userId, roomId) {
@@ -144,9 +140,6 @@ io.on('connection', (socket) => {
   socket.on('participant-waiting', ({ roomId, userId, userName }) => {
     if (!roomId || !userId) return;
 
-    // FIX #3: Bind the identity to the socket object at first use.
-    // Subsequent events that reference socketUserId are already protected.
-    // For the waiting room we store the userId tied to this socket connection.
     socket.waitingRoomId = roomId;
     socket.waitingUserId = userId;
     socket.waitingUserName = userName;
@@ -167,19 +160,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  // FIX #2: Verify the emitting socket is actually the host before admitting/denying.
   socket.on('admit-participant', async ({ socketId, roomId }) => {
     if (!socketId || !roomId) return;
 
-    // Check if the emitting socket is the host from the in-memory rooms object
     const hostEntry = rooms[roomId]?.find(p => p.id === socket.id && p.isHost);
     if (!hostEntry) {
-      // Fallback: try socketUserId DB check
       if (socketUserId) {
         const isHost = await verifyIsHost(socketUserId, roomId);
         if (!isHost) return;
       } else {
-        return; // can't verify, reject
+        return;
       }
     }
 
@@ -204,31 +194,27 @@ io.on('connection', (socket) => {
     io.to(socketId).emit('admission-result', { admitted: false });
   });
 
-  // FIX #4: Only relay signals between sockets that share a room.
   socket.on('signal', ({ to, signal }) => {
     if (!to || !signal || !joinedRoom) return;
 
-    // Confirm 'to' is in the same room as sender
     const targetInRoom = rooms[joinedRoom]?.find(p => p.id === to);
     if (!targetInRoom) return;
 
     io.to(to).emit('signal', { from: socket.id, signal });
   });
 
-  // FIX #12: Enforce server-side message length limits.
   socket.on('chat-message', ({ roomId, sender, text, timestamp, attachments }) => {
     if (!joinedRoom) return;
     const safeText = typeof text === 'string' ? text.slice(0, 2000) : '';
     const safeSender = typeof sender === 'string' ? sender.slice(0, 60) : 'Unknown';
-    // Only allow a simple array of objects with known shape; strip everything else
     const safeAttachments = Array.isArray(attachments)
-  ? attachments.slice(0, 5).map(a => ({
-      name:     typeof a.name     === 'string' ? a.name.slice(0, 200)     : '',
-      mimeType: typeof a.mimeType === 'string' ? a.mimeType.slice(0, 100) : '',
-      base64:   typeof a.base64   === 'string' && a.base64.length < 2_800_000 ? a.base64 : '',
-      size:     typeof a.size     === 'number' ? a.size                   : 0,
-    }))
-  : [];
+      ? attachments.slice(0, 5).map(a => ({
+          name:     typeof a.name     === 'string' ? a.name.slice(0, 200)     : '',
+          mimeType: typeof a.mimeType === 'string' ? a.mimeType.slice(0, 100) : '',
+          base64:   typeof a.base64   === 'string' && a.base64.length < 2_800_000 ? a.base64 : '',
+          size:     typeof a.size     === 'number' ? a.size : 0,
+        }))
+      : [];
 
     if (!safeText && safeAttachments.length === 0) return;
 
@@ -263,17 +249,26 @@ io.on('connection', (socket) => {
 
   socket.on('wb:stroke', (data) => {
     if (!data || !data.roomId) return;
-    // Only relay to others in the same room
-    const targetInRoom = rooms[data.roomId]?.find(p => p.id === socket.id);
-    if (!targetInRoom) return;
+    const senderInRoom = rooms[data.roomId]?.find(p => p.id === socket.id);
+    if (!senderInRoom) return;
     socket.to(data.roomId).emit('wb:stroke', data);
   });
 
   socket.on('wb:clear', ({ roomId }) => {
     if (!roomId) return;
-    const targetInRoom = rooms[roomId]?.find(p => p.id === socket.id);
-    if (!targetInRoom) return;
+    const senderInRoom = rooms[roomId]?.find(p => p.id === socket.id);
+    if (!senderInRoom) return;
     socket.to(roomId).emit('wb:clear');
+  });
+
+  socket.on('wb:request-state', (data) => {
+    if (!data || !data.roomId) return;
+    socket.to(data.roomId).emit('wb:request-state', data);
+  });
+
+  socket.on('wb:state', (data) => {
+    if (!data || !data.roomId) return;
+    socket.to(data.roomId).emit('wb:state', data);
   });
 
   socket.on('mute-all', async ({ roomId }) => {
@@ -331,7 +326,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// REST endpoints
 app.post('/api/end-meeting', authMiddleware, async (req, res) => {
   const { roomId } = req.body;
   if (!roomId) return res.status(400).json({ success: false, message: 'roomId is required' });
@@ -383,9 +377,6 @@ app.get('/api/rooms', authMiddleware, (req, res) => {
   res.json(roomSummary);
 });
 
-// FIX #1: /api/send-email now requires authentication.
-// The accessToken is no longer accepted from the client body —
-// the server generates it from the stored refresh token.
 const { google } = require('googleapis');
 app.post('/api/send-email', async (req, res) => {
   const { to, subject, body, accessToken, senderEmail } = req.body;
@@ -397,7 +388,7 @@ app.post('/api/send-email', async (req, res) => {
   try {
     const emailLines = [
       `To: ${to}`,
-      `From: ${senderEmail}`,  // ← user's actual email
+      `From: ${senderEmail}`,
       `Subject: ${subject}`,
       '',
       body
@@ -412,7 +403,7 @@ app.post('/api/send-email', async (req, res) => {
     const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,  // ← user's token
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ raw })
@@ -428,20 +419,4 @@ app.post('/api/send-email', async (req, res) => {
     console.error('Email send error:', error);
     res.status(500).json({ success: false, message: error.message });
   }
-});
-
-socket.on('wb:stroke', (data) => {
-  socket.to(data.roomId).emit('wb:stroke', data);
-});
-
-socket.on('wb:clear', (data) => {
-  socket.to(data.roomId).emit('wb:clear', data);
-});
-
-socket.on('wb:request-state', (data) => {
-  socket.to(data.roomId).emit('wb:request-state', data);
-});
-
-socket.on('wb:state', (data) => {
-  socket.to(data.roomId).emit('wb:state', data);
 });
