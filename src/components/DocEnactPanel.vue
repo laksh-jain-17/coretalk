@@ -226,7 +226,7 @@ export default {
           this.editors = Array.isArray(msg.editors) ? msg.editors : [];
           this._updateAccessStatus();
           if (this.canEdit && !this.isHost) {
-            this._requestState();
+            setTimeout(() => this._requestState(), 300);
           }
           break;
       }
