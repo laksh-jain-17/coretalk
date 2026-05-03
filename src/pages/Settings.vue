@@ -193,11 +193,15 @@ export default {
             },
             {
               q: 'Where can I find my meeting passcode to share with others?',
-              a: 'After creating a meeting, your unique passcode is displayed on screen. Copy and share it with participants so they can join your room.'
+              a: 'After creating a meeting, your unique passcode is displayed on screen or see in meeting info. Copy and share it with participants so they can join your room.'
             },
             {
               q: 'How many people can join a meeting at once?',
               a: 'CoreTalk supports multiple participants per meeting room. For large gatherings, ensure a stable internet connection for the best experience.'
+            },
+            {
+              q: 'What features are restricted for Guest users?',
+              a: 'Guest users cannot create account, cannot use gmail enact, cannot complain, cannot have account information, and cannot edit the doc.'
             }
           ]
         },
