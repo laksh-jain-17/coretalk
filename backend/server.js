@@ -282,6 +282,11 @@ io.on('connection', (socket) => {
 
     // doc-request-state: participant asking host for current doc state
     // Send to everyone else — host will respond
+    if (type === 'doc-enact-visibility') {
+      socket.to(roomId).emit('doc-enact-visibility', payload);
+      return;
+    }
+    
     if (type === 'doc-request-state') {
       socket.to(roomId).emit(type, payload);
       return;
