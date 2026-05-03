@@ -223,6 +223,18 @@ export default {
             {
               q: 'What is background noise suppression and how does it work?',
               a: 'Background noise suppression filters out ambient sounds like keyboard clicks or background chatter, so other participants only hear your voice clearly. You can toggle it from the audio settings inside the meeting.'
+            },
+            {
+              q: 'What is Gmail Enact?',
+              a: 'The Gmail Enact lets you to send emails and check inbox mails without opening another tab, preventing context switching and also saves 200-350 MB of RAM. Coretalk is equipped with features which lets you do your important task during the meeting with ease.'
+            },
+            {
+              q: 'What is Doc Enact?',
+              a: 'Similar to Google Docs lets you to make a document, initially controlled mainly by host, it lets other users / participants to edit or write into same doc simultaneously and download them. It has all the basic features like unordered list, ordered list, bold, italic and underline writing.'
+            },
+            {
+              q: 'What about Whiteboard?',
+              a: 'To illustrate something by the host or other participants open whiteboard, click share screen and draw what you want. It\'s that easy'
             }
           ]
         },
