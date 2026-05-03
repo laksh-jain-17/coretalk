@@ -1643,7 +1643,7 @@ export default {
       this.showDocEnact = !this.showDocEnact;
       if(this.socket && this.socket.connected) 
       {
-        this.socket.emit('doc-realy',{
+        this.socket.emit('doc-relay',{
           roomId: this.roomId,
           type: 'doc-enact-visibility',
           isOpen: this.showDocEnact,
