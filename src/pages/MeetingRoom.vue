@@ -492,7 +492,7 @@
     </div>
     <WhiteboardPanel v-if="showWhiteboard" :socket="socket" :roomId="roomId" @close="showWhiteboard = false"/>
     <AiNotesPanel v-if="showAiNotes" :roomTitle="title" @close="showAiNotes = false"/>
-    <DocEnactPanel v-if="showDocEnact && livekitRoom" :livekitRoom="livekitRoom" :isHost="isHost" :userId="userId" :participants="participants" :roomId="roomId" @close="showDocEnact = false"/>
+    <DocEnactPanel v-if="showDocEnact && livekitRoom" :livekitRoom="livekitRoom" :isHost="isHost" :userId="userId" :participants="participants" :roomId="roomId" :socket="socket" @close="toggleDocEnact"/>
   </div>
 </template>
 
