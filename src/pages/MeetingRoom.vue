@@ -17,7 +17,7 @@
         <button @click="showWhiteboard = !showWhiteboard" :class="{ 'active-feature': showWhiteboard }">
             {{ showWhiteboard ? 'Whiteboard ON' : 'Whiteboard' }}
         </button>
-        <button @click="showDocEnact = !showDocEnact" :class="{'active-feature':showDocEnact}">
+        <button @click="toggleDocEnact" :class="{'active-feature':showDocEnact}">
           {{ showDocEnact ? 'Doc Enact ON' : 'Doc Enact' }}
         </button>
         <!--button @click="showAiNotes = !showAiNotes" :class="{ 'active-feature': showAiNotes }">
@@ -1602,6 +1602,13 @@ export default {
           p => p.socketId !== socketId
         );
       });
+
+      this.socket.on('doc-enact-visibility',({isOpen}) => {
+        if(!this.isHost)
+        {
+          this.showDocEnact = isOpen;
+        }
+      });
     },
 
     startBroadcastRetry() {
@@ -1631,6 +1638,20 @@ export default {
       }
     },
 
+    toggleDocEnact()
+    {
+      this.showDocEnact = !this.showDocEnact;
+      if(this.socket && this.socket.connected) 
+      {
+        this.socket.emit('doc-realy',{
+          roomId: this.roomId,
+          type: 'doc-enact-visibility',
+          isOpen: this.showDocEnact,
+          senderId: this.userId,
+        });
+      }
+    },
+    
     safeBroadcast(event, data) {
       if (this.socket && this.socket.connected && this.isSocketConnected) {
         try {
