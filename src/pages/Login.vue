@@ -19,6 +19,7 @@
               <li>FAQ is available.</li>
               <li>Sign in as guest account is provided.</li>
               <li>Gmail Enact feature.</li>
+              <li>Doc Enact feature</li>
               <li>Bug fixes.</li>
             </ol>
             <p>Version v3.</p>
