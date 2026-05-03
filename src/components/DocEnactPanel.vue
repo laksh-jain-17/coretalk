@@ -1,11 +1,11 @@
 <template>
   <div id="doc-enact-panel">
     <div class="doc-header">
-      <span>📄 Doc Enact</span>
+      <span>Doc Enact</span>
       <div class="doc-header-right">
-        <span v-if="isHost" class="role-badge host-badge">👑 Host</span>
-        <span v-else-if="canEdit" class="role-badge edit-badge">✏️ Editor</span>
-        <span v-else class="role-badge view-badge">👁 View Only</span>
+        <span v-if="isHost" class="role-badge host-badge">Host</span>
+        <span v-else-if="canEdit" class="role-badge edit-badge">Editor</span>
+        <span v-else class="role-badge view-badge">View Only</span>
         <button @click="$emit('close')">✕</button>
       </div>
     </div>
@@ -27,7 +27,7 @@
 
     <div v-if="isHost" class="doc-access-panel">
       <div class="access-header">
-        <span>🔐 Edit Access</span>
+        <span>Edit Access</span>
         <div class="access-bulk-btns">
           <button class="grant-all-btn" @click="grantAll">Grant All</button>
           <button class="revoke-all-btn" @click="revokeAll">Revoke All</button>
@@ -69,7 +69,7 @@
 
     <div class="doc-footer">
       <span class="doc-status">{{ statusText }}</span>
-      <button v-if="canEdit" class="doc-download-btn" @click="downloadDoc">⬇ Export</button>
+      <button v-if="canEdit" class="doc-download-btn" @click="downloadDoc">Download</button>
     </div>
   </div>
 </template>
@@ -492,7 +492,7 @@ h1{font-size:2em;}h2{font-size:1.5em;}h3{font-size:1.2em;}ul,ol{padding-left:24p
 }
 .doc-status { font-size: 11px; color: #888; }
 .doc-download-btn {
-  font-size: 12px; padding: 5px 12px; background: #3730a3; color: white;
+  font-size: 12px; padding: 5px 12px; background: black; color: white;
   border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
 }
 .doc-download-btn:hover { background: #312e81; }
