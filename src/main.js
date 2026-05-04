@@ -36,7 +36,7 @@ const router = createRouter({
 router.beforeEach((to,from,next) => {
     if(to.meta.requiresAuth && !isLoggedIn())
     {
-        next('/Login');
+        next({ path: '/Login', query: {redirect: to.fullPath}});
     }
     else{
         next();
