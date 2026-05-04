@@ -1919,20 +1919,19 @@ export default {
     },
 
     copystring() {
-      const meetingLink = this.roomId;
+      const meetingLink = `${window.location.origin}/MeetingRoom/${this.roomId}`;
       navigator.clipboard.writeText(meetingLink)
         .then(() => {
-          alert('Meeting link copied to clipboard!');
+          alert('Meeting link copied! Share this with anyone to invite them.');
         })
-        .catch(err => {
-          console.error('Failed to copy link:', err);
+        .catch(() => {
           const textArea = document.createElement('textarea');
           textArea.value = meetingLink;
           document.body.appendChild(textArea);
           textArea.select();
           document.execCommand('copy');
           document.body.removeChild(textArea);
-          alert('Meeting link copied to clipboard!');
+          alert('Meeting link copied! Share this with anyone to invite them.');
         });
     },
 
