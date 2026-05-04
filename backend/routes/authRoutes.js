@@ -173,6 +173,33 @@ router.post('/join', authMiddleware, async (req, res) => {
   res.json({ roomid: existingRoom.roomId, token, name: user.name });
 });
 
+router.post('/guest-join', async (req, res) => {
+  const { roomId, guestName, guestId } = req.body;
+
+  if (!roomId || !guestName || !guestId)
+    return res.status(400).json({ msg: 'roomId, guestName, and guestId are required' });
+
+  if (guestName.length > 50)
+    return res.status(400).json({ msg: 'Guest name too long (max 50 chars)' });
+
+  try {
+    const existingRoom = await Room.findOne({ roomId });
+    if (!existingRoom)
+      return res.status(404).json({ msg: 'Invalid or expired room ID' });
+
+    const token = jwt.sign(
+      { id: guestId, name: guestName, role: 'participant', roomid: roomId, isGuest: true },
+      process.env.JWT_SECRET,
+      { expiresIn: '4h' }
+    );
+
+    res.json({ roomid: existingRoom.roomId, token, name: guestName });
+  } catch (err) {
+    console.error('Guest join error:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
 // Forgot Password — Step 1: Send OTP
 router.post('/forget-request', otpLimiter, async (req, res) => {
   try {
