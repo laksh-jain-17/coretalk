@@ -113,6 +113,11 @@
   display:flex;align-items:center;justify-content:center;z-index:200;">
   <div style="background:white;border-radius:12px;padding:32px;width:320px;text-align:center;">
     <h3 style="margin:0 0 8px;color:#1e3a8a;">Join as Guest</h3>
+    <p v-if="$route.query.redirect && $route.query.redirect.includes('MeetingRoom')"
+   style="font-size:0.85rem;color:#1e3a8a;background:#eff6ff;padding:8px 10px;
+          border-radius:6px;margin-bottom:10px;text-align:left;">
+      You were invited to a meeting. Enter a name to join instantly.
+    </p>
     <p style="font-size:0.9rem;color:#666;margin-bottom:16px;">Enter a display name to continue</p>
     <input
       v-model="guestName"
@@ -181,6 +186,10 @@ export default {
 
   methods: {
     signInWithGoogle() {
+      // ✅ Save redirect destination before Google takes us away
+      const redirect = this.$route.query.redirect || '/Schedule';
+      sessionStorage.setItem('postLoginRedirect', redirect);
+
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       const redirectUri = encodeURIComponent('https://coretalk.vercel.app/Login');
       const scope = encodeURIComponent('openid email profile');
@@ -193,51 +202,65 @@ export default {
         `&scope=${scope}` +
         `&nonce=${Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2,"0")).join("")}` +
         `&prompt=select_account`;
-    },
+      },
 
     async handleGoogleRedirectReturn() {
-      const hash = window.location.hash;
-      if (!hash.includes('id_token=')) return;
+  const hash = window.location.hash;
+  if (!hash.includes('id_token=')) {
+    // Not a Google return — but check if we have a pending redirect saved
+    const pendingRedirect = sessionStorage.getItem('postLoginRedirect');
+    if (pendingRedirect) {
+      sessionStorage.removeItem('postLoginRedirect');
+      this.$router.push(pendingRedirect);
+    }
+    return;
+  }
 
-      const params = new URLSearchParams(hash.replace('#', ''));
-      const idToken = params.get('id_token');
-      if (!idToken) return;
+  const params = new URLSearchParams(hash.replace('#', ''));
+  const idToken = params.get('id_token');
+  if (!idToken) return;
 
-      this.googleLoading = true;
-      this.message = '';
+  this.googleLoading = true;
+  this.message = '';
 
-      try {
-        const res = await this.$axios.post(
-          `${import.meta.env.VITE_API_URL}/api/auth/google-login`,
-          { credential: idToken }
-        );
+  try {
+    const res = await this.$axios.post(
+      `${import.meta.env.VITE_API_URL}/api/auth/google-login`,
+      { credential: idToken }
+    );
 
-        if (res.data.token) {
-          localStorage.setItem('token', res.data.token);
-          localStorage.setItem('username', res.data.user.name || res.data.user.email);
-          localStorage.removeItem('isGuest'); 
+    if (res.data.token) {
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('username', res.data.user.name || res.data.user.email);
+      localStorage.removeItem('isGuest');
 
-          if (res.data.user.isAdmin) {
-            localStorage.setItem('isAdmin', 'true');
-          } else {
-            localStorage.removeItem('isAdmin');
-          }
-
-          window.history.replaceState(null, '', window.location.pathname);
-          this.$router.push('/Schedule');
-        } else {
-          window.history.replaceState(null, '', window.location.pathname);
-          this.message = 'Google login failed. Please try again.';
-        }
-      } catch (err) {
-        console.error('Google login error:', err);
-        window.history.replaceState(null, '', window.location.pathname);
-        this.message = err.response?.data?.msg || 'Google login failed. Please try again.';
-      } finally {
-        this.googleLoading = false;
+      if (res.data.user.isAdmin) {
+        localStorage.setItem('isAdmin', 'true');
+      } else {
+        localStorage.removeItem('isAdmin');
       }
-    },
 
+      // Clean the hash from the URL
+      window.history.replaceState(null, '', window.location.pathname);
+
+      // ✅ Retrieve saved redirect (set before Google OAuth redirected away)
+      const redirect = sessionStorage.getItem('postLoginRedirect') || '/Schedule';
+      sessionStorage.removeItem('postLoginRedirect');
+      this.$router.push(redirect);
+
+    } else {
+      window.history.replaceState(null, '', window.location.pathname);
+      this.message = 'Google login failed. Please try again.';
+    }
+  } catch (err) {
+    console.error('Google login error:', err);
+    window.history.replaceState(null, '', window.location.pathname);
+    this.message = err.response?.data?.msg || 'Google login failed. Please try again.';
+  } finally {
+    this.googleLoading = false;
+  }
+},
+    
     async loginuser() {
       if (this.loading || this.googleLoading) return;
 
@@ -282,7 +305,9 @@ export default {
           localStorage.removeItem('isAdmin');
         }
 
-        this.$router.push('/Schedule');
+        //this.$router.push('/Schedule');//
+        const redirect = this.$route.query.redirect || '/Schedule';
+        this.$router.push(redirect);
       } catch (err) {
         console.error('Login error', err);
          if (err.response?.data?.unverified) {
@@ -346,11 +371,17 @@ export default {
         this.guestError = 'Please enter a name.';
         return;
       }
+      const guestId = `guest_${Date.now()}`;
       localStorage.setItem('isGuest', 'true');
       localStorage.setItem('username', this.guestName.trim());
-      // No token needed — guest is identified by isGuest flag
+      localStorage.setItem('guestId', guestId);
       this.showGuestModal = false;
-      this.$router.push('/Schedule');
+      this.guestName = '';
+      this.guestError = '';
+
+      // ✅ Go to the meeting they were invited to, or Schedule if direct login
+      const redirect = this.$route.query.redirect || '/Schedule';
+      this.$router.push(redirect);
     },
   },
 };
