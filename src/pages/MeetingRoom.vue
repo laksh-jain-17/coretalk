@@ -1995,10 +1995,26 @@ export default {
         });
     },
 
-    leave() {
+    async exitFullscreenIfActive()
+    {
+      try
+      {
+        if(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement)
+        {
+          await(document.exitFullscreen?.() || document.webkitExitFullscreen?.() || document.msExitFullscreen?.());
+        }
+        this.isFullscreen = false;
+      }
+      catch(err)
+      {
+        console.warn("Could not exit fullscreen " + err);
+        this.isFullscreen = false;
+      }
+    },
+
+    async leave() {
+      await this.exitFullscreenIfActive();
       this.cleanup();
-      //To exit fullscreen mode while exiting the meeting//
-      //this.exitFullscreen();
       if (this.$router) {
         this.$router.push('/Ending');
       } else {
@@ -2019,9 +2035,8 @@ export default {
           body: JSON.stringify({ roomId: this.roomId })
         });
         if (res.ok) {
+          await this.exitFullscreenIfActive();
           this.cleanup();
-          //To exit fullscreen mode while exiting the meeting//
-          //this.exitFullscreen();
           if (this.$router) this.$router.push('/Ending');
           else window.location.href = '/Ending';
         }
