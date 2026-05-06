@@ -336,12 +336,12 @@
           </p>
           <label
             v-for="p in participants"
-            :key="p.id"
+            :key="p.socketId || p.id"
             class="expel-member-row"
           >
             <input
               type="checkbox"
-              :value="p.id"
+              :value="p.socketId || p.id"
               v-model="expelSelected"
               class="expel-checkbox"
             />
@@ -1617,9 +1617,11 @@ export default {
             if (existing) {
               existing.isHost = p.isHost || false;
               existing.name = p.name || existing.name;
+              existing.socketId = p.id;   // keep socket ID current (reconnects change it)
             } else {
               this.participants.push({
                 id: p.userId,
+                socketId: p.id,       // real socket.id from server
                 userId: p.userId,
                 name: p.name || p.userId,
                 isHost: p.isHost || false,
