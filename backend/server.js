@@ -296,6 +296,24 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit(type, payload);
   });
 
+  socket.on('expel-participant', async ({ roomId, targetSocketId }) => {
+    if (!roomId || !targetSocketId || !socketUserId) return;
+    const isHost = await verifyIsHost(socketUserId, roomId);
+    if (!isHost) return;
+
+    // Remove from room list
+    if (rooms[roomId]) {
+      rooms[roomId] = rooms[roomId].filter(p => p.id !== targetSocketId);
+      if (rooms[roomId].length === 0) delete rooms[roomId];
+      else io.to(roomId).emit('participants-list', rooms[roomId]);
+    }
+
+    // Notify the expelled participant
+    io.to(targetSocketId).emit('expelled');
+    // Let others know they left
+    socket.to(roomId).emit('user-left', targetSocketId);
+  });
+
   socket.on('mute-all', async ({ roomId }) => {
     if (!roomId || !socketUserId) return;
     const isHost = await verifyIsHost(socketUserId, roomId);
