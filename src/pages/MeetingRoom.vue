@@ -311,6 +311,9 @@
               <li v-if="isHost" @click.stop="muteAll">
                 🔇 Mute All
               </li>
+              <li v-if="isHost" @click.stop="openExpelModal">
+                🚫 Expel Members
+              </li>
               <li v-if="isHost" @click.stop="endMeeting">
                 🛑 End Meeting
               </li>
@@ -319,6 +322,51 @@
         </ul>
       </div>
     </transition>
+
+    <!-- Expel Members Modal (Host only) -->
+    <div v-if="showExpelModal && isHost" class="expel-overlay" @click.self="showExpelModal = false">
+      <div class="expel-box" @click.stop>
+        <div class="expel-header">
+          <b>🚫 Expel Members</b>
+          <button @click="showExpelModal = false">✕</button>
+        </div>
+        <div class="expel-body">
+          <p v-if="participants.length === 0" style="color:#888; font-size:13px; text-align:center; margin:20px 0;">
+            No other participants in the meeting.
+          </p>
+          <label
+            v-for="p in participants"
+            :key="p.id"
+            class="expel-member-row"
+          >
+            <input
+              type="checkbox"
+              :value="p.id"
+              v-model="expelSelected"
+              class="expel-checkbox"
+            />
+            <div class="expel-avatar">{{ getInitials(p.name) }}</div>
+            <div class="expel-member-info">
+              <div class="expel-member-name">{{ p.name }}</div>
+              <div class="expel-member-role">{{ p.isHost ? 'Host' : 'Participant' }}</div>
+            </div>
+          </label>
+        </div>
+        <div class="expel-footer">
+          <button
+            class="expel-cancel-btn"
+            @click="showExpelModal = false"
+          >Cancel</button>
+          <button
+            class="expel-confirm-btn"
+            :disabled="expelSelected.length === 0"
+            @click="expelSelectedMembers"
+          >
+            Remove ({{ expelSelected.length }})
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Meeting Info Modal -->
     <div id="info_box" v-if="show_info" @click.stop>
@@ -590,6 +638,9 @@ export default {
       showWhiteboard: false,
       showAiNotes: false,
       showDocEnact: false,
+      showExpelModal: false,
+      expelSelected: [],
+      guestInactivityTimer: null,
     };
   },
 
@@ -1541,6 +1592,13 @@ export default {
         }
       });
 
+      this.socket.on('expelled', () => {
+        alert('You have been removed from the meeting by the host.');
+        this.cleanup();
+        if (this.$router) this.$router.push('/Ending');
+        else window.location.href = '/Ending';
+      });
+
       this.socket.on('participants-list', (list) => {
         console.log('participants-list received:', JSON.stringify(list));
 
@@ -1987,6 +2045,24 @@ export default {
         console.error('Error muting all:', err);
       }
     },
+
+    openExpelModal() {
+      this.expelSelected = [];
+      this.showExpelModal = true;
+      this.activeDropdown = null;
+    },
+
+    expelSelectedMembers() {
+      if (!this.isHost || this.expelSelected.length === 0) return;
+      this.expelSelected.forEach(socketId => {
+        this.socket.emit('expel-participant', {
+          roomId: this.roomId,
+          targetSocketId: socketId,
+        });
+      });
+      this.expelSelected = [];
+      this.showExpelModal = false;
+    },
     
     async recording() {
       this.record = !this.record;
@@ -2351,6 +2427,18 @@ export default {
         this.inactivityTimer = null;
       }
 
+      if (this.guestInactivityTimer) {
+        clearTimeout(this.guestInactivityTimer);
+        this.guestInactivityTimer = null;
+      }
+
+      // Clear guest identity on exit
+      if (this.isGuest) {
+        localStorage.removeItem('username');
+        localStorage.removeItem('isGuest');
+        localStorage.removeItem('guestId');
+      }
+
       this.participants = [];
       this.messages = [];
       this.micon = false;
@@ -2427,6 +2515,24 @@ export default {
     document.addEventListener('keydown', this.resetinactivityTimer);
     document.addEventListener('click', this.resetinactivityTimer);
     document.addEventListener('touchstart', this.resetinactivityTimer);
+
+    // Guest name auto-clear after 1 hour of inactivity
+    if (this.isGuest) {
+      const GUEST_TIMEOUT = 60 * 60 * 1000; // 1 hour
+      const resetGuestTimer = () => {
+        if (this.guestInactivityTimer) clearTimeout(this.guestInactivityTimer);
+        this.guestInactivityTimer = setTimeout(() => {
+          localStorage.removeItem('username');
+          localStorage.removeItem('isGuest');
+          localStorage.removeItem('guestId');
+        }, GUEST_TIMEOUT);
+      };
+      resetGuestTimer();
+      document.addEventListener('mousemove', resetGuestTimer);
+      document.addEventListener('keydown', resetGuestTimer);
+      document.addEventListener('click', resetGuestTimer);
+      document.addEventListener('touchstart', resetGuestTimer);
+    }
 
     document.addEventListener('fullscreenchange', this.handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange);
@@ -3521,6 +3627,157 @@ body {
 .perm-always  { background: #4CAF50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ==================== EXPEL MODAL ==================== */
+.expel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.expel-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 340px;
+  max-height: 480px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: #111;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+
+.expel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 15px;
+  background: #f5f5f5;
+  border-radius: 14px 14px 0 0;
+}
+
+.expel-header button {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #333;
+  padding: 0;
+}
+
+.expel-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px 0;
+}
+
+.expel-member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: 8px;
+  margin: 2px 8px;
+}
+
+.expel-member-row:hover {
+  background: #f0f0f0;
+}
+
+.expel-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #e53935;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.expel-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #3730a3;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.expel-member-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.expel-member-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expel-member-role {
+  font-size: 12px;
+  color: #888;
+  margin-top: 1px;
+}
+
+.expel-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.expel-cancel-btn {
+  flex: 1;
+  padding: 9px;
+  background: #f0f0f0;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.15s;
+}
+
+.expel-cancel-btn:hover {
+  background: #e0e0e0;
+}
+
+.expel-confirm-btn {
+  flex: 1;
+  padding: 9px;
+  background: #e53935;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: white;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.expel-confirm-btn:hover:not(:disabled) {
+  background: #c62828;
+}
+
+.expel-confirm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 /* ==================== RESPONSIVE DESIGN ==================== */
 @media (max-width: 768px) {
