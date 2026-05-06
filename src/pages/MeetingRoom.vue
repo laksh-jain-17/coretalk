@@ -760,7 +760,7 @@ export default {
     startCaptionRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        alert('Speech recognition not supported in this browser');
+        //alert('Speech recognition not supported in this browser');//
         this.showCaptions = false;
         return;
       }
@@ -837,7 +837,7 @@ export default {
     async enableBackgroundNoiseSuppression() {
       try {
         if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-          alert('Not connected to meeting room. Please join first.');
+         // alert('Not connected to meeting room. Please join first.');//
           this.silentBackgroundEnabled = false;
           return;
         }
@@ -859,7 +859,7 @@ export default {
           });
         } catch (permError) {
           console.error('Microphone permission denied:', permError);
-          alert('Microphone permission denied. Please allow microphone access.');
+         // alert('Microphone permission denied. Please allow microphone access.');//
           this.silentBackgroundEnabled = false;
           return;
         }
@@ -867,7 +867,7 @@ export default {
         const rawAudioTrack = stream.getAudioTracks()[0];
 
         if (!rawAudioTrack) {
-          alert('Could not get audio track for noise suppression.');
+         // alert('Could not get audio track for noise suppression.');//
           this.silentBackgroundEnabled = false;
           stream.getTracks().forEach(t => t.stop());
           return;
@@ -900,7 +900,7 @@ export default {
         console.log('Background noise suppression enabled and published to LiveKit.');
       } catch (error) {
         console.error('Error enabling noise suppression:', error);
-        alert('Could not enable Silent Background: ' + error.message);
+        //alert('Could not enable Silent Background: ' + error.message);//
         this.silentBackgroundEnabled = false;
 
         if (this.backgroundNoiseSuppressionStream) {
@@ -1153,7 +1153,7 @@ export default {
 
       if (!guestId) {
         console.error('No guestId found — was startWaiting() called first?');
-        alert('Session error. Please rejoin the meeting.');
+      //  alert('Session error. Please rejoin the meeting.');//
         return null;
       }
 
@@ -1214,7 +1214,7 @@ export default {
     return data;
   } catch (error) {
     console.error('Error getting LiveKit token:', error);
-    alert('Failed to connect to meeting room');
+   // alert('Failed to connect to meeting room');//
     return null;
   }
 },
@@ -1247,7 +1247,7 @@ export default {
         wsUrl = tokenData.url || tokenData.wsUrl || `wss://${import.meta.env.VITE_LIVEKIT_URL || 'coretalk-e6xkfd5h.livekit.cloud'}`;
       } else {
         console.error('Unexpected token data format:', tokenData);
-        alert('Failed to parse authentication token');
+       // alert('Failed to parse authentication token');//
         return;
       }
 
@@ -1257,14 +1257,14 @@ export default {
 
       if (typeof token !== 'string' || token.length < 20 || token === '[object Object]') {
         console.error('Invalid token format:', token);
-        alert('Failed to get valid authentication token.');
+     //   alert('Failed to get valid authentication token.');//
         return;
       }
 
       const tokenParts = token.split('.');
       if (tokenParts.length !== 3) {
         console.error('Token does not have JWT structure:', token);
-        alert('Invalid token structure.');
+      //  alert('Invalid token structure.');//
         return;
       }
 
@@ -1390,7 +1390,7 @@ export default {
         }
       } catch (error) {
         console.error('Failed to connect to LiveKit:', error);
-        alert('Failed to join meeting room: ' + error.message);
+     //   alert('Failed to join meeting room: ' + error.message);//
       }
     },
 
@@ -1577,7 +1577,7 @@ export default {
       });
 
       this.socket.on('meeting-locked', () => {
-        alert('Meeting has been locked by the host');
+        console.log('Meeting has been locked by the host');
       });
 
       this.socket.on('meeting-ended', () => {
@@ -1593,7 +1593,7 @@ export default {
       });
 
       this.socket.on('expelled', () => {
-        alert('You have been removed from the meeting by the host.');
+      //  alert('You have been removed from the meeting by the host.');//
         this.cleanup();
         if (this.$router) this.$router.push('/Ending');
         else window.location.href = '/Ending';
@@ -1734,7 +1734,7 @@ export default {
       }
 
       if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-        alert('Not connected to meeting room');
+    //    alert('Not connected to meeting room');//
         return;
       }
 
@@ -1764,11 +1764,11 @@ export default {
         console.error('Error toggling microphone:', error);
 
         if (error.name === 'NotAllowedError') {
-          alert('Microphone permission denied. Please allow microphone access in your browser settings.');
+         console.warn('Microphone permission denied. Please allow microphone access in your browser settings.');
         } else if (error.message && error.message.includes('structuredClone')) {
-          alert('Browser compatibility issue. Please try refreshing the page or using Chrome/Edge.');
+          console.error('Browser compatibility issue. Please try refreshing the page or using Chrome/Edge.');
         } else {
-          alert('Could not access microphone: ' + error.message);
+          console.error('Could not access microphone: ' + error.message);
         }
 
         this.micon = false;
@@ -1780,7 +1780,7 @@ export default {
     async toggleVideo() {
       if (this.isInitializingMedia) return;
       if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-        alert('Not connected to meeting room');
+        //alert('Not connected to meeting room');//
         return;
       }
 
@@ -1811,9 +1811,9 @@ export default {
       } catch (error) {
         console.error('Error toggling camera:', error);
         if (error.name === 'NotAllowedError') {
-          alert('Camera permission denied. Please allow camera access in your browser settings.');
+          //alert('Camera permission denied. Please allow camera access in your browser settings.');//
         } else {
-          alert('Could not access camera: ' + error.message);
+          //alert('Could not access camera: ' + error.message);//
         }
         this.videoon = false;
       } finally {
@@ -1823,7 +1823,7 @@ export default {
 
     async sharescreen() {
        if (!this.livekitRoom || !this.livekitRoom.localParticipant) {
-        alert('Not connected to meeting room');
+       // alert('Not connected to meeting room');//
         return;
       }
 
@@ -1848,9 +1848,9 @@ export default {
       } catch (error) {
         console.error('Error sharing screen:', error);
         if (error.name === 'NotAllowedError') {
-          alert('Screen sharing permission denied.');
+          //alert('Screen sharing permission denied.');//
         } else {
-          alert('Could not start screen sharing: ' + error.message);
+         // alert('Could not start screen sharing: ' + error.message);//
         }
         this.isScreenSharing = false;
       }
@@ -1982,7 +1982,7 @@ export default {
       const meetingLink = `${window.location.origin}/MeetingRoom/${this.roomId}`;
       navigator.clipboard.writeText(meetingLink)
         .then(() => {
-          alert('Meeting link copied! Share this with anyone to invite them.');
+          //alert('Meeting link copied! Share this with anyone to invite them.');//
         })
         .catch(() => {
           const textArea = document.createElement('textarea');
@@ -1991,7 +1991,7 @@ export default {
           textArea.select();
           document.execCommand('copy');
           document.body.removeChild(textArea);
-          alert('Meeting link copied! Share this with anyone to invite them.');
+          //alert('Meeting link copied! Share this with anyone to invite them.');//
         });
     },
 
@@ -2260,20 +2260,20 @@ export default {
     async sendEmail() {
   // Guard: Gmail must be connected
   if (!this.gmailAccessToken) {
-    alert('Gmail not connected. Please click "Gmail Enact" first.');
+    //alert('Gmail not connected. Please click "Gmail Enact" first.');//
     return;
   }
 
   // Guard: required fields
   if (!this.emailTo || !this.emailSubject || !this.emailBody) {
-    alert('Please fill in To, Subject, and Message fields.');
+    //alert('Please fill in To, Subject, and Message fields.');//
     return;
   }
 
   // Guard: basic email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(this.emailTo.trim())) {
-    alert('Please enter a valid recipient email address.');
+  //  alert('Please enter a valid recipient email address.');//
     return;
   }
 
@@ -2330,10 +2330,10 @@ export default {
     this.emailBody = '';
     this.emailAttachments = [];
     this.showEmailPanel = false;
-    alert('Email sent successfully!');
+    //alert('Email sent successfully!');//
   } catch (err) {
     console.error('sendEmail error:', err);
-    alert('Failed to send email: ' + err.message);
+    //alert('Failed to send email: ' + err.message);//
   } finally {
     this.emailSending = false;
   }
