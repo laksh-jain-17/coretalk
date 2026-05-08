@@ -2500,8 +2500,10 @@ export default {
     },
 
     async cleanup() {
-      if (this.isCleanedUp) return;  // ADD THIS
+      if (this.isCleanedUp) return;
       this.isCleanedUp = true;
+      // Flag so router guard lets us reach /Ending without being logged in
+      localStorage.setItem('meetingEnded', 'true');
       console.log('Cleaning up resources...');
 
       if (this.broadcastRetryTimer) {
