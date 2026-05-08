@@ -2511,8 +2511,10 @@ export default {
     async cleanup() {
       if (this.isCleanedUp) return;
       this.isCleanedUp = true;
-      // Flag so router guard lets us reach /Ending without being logged in
+      // Preserve guest status BEFORE cleanup wipes localStorage,
+      // so Ending.vue can still correctly hide the logout button for guests
       localStorage.setItem('meetingEnded', 'true');
+      localStorage.setItem('wasGuest', this.isGuest ? 'true' : 'false');
       console.log('Cleaning up resources...');
 
       if (this.broadcastRetryTimer) {
