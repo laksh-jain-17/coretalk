@@ -1472,20 +1472,24 @@ export default {
     },
 
     handleParticipantConnected(participant) {
-      // Remove any duplicate first
-      this.participants = this.participants.filter(
-        p => p.id !== participant.identity
+      // Merge into existing entry if already added by participants-list socket event
+      // so we never wipe the socketId that was already stored
+      const existing = this.participants.find(
+        p => p.id === participant.identity || p.userId === participant.identity
       );
-
-      this.participants.push({
-        id: participant.identity,
-        userId: participant.identity,
-        name: participant.name || participant.identity,
-        isHost: false,
-        hasMic: false,
-        hasVideo: false,
-        captions: ''
-      });
+      if (existing) {
+        existing.name = participant.name || existing.name;
+      } else {
+        this.participants.push({
+          id: participant.identity,
+          userId: participant.identity,
+          name: participant.name || participant.identity,
+          isHost: false,
+          hasMic: false,
+          hasVideo: false,
+          captions: ''
+        });
+      }
 
       this.remoteParticipants.set(participant.identity, participant);
     },
@@ -2183,7 +2187,12 @@ export default {
 
     expelSelectedMembers() {
       if (!this.isHost || this.expelSelected.length === 0) return;
-      this.expelSelected.forEach(socketId => {
+      this.expelSelected.forEach(targetId => {
+        // Look up the participant to get their confirmed socket.id
+        const participant = this.participants.find(
+          p => (p.socketId || p.id) === targetId
+        );
+        const socketId = participant?.socketId || targetId;
         this.socket.emit('expel-participant', {
           roomId: this.roomId,
           targetSocketId: socketId,
