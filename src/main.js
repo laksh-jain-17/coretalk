@@ -33,12 +33,14 @@ const router = createRouter({
     ],
 });
 
-router.beforeEach((to,from,next) => {
-    if(to.meta.requiresAuth && !isLoggedIn())
-    {
-        next({ path: '/Login', query: {redirect: to.fullPath}});
+router.beforeEach((to, from, next) => {
+    // Allow /Ending even if not logged in (guest or cleared token) after a meeting
+    if (to.path === '/Ending' && localStorage.getItem('meetingEnded') === 'true') {
+        return next();
     }
-    else{
+    if (to.meta.requiresAuth && !isLoggedIn()) {
+        next({ path: '/Login', query: { redirect: to.fullPath } });
+    } else {
         next();
     }
 });
