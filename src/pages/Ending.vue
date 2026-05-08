@@ -32,8 +32,10 @@ export default {
     };
   },
   mounted() {
-    window.jistory.pushState(null,'',window.location.href);
-    window.addEventListener('popstate',this.preventBack);
+    // Clear the post-meeting flag now that we're here
+    localStorage.removeItem('meetingEnded');
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', this.preventBack);
   },
   beforeUnmount() {
     window.removeEventListener('popstate',this.preventBack);
@@ -43,7 +45,14 @@ export default {
       window.history.pushState(null,'',window.location.href);
     },
     returned() {
-      this.$router.push('/Schedule');
+      const isGuest = localStorage.getItem('isGuest') === 'true';
+      const hasToken = !!localStorage.getItem('token');
+      if (hasToken) {
+        this.$router.push('/Schedule');
+      } else {
+        // Guest or logged-out user: go to login
+        this.$router.push('/Login');
+      }
     },
     logoutuser() {
       logout();
