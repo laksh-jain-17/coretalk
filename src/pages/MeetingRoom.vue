@@ -258,33 +258,53 @@
               </div>
 
               <div class="chat-body" ref="chatBody">
-                <div v-for="(msg, index) in messages" :key="index"
-                  :class="['message', msg.isPrivate ? 'message-private' : '']">
-                  <div class="message-sender">
-                    {{ msg.sender }}
-                    <span v-if="msg.isPrivate && msg.privateTo" class="dm-tag">\u2192 {{ msg.privateTo }} (DM)</span>
-                    <span v-if="msg.isPrivate && msg.privateFrom" class="dm-tag">\ud83d\udd12 Private</span>
+                <!-- Public messages -->
+                <template v-if="!messageRecipient">
+                  <div v-if="messages.length === 0" class="chat-empty">No messages yet. Say hello!</div>
+                  <div v-for="(msg, index) in messages" :key="'pub-' + index" class="message">
+                    <div class="message-sender">{{ msg.sender }}</div>
+                    <div class="message-text">{{ msg.text }}</div>
+                    <div v-if="msg.attachments && msg.attachments.length > 0">
+                      <div v-for="(att, i) in msg.attachments" :key="i">
+                        <img v-if="att.mimeType && att.mimeType.startsWith('image/')"
+                          :src="'data:' + att.mimeType + ';base64,' + att.base64"
+                          style="max-width:200px; border-radius:8px; margin-top:6px;" />
+                        <a v-else :href="'data:' + att.mimeType + ';base64,' + att.base64"
+                          :download="att.name" style="display:block; margin-top:6px; color:#3730a3;">
+                          📎 {{ att.name }} ({{ formatFileSize(att.size) }})
+                        </a>
+                      </div>
+                    </div>
+                    <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
                   </div>
-                  <div class="message-text">{{ msg.text }}</div>
-                  <div v-if="msg.attachments && msg.attachments.length > 0">
-                    <div v-for="(att, i) in msg.attachments" :key="i">
-                    <img
-                      v-if="att.mimeType && att.mimeType.startsWith('image/')"
-                      :src="'data:' + att.mimeType + ';base64,' + att.base64"
-                      style="max-width:200px; border-radius:8px; margin-top:6px;"
-                    />
-                    <a
-                    v-else
-                      :href="'data:' + att.mimeType + ';base64,' + att.base64"
-                      :download="att.name"
-                       style="display:block; margin-top:6px; color:#3730a3;"
-                    >
-                    + {{ att.name }} ({{ formatFileSize(att.size) }})
-                  </a>
+                </template>
+
+                <!-- Private messages (only shown when a specific recipient is selected) -->
+                <template v-if="messageRecipient">
+                  <div class="dm-conversation-header">
+                    🔒 Private conversation with <strong>{{ messageRecipient.name }}</strong>
                   </div>
-                </div>
-                  <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
-                </div>
+                  <div v-if="dmMessages.length === 0" class="chat-empty">No private messages yet.</div>
+                  <div v-for="(msg, index) in dmMessages" :key="'dm-' + index" class="message message-private">
+                    <div class="message-sender">
+                      {{ msg.sender }}
+                      <span class="dm-tag">{{ msg.dmLabel }}</span>
+                    </div>
+                    <div class="message-text">{{ msg.text }}</div>
+                    <div v-if="msg.attachments && msg.attachments.length > 0">
+                      <div v-for="(att, i) in msg.attachments" :key="i">
+                        <img v-if="att.mimeType && att.mimeType.startsWith('image/')"
+                          :src="'data:' + att.mimeType + ';base64,' + att.base64"
+                          style="max-width:200px; border-radius:8px; margin-top:6px;" />
+                        <a v-else :href="'data:' + att.mimeType + ';base64,' + att.base64"
+                          :download="att.name" style="display:block; margin-top:6px; color:#3730a3;">
+                          📎 {{ att.name }} ({{ formatFileSize(att.size) }})
+                        </a>
+                      </div>
+                    </div>
+                    <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
+                  </div>
+                </template>
               </div>
               <div class="chat-input-section" style="flex-direction:column; gap:0;">
                 <!-- Attachment previews -->
@@ -689,6 +709,7 @@ export default {
       guestInactivityTimer: null,
       messageRecipient: null, // null = Everyone, or { name, socketId }
       showRecipientPicker: false,
+      privateMessages: [], // separate array, never shared publicly
     };
   },
 
@@ -703,6 +724,17 @@ export default {
 
     userInitials() {
       return this.getInitials(this.userName);
+    },
+
+    dmMessages() {
+      if (!this.messageRecipient) return [];
+      // Show private messages involving the selected participant
+      return this.privateMessages.filter(msg => {
+        const recipientName = this.messageRecipient.name;
+        // Messages I sent to them (dmLabel starts with arrow + their name)
+        // Messages they sent to me (sender matches)
+        return msg.sender === recipientName || msg.dmLabel.includes(recipientName);
+      });
     },
 
     gridClass() {
@@ -1614,17 +1646,18 @@ export default {
         });
       });
 
-      this.socket.on('private-message', ({ sender, text, timestamp, attachments, isPrivate, privateTo, toSelf }) => {
+      this.socket.on('private-message', ({ sender, text, timestamp, attachments, privateTo, toSelf }) => {
         const message = {
           sender: sender || 'Unknown',
           text: text || '',
           timestamp: timestamp || Date.now(),
           attachments: attachments || [],
           isPrivate: true,
-          privateTo: toSelf ? privateTo : null,  // for sender: show who they sent to
-          privateFrom: toSelf ? null : sender,   // for receiver: show who sent it
+          // toSelf=true means I sent it; label shows who I sent it to
+          // toSelf=false means I received it; label shows who sent it
+          dmLabel: toSelf ? '\u2192 ' + privateTo + ' (DM)' : '\ud83d\udd12 from ' + (sender || 'Unknown'),
         };
-        this.messages.push(message);
+        this.privateMessages.push(message);
 
         if (this.activePanel !== 'chat') {
           this.unreadMessages++;
@@ -2558,6 +2591,8 @@ export default {
       this.emailAttachments = [];
       this.waitingParticipants = [];
       this.chatAttachments = [];
+      this.privateMessages = [];
+      this.messageRecipient = null;
       this.showWhiteboard = false;
       this.showAiNotes = false;
       this.showDocEnact = false;
@@ -3870,6 +3905,24 @@ body {
   border-radius: 10px;
   padding: 1px 7px;
   vertical-align: middle;
+}
+
+.chat-empty {
+  text-align: center;
+  color: #aaa;
+  font-size: 13px;
+  padding: 32px 16px;
+}
+
+.dm-conversation-header {
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  background: #f0edff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1px solid #c4b9f5;
 }
 
 /* ==================== EXPEL MODAL ==================== */
