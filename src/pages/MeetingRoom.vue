@@ -211,14 +211,60 @@
             <ul v-if="hoveredIcon === 'chat'" class="tooltip">
               <li>Chat</li>
             </ul>
-            <div id="chat-box" v-if="activePanel === 'chat'">
+            <div id="chat-box" v-if="activePanel === 'chat'" @click.stop="showRecipientPicker = false">
               <div class="chat-header">
                 Chat
                 <button @click="togglePanel(null)">✕</button>
               </div>
+
+              <!-- Recipient selector bar -->
+              <div class="recipient-bar" @click.stop="showRecipientPicker = !showRecipientPicker">
+                <span class="recipient-bar-label">To:</span>
+                <span class="recipient-bar-value">
+                  {{ messageRecipient ? messageRecipient.name : 'All Members' }}
+                </span>
+                <span class="recipient-bar-arrow">{{ showRecipientPicker ? '\u25b2' : '\u25bc' }}</span>
+
+                <!-- Dropdown list -->
+                <div v-if="showRecipientPicker" class="recipient-dropdown" @click.stop>
+                  <div
+                    class="recipient-option"
+                    :class="{ active: !messageRecipient }"
+                    @click="selectRecipient(null)"
+                  >
+                    <div class="recipient-option-avatar all">All</div>
+                    <div class="recipient-option-info">
+                      <span class="recipient-option-name">All Members</span>
+                      <span class="recipient-option-sub">Public message</span>
+                    </div>
+                    <span v-if="!messageRecipient" class="recipient-check">\u2713</span>
+                  </div>
+                  <div class="recipient-divider"></div>
+                  <div
+                    v-for="p in participants"
+                    :key="p.id"
+                    class="recipient-option"
+                    :class="{ active: messageRecipient && messageRecipient.socketId === (p.socketId || p.id) }"
+                    @click="selectRecipient({ name: p.name, socketId: p.socketId || p.id })"
+                  >
+                    <div class="recipient-option-avatar">{{ getInitials(p.name) }}</div>
+                    <div class="recipient-option-info">
+                      <span class="recipient-option-name">{{ p.name }}</span>
+                      <span class="recipient-option-sub">{{ p.isHost ? 'Host' : 'Participant' }}</span>
+                    </div>
+                    <span v-if="messageRecipient && messageRecipient.socketId === (p.socketId || p.id)" class="recipient-check">\u2713</span>
+                  </div>
+                </div>
+              </div>
+
               <div class="chat-body" ref="chatBody">
-                <div v-for="(msg, index) in messages" :key="index" class="message">
-                  <div class="message-sender">{{ msg.sender }}</div>
+                <div v-for="(msg, index) in messages" :key="index"
+                  :class="['message', msg.isPrivate ? 'message-private' : '']">
+                  <div class="message-sender">
+                    {{ msg.sender }}
+                    <span v-if="msg.isPrivate && msg.privateTo" class="dm-tag">\u2192 {{ msg.privateTo }} (DM)</span>
+                    <span v-if="msg.isPrivate && msg.privateFrom" class="dm-tag">\ud83d\udd12 Private</span>
+                  </div>
                   <div class="message-text">{{ msg.text }}</div>
                   <div v-if="msg.attachments && msg.attachments.length > 0">
                     <div v-for="(att, i) in msg.attachments" :key="i">
@@ -232,7 +278,7 @@
                       :href="'data:' + att.mimeType + ';base64,' + att.base64"
                       :download="att.name"
                        style="display:block; margin-top:6px; color:#3730a3;"
-                    >    
+                    >
                     + {{ att.name }} ({{ formatFileSize(att.size) }})
                   </a>
                   </div>
@@ -1923,6 +1969,7 @@ export default {
     togglePanel(panel) {
       this.activePanel = this.activePanel === panel ? null : panel;
       this.activeDropdown = null;
+      this.showRecipientPicker = false;
 
       if (panel === 'chat') {
         this.unreadMessages = 0;
@@ -1954,32 +2001,43 @@ export default {
       const text = (this.newMessage || '').trim();
       if (!text && this.chatAttachments.length === 0) return;
 
-      const message = {
-        sender: this.userName,
-        text,
-        timestamp: Date.now(),
-        attachments: this.chatAttachments.map(a => ({
-          name: a.name,
-          mimeType: a.mimeType,
-          previewUrl: a.previewUrl,  // images only, others null
-          base64: a.base64, 
-          size: a.size
-        }))
-      };
+      const attachments = this.chatAttachments.map(a => ({
+        name: a.name,
+        mimeType: a.mimeType,
+        previewUrl: a.previewUrl,
+        base64: a.base64,
+        size: a.size
+      }));
 
-      this.safeBroadcast('chat-message', {
-        roomId: this.roomId,
-        ...message
-      });
+      if (this.messageRecipient) {
+        this.safeBroadcast('private-message', {
+          toSocketId: this.messageRecipient.socketId,
+          sender: this.userName,
+          text,
+          timestamp: Date.now(),
+          attachments,
+        });
+      } else {
+        this.safeBroadcast('chat-message', {
+          roomId: this.roomId,
+          sender: this.userName,
+          text,
+          timestamp: Date.now(),
+          attachments,
+        });
+      }
 
       this.newMessage = '';
       this.chatAttachments = [];
       this.$nextTick(() => {
         const chatBody = this.$refs.chatBody;
-        if (chatBody) {
-          chatBody.scrollTop = chatBody.scrollHeight;
-        }
+        if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
       });
+    },
+
+    selectRecipient(participant) {
+      this.messageRecipient = participant;
+      this.showRecipientPicker = false;
     },
 
     hand_raised() {
@@ -3668,6 +3726,151 @@ body {
 .perm-always  { background: #4CAF50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ==================== RECIPIENT BAR ==================== */
+.recipient-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: #f0f4ff;
+  border-bottom: 1px solid #dde3f0;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: #000;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.recipient-bar:hover {
+  background: #e5ebfa;
+}
+
+.recipient-bar-label {
+  font-weight: 600;
+  color: #555;
+  flex-shrink: 0;
+}
+
+.recipient-bar-value {
+  flex: 1;
+  font-weight: 600;
+  color: #3730a3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recipient-bar-arrow {
+  font-size: 10px;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.recipient-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.13);
+  z-index: 200;
+  overflow: hidden;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.recipient-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.recipient-option:hover {
+  background: #f5f7ff;
+}
+
+.recipient-option.active {
+  background: #eef2ff;
+}
+
+.recipient-option-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3730a3, #6366f1);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.recipient-option-avatar.all {
+  background: linear-gradient(135deg, #4CAF50, #38ef7d);
+  font-size: 11px;
+}
+
+.recipient-option-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.recipient-option-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recipient-option-sub {
+  font-size: 11px;
+  color: #888;
+  margin-top: 1px;
+}
+
+.recipient-check {
+  color: #3730a3;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.recipient-divider {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 2px 0;
+}
+
+.message-private {
+  background: #f0edff !important;
+  border: 1px solid #c4b9f5 !important;
+}
+
+.dm-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: #3730a3;
+  color: white;
+  border-radius: 10px;
+  padding: 1px 7px;
+  vertical-align: middle;
+}
 
 /* ==================== EXPEL MODAL ==================== */
 .expel-overlay {
