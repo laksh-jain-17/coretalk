@@ -641,6 +641,8 @@ export default {
       showExpelModal: false,
       expelSelected: [],
       guestInactivityTimer: null,
+      messageRecipient: null, // null = Everyone, or { name, socketId }
+      showRecipientPicker: false,
     };
   },
 
@@ -1550,7 +1552,7 @@ export default {
           sender: sender || 'Unknown',
           text: text || '',
           timestamp: timestamp || Date.now(),
-          attachments: attachments || []   // ← ADD THIS
+          attachments: attachments || []
         };
         this.messages.push(message);
 
@@ -1563,6 +1565,28 @@ export default {
           if (chatBody) {
             chatBody.scrollTop = chatBody.scrollHeight;
           }
+        });
+      });
+
+      this.socket.on('private-message', ({ sender, text, timestamp, attachments, isPrivate, privateTo, toSelf }) => {
+        const message = {
+          sender: sender || 'Unknown',
+          text: text || '',
+          timestamp: timestamp || Date.now(),
+          attachments: attachments || [],
+          isPrivate: true,
+          privateTo: toSelf ? privateTo : null,  // for sender: show who they sent to
+          privateFrom: toSelf ? null : sender,   // for receiver: show who sent it
+        };
+        this.messages.push(message);
+
+        if (this.activePanel !== 'chat') {
+          this.unreadMessages++;
+        }
+
+        this.$nextTick(() => {
+          const chatBody = this.$refs.chatBody;
+          if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
         });
       });
 
