@@ -237,7 +237,7 @@
                       <span class="recipient-option-name">All Members</span>
                       <span class="recipient-option-sub">Public message</span>
                     </div>
-                    <span v-if="!messageRecipient" class="recipient-check">\u2713</span>
+                    <span v-if="!messageRecipient" class="recipient-check">✓</span>
                   </div>
                   <div class="recipient-divider"></div>
                   <div
@@ -252,7 +252,7 @@
                       <span class="recipient-option-name">{{ p.name }}</span>
                       <span class="recipient-option-sub">{{ p.isHost ? 'Host' : 'Participant' }}</span>
                     </div>
-                    <span v-if="messageRecipient && messageRecipient.socketId === (p.socketId || p.id)" class="recipient-check">\u2713</span>
+                    <span v-if="messageRecipient && messageRecipient.socketId === (p.socketId || p.id)" class="recipient-check">✓</span>
                   </div>
                 </div>
               </div>
@@ -728,13 +728,10 @@ export default {
 
     dmMessages() {
       if (!this.messageRecipient) return [];
-      // Show private messages involving the selected participant
-      return this.privateMessages.filter(msg => {
-        const recipientName = this.messageRecipient.name;
-        // Messages I sent to them (dmLabel starts with arrow + their name)
-        // Messages they sent to me (sender matches)
-        return msg.sender === recipientName || msg.dmLabel.includes(recipientName);
-      });
+      // Only show messages where conversationWith matches the selected recipient
+      return this.privateMessages.filter(msg =>
+        msg.conversationWith === this.messageRecipient.name
+      );
     },
 
     gridClass() {
@@ -1647,15 +1644,15 @@ export default {
       });
 
       this.socket.on('private-message', ({ sender, text, timestamp, attachments, privateTo, toSelf }) => {
+        const otherPerson = toSelf ? privateTo : (sender || 'Unknown');
         const message = {
           sender: sender || 'Unknown',
           text: text || '',
           timestamp: timestamp || Date.now(),
           attachments: attachments || [],
           isPrivate: true,
-          // toSelf=true means I sent it; label shows who I sent it to
-          // toSelf=false means I received it; label shows who sent it
-          dmLabel: toSelf ? '\u2192 ' + privateTo + ' (DM)' : '\ud83d\udd12 from ' + (sender || 'Unknown'),
+          conversationWith: otherPerson, // always the OTHER person's name
+          dmLabel: toSelf ? '\u2192 ' + privateTo + ' (DM)' : '🔒 from ' + (sender || 'Unknown'),
         };
         this.privateMessages.push(message);
 
