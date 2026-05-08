@@ -28,12 +28,15 @@ export default {
   name: 'Ending',
   data() {
     return {
-      isGuest: localStorage.getItem('isGuest') === 'true',
+      // isGuest is cleared by cleanup() before we arrive here,
+      // so read the wasGuest flag that cleanup() preserves for us
+      isGuest: localStorage.getItem('wasGuest') === 'true' || localStorage.getItem('isGuest') === 'true',
     };
   },
   mounted() {
     // Clear the post-meeting flag now that we're here
     localStorage.removeItem('meetingEnded');
+    localStorage.removeItem('wasGuest');
     window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', this.preventBack);
   },
