@@ -48,14 +48,7 @@ export default {
       window.history.pushState(null,'',window.location.href);
     },
     returned() {
-      const isGuest = localStorage.getItem('isGuest') === 'true';
-      const hasToken = !!localStorage.getItem('token');
-      if (hasToken) {
-        this.$router.push('/Schedule');
-      } else {
-        // Guest or logged-out user: go to login
-        this.$router.push('/Login');
-      }
+      this.$router.push('/Schedule');
     },
     logoutuser() {
       logout();
