@@ -609,7 +609,6 @@
     <DocEnactPanel v-if="showDocEnact && livekitRoom" :livekitRoom="livekitRoom" :isHost="isHost" :userId="userId" :participants="participants" :roomId="roomId" :socket="socket" @close="toggleDocEnact"/>
   </div>
 </template>
-
 <script>
 import { jwtDecode } from 'jwt-decode';
 import { io } from 'socket.io-client';
@@ -1626,6 +1625,9 @@ export default {
         this.isSocketConnected = false;
       });
 
+      this.socket.off('chat-message');
+      this.socket.off('private-message');
+      
       this.socket.on('chat-message', ({ sender, text, timestamp, attachments }) => {
         const message = {
           sender: sender || 'Unknown',
