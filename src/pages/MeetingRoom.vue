@@ -211,100 +211,34 @@
             <ul v-if="hoveredIcon === 'chat'" class="tooltip">
               <li>Chat</li>
             </ul>
-            <div id="chat-box" v-if="activePanel === 'chat'" @click.stop="showRecipientPicker = false">
+            <div id="chat-box" v-if="activePanel === 'chat'">
               <div class="chat-header">
                 Chat
                 <button @click="togglePanel(null)">✕</button>
               </div>
-
-              <!-- Recipient selector bar -->
-              <div class="recipient-bar" @click.stop="showRecipientPicker = !showRecipientPicker">
-                <span class="recipient-bar-label">To:</span>
-                <span class="recipient-bar-value">
-                  {{ messageRecipient ? messageRecipient.name : 'All Members' }}
-                </span>
-                <span class="recipient-bar-arrow">{{ showRecipientPicker ? '\u25b2' : '\u25bc' }}</span>
-
-                <!-- Dropdown list -->
-                <div v-if="showRecipientPicker" class="recipient-dropdown" @click.stop>
-                  <div
-                    class="recipient-option"
-                    :class="{ active: !messageRecipient }"
-                    @click="selectRecipient(null)"
-                  >
-                    <div class="recipient-option-avatar all">All</div>
-                    <div class="recipient-option-info">
-                      <span class="recipient-option-name">All Members</span>
-                      <span class="recipient-option-sub">Public message</span>
-                    </div>
-                    <span v-if="!messageRecipient" class="recipient-check">✓</span>
-                  </div>
-                  <div class="recipient-divider"></div>
-                  <div
-                    v-for="p in participants"
-                    :key="p.id"
-                    class="recipient-option"
-                    :class="{ active: messageRecipient && messageRecipient.socketId === (p.socketId || p.id) }"
-                    @click="selectRecipient({ name: p.name, socketId: p.socketId || p.id })"
-                  >
-                    <div class="recipient-option-avatar">{{ getInitials(p.name) }}</div>
-                    <div class="recipient-option-info">
-                      <span class="recipient-option-name">{{ p.name }}</span>
-                      <span class="recipient-option-sub">{{ p.isHost ? 'Host' : 'Participant' }}</span>
-                    </div>
-                    <span v-if="messageRecipient && messageRecipient.socketId === (p.socketId || p.id)" class="recipient-check">✓</span>
+              <div class="chat-body" ref="chatBody">
+                <div v-for="(msg, index) in messages" :key="index" class="message">
+                  <div class="message-sender">{{ msg.sender }}</div>
+                  <div class="message-text">{{ msg.text }}</div>
+                  <div v-if="msg.attachments && msg.attachments.length > 0">
+                    <div v-for="(att, i) in msg.attachments" :key="i">
+                    <img
+                      v-if="att.mimeType && att.mimeType.startsWith('image/')"
+                      :src="'data:' + att.mimeType + ';base64,' + att.base64"
+                      style="max-width:200px; border-radius:8px; margin-top:6px;"
+                    />
+                    <a
+                    v-else
+                      :href="'data:' + att.mimeType + ';base64,' + att.base64"
+                      :download="att.name"
+                       style="display:block; margin-top:6px; color:#3730a3;"
+                    >    
+                    + {{ att.name }} ({{ formatFileSize(att.size) }})
+                  </a>
                   </div>
                 </div>
-              </div>
-
-              <div class="chat-body" ref="chatBody">
-                <!-- Public messages -->
-                <template v-if="!messageRecipient">
-                  <div v-if="messages.length === 0" class="chat-empty">No messages yet. Say hello!</div>
-                  <div v-for="(msg, index) in messages" :key="'pub-' + index" class="message">
-                    <div class="message-sender">{{ msg.sender }}</div>
-                    <div class="message-text">{{ msg.text }}</div>
-                    <div v-if="msg.attachments && msg.attachments.length > 0">
-                      <div v-for="(att, i) in msg.attachments" :key="i">
-                        <img v-if="att.mimeType && att.mimeType.startsWith('image/')"
-                          :src="'data:' + att.mimeType + ';base64,' + att.base64"
-                          style="max-width:200px; border-radius:8px; margin-top:6px;" />
-                        <a v-else :href="'data:' + att.mimeType + ';base64,' + att.base64"
-                          :download="att.name" style="display:block; margin-top:6px; color:#3730a3;">
-                          📎 {{ att.name }} ({{ formatFileSize(att.size) }})
-                        </a>
-                      </div>
-                    </div>
-                    <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
-                  </div>
-                </template>
-
-                <!-- Private messages (only shown when a specific recipient is selected) -->
-                <template v-if="messageRecipient">
-                  <div class="dm-conversation-header">
-                    🔒 Private conversation with <strong>{{ messageRecipient.name }}</strong>
-                  </div>
-                  <div v-if="dmMessages.length === 0" class="chat-empty">No private messages yet.</div>
-                  <div v-for="(msg, index) in dmMessages" :key="'dm-' + index" class="message message-private">
-                    <div class="message-sender">
-                      {{ msg.sender }}
-                      <span class="dm-tag">{{ msg.dmLabel }}</span>
-                    </div>
-                    <div class="message-text">{{ msg.text }}</div>
-                    <div v-if="msg.attachments && msg.attachments.length > 0">
-                      <div v-for="(att, i) in msg.attachments" :key="i">
-                        <img v-if="att.mimeType && att.mimeType.startsWith('image/')"
-                          :src="'data:' + att.mimeType + ';base64,' + att.base64"
-                          style="max-width:200px; border-radius:8px; margin-top:6px;" />
-                        <a v-else :href="'data:' + att.mimeType + ';base64,' + att.base64"
-                          :download="att.name" style="display:block; margin-top:6px; color:#3730a3;">
-                          📎 {{ att.name }} ({{ formatFileSize(att.size) }})
-                        </a>
-                      </div>
-                    </div>
-                    <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
-                  </div>
-                </template>
+                  <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
+                </div>
               </div>
               <div class="chat-input-section" style="flex-direction:column; gap:0;">
                 <!-- Attachment previews -->
@@ -609,6 +543,7 @@
     <DocEnactPanel v-if="showDocEnact && livekitRoom" :livekitRoom="livekitRoom" :isHost="isHost" :userId="userId" :participants="participants" :roomId="roomId" :socket="socket" @close="toggleDocEnact"/>
   </div>
 </template>
+
 <script>
 import { jwtDecode } from 'jwt-decode';
 import { io } from 'socket.io-client';
@@ -706,9 +641,6 @@ export default {
       showExpelModal: false,
       expelSelected: [],
       guestInactivityTimer: null,
-      messageRecipient: null, // null = Everyone, or { name, socketId }
-      showRecipientPicker: false,
-      privateMessages: [], // separate array, never shared publicly
     };
   },
 
@@ -723,14 +655,6 @@ export default {
 
     userInitials() {
       return this.getInitials(this.userName);
-    },
-
-    dmMessages() {
-      if (!this.messageRecipient) return [];
-      // Only show messages where conversationWith matches the selected recipient
-      return this.privateMessages.filter(msg =>
-        msg.conversationWith === this.messageRecipient.name
-      );
     },
 
     gridClass() {
@@ -1471,24 +1395,20 @@ export default {
     },
 
     handleParticipantConnected(participant) {
-      // Merge into existing entry if already added by participants-list socket event
-      // so we never wipe the socketId that was already stored
-      const existing = this.participants.find(
-        p => p.id === participant.identity || p.userId === participant.identity
+      // Remove any duplicate first
+      this.participants = this.participants.filter(
+        p => p.id !== participant.identity
       );
-      if (existing) {
-        existing.name = participant.name || existing.name;
-      } else {
-        this.participants.push({
-          id: participant.identity,
-          userId: participant.identity,
-          name: participant.name || participant.identity,
-          isHost: false,
-          hasMic: false,
-          hasVideo: false,
-          captions: ''
-        });
-      }
+
+      this.participants.push({
+        id: participant.identity,
+        userId: participant.identity,
+        name: participant.name || participant.identity,
+        isHost: false,
+        hasMic: false,
+        hasVideo: false,
+        captions: ''
+      });
 
       this.remoteParticipants.set(participant.identity, participant);
     },
@@ -1625,15 +1545,12 @@ export default {
         this.isSocketConnected = false;
       });
 
-      this.socket.off('chat-message');
-      this.socket.off('private-message');
-      
       this.socket.on('chat-message', ({ sender, text, timestamp, attachments }) => {
         const message = {
           sender: sender || 'Unknown',
           text: text || '',
           timestamp: timestamp || Date.now(),
-          attachments: attachments || []
+          attachments: attachments || []   // ← ADD THIS
         };
         this.messages.push(message);
 
@@ -1646,29 +1563,6 @@ export default {
           if (chatBody) {
             chatBody.scrollTop = chatBody.scrollHeight;
           }
-        });
-      });
-
-      this.socket.on('private-message', ({ sender, text, timestamp, attachments, privateTo, toSelf }) => {
-        const otherPerson = toSelf ? privateTo : (sender || 'Unknown');
-        const message = {
-          sender: sender || 'Unknown',
-          text: text || '',
-          timestamp: timestamp || Date.now(),
-          attachments: attachments || [],
-          isPrivate: true,
-          conversationWith: otherPerson, // always the OTHER person's name
-          dmLabel: toSelf ? '\u2192 ' + privateTo + ' (DM)' : '🔒 from ' + (sender || 'Unknown'),
-        };
-        this.privateMessages.push(message);
-
-        if (this.activePanel !== 'chat') {
-          this.unreadMessages++;
-        }
-
-        this.$nextTick(() => {
-          const chatBody = this.$refs.chatBody;
-          if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
         });
       });
 
@@ -2005,7 +1899,6 @@ export default {
     togglePanel(panel) {
       this.activePanel = this.activePanel === panel ? null : panel;
       this.activeDropdown = null;
-      this.showRecipientPicker = false;
 
       if (panel === 'chat') {
         this.unreadMessages = 0;
@@ -2037,43 +1930,32 @@ export default {
       const text = (this.newMessage || '').trim();
       if (!text && this.chatAttachments.length === 0) return;
 
-      const attachments = this.chatAttachments.map(a => ({
-        name: a.name,
-        mimeType: a.mimeType,
-        previewUrl: a.previewUrl,
-        base64: a.base64,
-        size: a.size
-      }));
+      const message = {
+        sender: this.userName,
+        text,
+        timestamp: Date.now(),
+        attachments: this.chatAttachments.map(a => ({
+          name: a.name,
+          mimeType: a.mimeType,
+          previewUrl: a.previewUrl,  // images only, others null
+          base64: a.base64, 
+          size: a.size
+        }))
+      };
 
-      if (this.messageRecipient) {
-        this.safeBroadcast('private-message', {
-          toSocketId: this.messageRecipient.socketId,
-          sender: this.userName,
-          text,
-          timestamp: Date.now(),
-          attachments,
-        });
-      } else {
-        this.safeBroadcast('chat-message', {
-          roomId: this.roomId,
-          sender: this.userName,
-          text,
-          timestamp: Date.now(),
-          attachments,
-        });
-      }
+      this.safeBroadcast('chat-message', {
+        roomId: this.roomId,
+        ...message
+      });
 
       this.newMessage = '';
       this.chatAttachments = [];
       this.$nextTick(() => {
         const chatBody = this.$refs.chatBody;
-        if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+        if (chatBody) {
+          chatBody.scrollTop = chatBody.scrollHeight;
+        }
       });
-    },
-
-    selectRecipient(participant) {
-      this.messageRecipient = participant;
-      this.showRecipientPicker = false;
     },
 
     hand_raised() {
@@ -2189,12 +2071,7 @@ export default {
 
     expelSelectedMembers() {
       if (!this.isHost || this.expelSelected.length === 0) return;
-      this.expelSelected.forEach(targetId => {
-        // Look up the participant to get their confirmed socket.id
-        const participant = this.participants.find(
-          p => (p.socketId || p.id) === targetId
-        );
-        const socketId = participant?.socketId || targetId;
+      this.expelSelected.forEach(socketId => {
         this.socket.emit('expel-participant', {
           roomId: this.roomId,
           targetSocketId: socketId,
@@ -2511,12 +2388,8 @@ export default {
     },
 
     async cleanup() {
-      if (this.isCleanedUp) return;
+      if (this.isCleanedUp) return;  // ADD THIS
       this.isCleanedUp = true;
-      // Preserve guest status BEFORE cleanup wipes localStorage,
-      // so Ending.vue can still correctly hide the logout button for guests
-      localStorage.setItem('meetingEnded', 'true');
-      localStorage.setItem('wasGuest', this.isGuest ? 'true' : 'false');
       console.log('Cleaning up resources...');
 
       if (this.broadcastRetryTimer) {
@@ -2603,8 +2476,6 @@ export default {
       this.emailAttachments = [];
       this.waitingParticipants = [];
       this.chatAttachments = [];
-      this.privateMessages = [];
-      this.messageRecipient = null;
       this.showWhiteboard = false;
       this.showAiNotes = false;
       this.showDocEnact = false;
@@ -3773,169 +3644,6 @@ body {
 .perm-always  { background: #4CAF50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* ==================== RECIPIENT BAR ==================== */
-.recipient-bar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  background: #f0f4ff;
-  border-bottom: 1px solid #dde3f0;
-  cursor: pointer;
-  user-select: none;
-  font-size: 13px;
-  color: #000;
-  transition: background 0.15s;
-  flex-shrink: 0;
-}
-
-.recipient-bar:hover {
-  background: #e5ebfa;
-}
-
-.recipient-bar-label {
-  font-weight: 600;
-  color: #555;
-  flex-shrink: 0;
-}
-
-.recipient-bar-value {
-  flex: 1;
-  font-weight: 600;
-  color: #3730a3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.recipient-bar-arrow {
-  font-size: 10px;
-  color: #888;
-  flex-shrink: 0;
-}
-
-.recipient-dropdown {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.13);
-  z-index: 200;
-  overflow: hidden;
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-.recipient-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  transition: background 0.12s;
-}
-
-.recipient-option:hover {
-  background: #f5f7ff;
-}
-
-.recipient-option.active {
-  background: #eef2ff;
-}
-
-.recipient-option-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3730a3, #6366f1);
-  color: white;
-  font-size: 12px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.recipient-option-avatar.all {
-  background: linear-gradient(135deg, #4CAF50, #38ef7d);
-  font-size: 11px;
-}
-
-.recipient-option-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.recipient-option-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #111;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.recipient-option-sub {
-  font-size: 11px;
-  color: #888;
-  margin-top: 1px;
-}
-
-.recipient-check {
-  color: #3730a3;
-  font-weight: 700;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.recipient-divider {
-  height: 1px;
-  background: #f0f0f0;
-  margin: 2px 0;
-}
-
-.message-private {
-  background: #f0edff !important;
-  border: 1px solid #c4b9f5 !important;
-}
-
-.dm-tag {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: 10px;
-  font-weight: 600;
-  background: #3730a3;
-  color: white;
-  border-radius: 10px;
-  padding: 1px 7px;
-  vertical-align: middle;
-}
-
-.chat-empty {
-  text-align: center;
-  color: #aaa;
-  font-size: 13px;
-  padding: 32px 16px;
-}
-
-.dm-conversation-header {
-  text-align: center;
-  font-size: 12px;
-  color: #666;
-  background: #f0edff;
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-bottom: 10px;
-  border: 1px solid #c4b9f5;
-}
 
 /* ==================== EXPEL MODAL ==================== */
 .expel-overlay {
