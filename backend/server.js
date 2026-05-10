@@ -226,66 +226,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('private-message', ({ toSocketId, sender, text, timestamp, attachments }) => {
-    if (!joinedRoom) return;
-    const safeText = typeof text === 'string' ? text.slice(0, 2000) : '';
-    const safeSender = typeof sender === 'string' ? sender.slice(0, 60) : 'Unknown';
-    const safeAttachments = Array.isArray(attachments)
-      ? attachments.slice(0, 5).map(a => ({
-          name:     typeof a.name     === 'string' ? a.name.slice(0, 200)     : '',
-          mimeType: typeof a.mimeType === 'string' ? a.mimeType.slice(0, 100) : '',
-          base64:   typeof a.base64   === 'string' && a.base64.length < 2_800_000 ? a.base64 : '',
-          size:     typeof a.size     === 'number' ? a.size : 0,
-        }))
-      : [];
-    if (!safeText && safeAttachments.length === 0) return;
-
-    const payload = {
-      sender: safeSender,
-      text: safeText,
-      timestamp: timestamp || Date.now(),
-      attachments: safeAttachments,
-      isPrivate: true,
-      fromSocketId: socket.id,
-    };
-
-    // Send to recipient
-    io.to(toSocketId).emit('private-message', payload);
-    // Echo back to sender
-    socket.emit('private-message', { ...payload, toSelf: true });
-  });
-
-  socket.on('private-message', ({ toSocketId, sender, text, timestamp, attachments }) => {
-    if (!joinedRoom) return;
-    const safeText = typeof text === 'string' ? text.slice(0, 2000) : '';
-    const safeSender = typeof sender === 'string' ? sender.slice(0, 60) : 'Unknown';
-    const safeAttachments = Array.isArray(attachments)
-      ? attachments.slice(0, 5).map(a => ({
-          name:     typeof a.name     === 'string' ? a.name.slice(0, 200)     : '',
-          mimeType: typeof a.mimeType === 'string' ? a.mimeType.slice(0, 100) : '',
-          base64:   typeof a.base64   === 'string' && a.base64.length < 2_800_000 ? a.base64 : '',
-          size:     typeof a.size     === 'number' ? a.size : 0,
-        }))
-      : [];
-    if (!safeText && safeAttachments.length === 0) return;
-
-    // Verify target is in same room
-    const targetInRoom = rooms[joinedRoom]?.find(p => p.id === toSocketId);
-    if (!targetInRoom) return;
-
-    const payload = {
-      sender: safeSender,
-      text: safeText,
-      timestamp: timestamp || Date.now(),
-      attachments: safeAttachments,
-      isPrivate: true,
-      privateTo: targetInRoom.name,
-    };
-
-    io.to(toSocketId).emit('private-message', payload);
-    socket.emit('private-message', { ...payload, toSelf: true });
-  });
-
   socket.on('hand-raised', ({ roomId, userId, userName, isRaised }) => {
     if (roomId) io.to(roomId).emit('hand-raised', { roomId, userId, userName, isRaised });
   });
@@ -340,19 +280,16 @@ io.on('connection', (socket) => {
 
     const { type, roomId, ...payload } = data;
 
-    // doc-request-state: participant asking host for current doc state
-    // Send to everyone else — host will respond
     if (type === 'doc-enact-visibility') {
       socket.to(roomId).emit('doc-enact-visibility', payload);
       return;
     }
-    
+
     if (type === 'doc-request-state') {
       socket.to(roomId).emit(type, payload);
       return;
     }
 
-    // All other doc events: broadcast to everyone else in the room
     socket.to(roomId).emit(type, payload);
   });
 
@@ -361,16 +298,13 @@ io.on('connection', (socket) => {
     const isHost = await verifyIsHost(socketUserId, roomId);
     if (!isHost) return;
 
-    // Remove from room list
     if (rooms[roomId]) {
       rooms[roomId] = rooms[roomId].filter(p => p.id !== targetSocketId);
       if (rooms[roomId].length === 0) delete rooms[roomId];
       else io.to(roomId).emit('participants-list', rooms[roomId]);
     }
 
-    // Notify the expelled participant
     io.to(targetSocketId).emit('expelled');
-    // Let others know they left
     socket.to(roomId).emit('user-left', targetSocketId);
   });
 
