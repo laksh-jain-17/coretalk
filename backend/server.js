@@ -299,13 +299,19 @@ io.on('connection', (socket) => {
     if (!isHost) return;
 
     if (rooms[roomId]) {
-      rooms[roomId] = rooms[roomId].filter(p => p.id !== targetSocketId);
+      // Match by socket ID first, fall back to userId in case of reconnect
+      const target = rooms[roomId].find(
+        p => p.id === targetSocketId || p.userId === targetSocketId
+      );
+      const resolvedSocketId = target?.id || targetSocketId;
+
+      rooms[roomId] = rooms[roomId].filter(p => p.id !== resolvedSocketId);
       if (rooms[roomId].length === 0) delete rooms[roomId];
       else io.to(roomId).emit('participants-list', rooms[roomId]);
-    }
 
-    io.to(targetSocketId).emit('expelled');
-    socket.to(roomId).emit('user-left', targetSocketId);
+      io.to(resolvedSocketId).emit('expelled');
+      socket.to(roomId).emit('user-left', resolvedSocketId);
+    }
   });
 
   socket.on('mute-all', async ({ roomId }) => {
