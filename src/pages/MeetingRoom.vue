@@ -2072,18 +2072,18 @@ export default {
     expelSelectedMembers() {
       if (!this.isHost || this.expelSelected.length === 0) return;
       this.expelSelected.forEach(selectedId => {
-        const participnat = this.participants.find(
-          p => p.socketId === selectedId || p.userId === selectedId || p.id === selectedId
-        );
-        const targetSocketId = participant?.socketId || selectedId;
-        this.socket.emit('expel-participant',{
-          roomId: this.roomId,
-          targetSocketId,
-        });
+        const found = this.participants.find(
+        p => p.socketId === selectedId || p.userId === selectedId || p.id === selectedId
+      );
+      const targetSocketId = found?.socketId || selectedId;
+       this.socket.emit('expel-participant', {
+        roomId: this.roomId,
+        targetSocketId,
       });
-      this.expelSelected = [];
-      this.showExpelModal = false;
-    },
+    });
+    this.expelSelected = [];
+    this.showExpelModal = false;
+  },
     
     async recording() {
       this.record = !this.record;
