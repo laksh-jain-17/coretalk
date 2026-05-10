@@ -341,7 +341,7 @@
           >
             <input
               type="checkbox"
-              :value="p.socketId || p.id"
+              :value="p.socketId || p.userId || p.id"
               v-model="expelSelected"
               class="expel-checkbox"
             />
@@ -2071,10 +2071,14 @@ export default {
 
     expelSelectedMembers() {
       if (!this.isHost || this.expelSelected.length === 0) return;
-      this.expelSelected.forEach(socketId => {
-        this.socket.emit('expel-participant', {
+      this.expelSelected.forEach(selectedId => {
+        const participnat = this.participants.find(
+          p => p.socketId === selectedId || p.userId === selectedId || p.id === selectedId
+        );
+        const targetSocketId = participant?.socketId || selectedId;
+        this.socket.emit('expel-participant',{
           roomId: this.roomId,
-          targetSocketId: socketId,
+          targetSocketId,
         });
       });
       this.expelSelected = [];
