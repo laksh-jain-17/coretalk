@@ -20,8 +20,8 @@
         <button @click="toggleDocEnact" :class="{'active-feature':showDocEnact}">
           {{ showDocEnact ? 'Doc Enact ON' : 'Doc Enact' }}
         </button>
-        <button @click="showAiNotes = !showAiNotes" :class="{ 'active-feature': showAiNotes }">
-            {{ showAiNotes ? 'AI Summary ON' : 'AI Summary' }}
+        <button @click="toggleAiNotes" :class="{ 'active-feature': showAiNotes }">
+          {{ showAiNotes ? 'AI Summary ON' : 'AI Summary' }}
         </button>
       </div>
     </transition>
@@ -453,7 +453,7 @@
           <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
           <div class="email-attach-row">
             <label class="email-attach-btn">
-              📎 Attach files
+               Attach files
               <input type="file" multiple ref="emailFileInput" @change="handleEmailAttachments" style="display:none" />
             </label>
             <div class="email-attach-list">
@@ -546,12 +546,11 @@
       @mouseenter="onAiNotesMouseEnter"
       @mouseleave="onAiNotesMouseLeave"
     >
-      <AiNotesPanel :roomTitle="title" @close="showAiNotes = false"/>
+      <AiNotesPanel :roomTitle="title" @close="closeAiNotes"/>
     </div>
     <DocEnactPanel v-if="showDocEnact && livekitRoom" :livekitRoom="livekitRoom" :isHost="isHost" :userId="userId" :participants="participants" :roomId="roomId" :socket="socket" @close="toggleDocEnact"/>
   </div>
 </template>
-
 <script>
 import { jwtDecode } from 'jwt-decode';
 import { io } from 'socket.io-client';
@@ -780,6 +779,19 @@ export default {
         this.startCaptionRecognition();
       } else {
         this.stopCaptionRecognition();
+      }
+    },
+
+    toggleAiNotes() {
+      this.showAiNotes = !this.showAiNotes;
+    },
+
+    closeAiNotes() {
+      this.showAiNotes = false;
+      this.aiNotesFaded = false;
+      if (this.aiNotesFadeTimer) {
+        clearTimeout(this.aiNotesFadeTimer);
+        this.aiNotesFadeTimer = null;
       }
     },
 
@@ -2034,22 +2046,6 @@ export default {
       this.aiNotesFadeTimer = setTimeout(() => {
         this.aiNotesFaded = true;
       }, 5000);
-    },
-
-    showAiNotes(newVal) {
-      if (newVal) {
-        if (this.aiNotesFadeTimer) clearTimeout(this.aiNotesFadeTimer);
-        this.aiNotesFadeTimer = setTimeout(() => {
-          this.aiNotesFaded = true;
-        }, 5000);
-      } 
-      else {
-        this.aiNotesFaded = false;
-        if (this.aiNotesFadeTimer) {
-          clearTimeout(this.aiNotesFadeTimer);
-          this.aiNotesFadeTimer = null;
-        }
-      }
     },
 
     async exitFullscreenIfActive()
