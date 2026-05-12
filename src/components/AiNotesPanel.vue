@@ -1,7 +1,7 @@
 <template>
   <div id="notes-panel">
     <div class="notes-header">
-      <span>🤖 AI Meeting Summary</span>
+      <span> AI Meeting Summary</span>
       <button @click="$emit('close')">✕</button>
     </div>
 
@@ -13,7 +13,7 @@
           then summarises everything when you stop.
         </p>
         <button class="notes-start-btn" @click="start">
-          🎙 Start taking notes
+           Start taking notes
         </button>
       </div>
 
@@ -24,7 +24,7 @@
           Recording — captures every 30s
         </div>
         <button class="notes-stop-btn" @click="stop">
-          ⏹ Stop &amp; summarise
+           Stop &amp; summarise
         </button>
         <div class="notes-waiting">
           {{ transcript.length ? `${transcript.length} segment(s) captured...` : 'Waiting for first transcription...' }}
@@ -45,7 +45,7 @@
         </div>
         <div class="notes-actions">
           <button class="notes-dl-btn" @click="download">
-            ⬇ Download (.md)
+             Download (.md)
           </button>
           <button class="notes-reset-btn" @click="reset">
             New session
@@ -60,7 +60,6 @@
     </div>
   </div>
 </template>
-
 <script>
 const GROQ_API = 'https://api.groq.com/openai/v1';
 
