@@ -1,7 +1,7 @@
 <template>
   <div id="notes-panel">
     <div class="notes-header">
-      <span>🧠 AI Meeting Notes</span>
+      <span>AI Meeting Summary</span>
       <button @click="$emit('close')">✕</button>
     </div>
 
@@ -24,7 +24,7 @@
           Recording — captures every 30s
         </div>
         <button class="notes-stop-btn" @click="stop">
-          ⏹ Stop &amp; summarise
+           Stop &amp; summarise
         </button>
 
         <div v-if="transcript.length" class="notes-transcript-live">
@@ -55,7 +55,7 @@
         </div>
         <div class="notes-actions">
           <button class="notes-dl-btn" @click="download">
-            ↓ Download notes (.md)
+             Download (.md)
           </button>
           <button class="notes-reset-btn" @click="reset">
             New session
