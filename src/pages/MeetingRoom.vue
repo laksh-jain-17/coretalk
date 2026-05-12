@@ -2036,6 +2036,22 @@ export default {
       }, 5000);
     },
 
+    showAiNotes(newVal) {
+      if (newVal) {
+        if (this.aiNotesFadeTimer) clearTimeout(this.aiNotesFadeTimer);
+        this.aiNotesFadeTimer = setTimeout(() => {
+          this.aiNotesFaded = true;
+        }, 5000);
+      } 
+      else {
+        this.aiNotesFaded = false;
+        if (this.aiNotesFadeTimer) {
+          clearTimeout(this.aiNotesFadeTimer);
+          this.aiNotesFadeTimer = null;
+        }
+      }
+    },
+
     async exitFullscreenIfActive()
     {
       try
