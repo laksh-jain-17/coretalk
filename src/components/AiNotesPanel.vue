@@ -1,7 +1,7 @@
 <template>
   <div id="notes-panel">
     <div class="notes-header">
-      <span>AI Meeting Summary</span>
+      <span>🤖 AI Meeting Summary</span>
       <button @click="$emit('close')">✕</button>
     </div>
 
@@ -24,20 +24,10 @@
           Recording — captures every 30s
         </div>
         <button class="notes-stop-btn" @click="stop">
-           Stop &amp; summarise
+          ⏹ Stop &amp; summarise
         </button>
-
-        <div v-if="transcript.length" class="notes-transcript-live">
-          <div class="notes-section-label">Live transcript</div>
-          <div class="notes-transcript-scroll">
-            <div v-for="(t, i) in transcript" :key="i" class="notes-transcript-line">
-              <span class="notes-time">{{ t.time }}</span>
-              <span class="notes-text">{{ t.text }}</span>
-            </div>
-          </div>
-        </div>
-        <div v-else class="notes-waiting">
-          Waiting for first transcription...
+        <div class="notes-waiting">
+          {{ transcript.length ? `${transcript.length} segment(s) captured...` : 'Waiting for first transcription...' }}
         </div>
       </div>
 
@@ -55,21 +45,11 @@
         </div>
         <div class="notes-actions">
           <button class="notes-dl-btn" @click="download">
-             Download (.md)
+            ⬇ Download (.md)
           </button>
           <button class="notes-reset-btn" @click="reset">
             New session
           </button>
-        </div>
-
-        <div v-if="transcript.length" class="notes-transcript-live" style="margin-top:16px">
-          <div class="notes-section-label">Full transcript</div>
-          <div class="notes-transcript-scroll">
-            <div v-for="(t, i) in transcript" :key="i" class="notes-transcript-line">
-              <span class="notes-time">{{ t.time }}</span>
-              <span class="notes-text">{{ t.text }}</span>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -116,7 +96,6 @@ export default {
       }
 
       try {
-        // Request mic permission up front
         this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch {
         this.error = 'Microphone permission denied.';
@@ -127,7 +106,6 @@ export default {
       this.transcript = [];
       this.summary = '';
 
-      // Capture immediately, then every 30s
       this.captureAndTranscribe();
       this.captureInterval = setInterval(() => {
         this.captureAndTranscribe();
@@ -155,7 +133,6 @@ export default {
         try {
           recorder = new MediaRecorder(this.micStream, { mimeType: 'audio/webm' });
         } catch {
-          // Fallback — some browsers don't support webm
           try {
             recorder = new MediaRecorder(this.micStream);
           } catch (e) {
@@ -170,7 +147,7 @@ export default {
 
         recorder.onstop = async () => {
           const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-          if (blob.size < 1000) { resolve(); return; } // too small, silence
+          if (blob.size < 1000) { resolve(); return; }
 
           const formData = new FormData();
           formData.append('file', blob, 'audio.webm');
@@ -206,7 +183,6 @@ export default {
         };
 
         recorder.start();
-        // Record a 25s window (5s buffer before next interval fires)
         setTimeout(() => {
           if (recorder.state === 'recording') recorder.stop();
         }, 25000);
@@ -281,6 +257,8 @@ export default {
         '',
         this.summary,
         '',
+        '---',
+        '',
         '## Full Transcript',
         '',
         ...this.transcript.map(t => `**${t.time}:** ${t.text}`)
@@ -306,10 +284,8 @@ export default {
 
 <style scoped>
 #notes-panel {
-  position: fixed;
-  bottom: 70px;
-  right: 20px;
-  width: 360px;
+  position: relative;
+  width: 100%;
   max-height: calc(100vh - 100px);
   background: #ffffff;
   border-radius: 12px;
@@ -317,7 +293,6 @@ export default {
   border: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
-  z-index: 101;
   color: #111;
   overflow: hidden;
 }
@@ -346,7 +321,10 @@ export default {
   border-radius: 4px;
 }
 
-.notes-header button:hover { background: #e0e0e0; color: #000; }
+.notes-header button:hover {
+  background: #e0e0e0;
+  color: #000;
+}
 
 .notes-body {
   flex: 1;
@@ -376,7 +354,10 @@ export default {
   cursor: pointer;
   transition: background 0.2s;
 }
-.notes-start-btn:hover { background: #059669; }
+
+.notes-start-btn:hover {
+  background: #059669;
+}
 
 .notes-recording-indicator {
   display: flex;
@@ -415,7 +396,10 @@ export default {
   transition: background 0.2s;
   margin-bottom: 12px;
 }
-.notes-stop-btn:hover { background: #1e3a8a; }
+
+.notes-stop-btn:hover {
+  background: #1e3a8a;
+}
 
 .notes-waiting {
   font-size: 13px;
@@ -431,33 +415,6 @@ export default {
   letter-spacing: 0.06em;
   color: #888;
   margin-bottom: 6px;
-}
-
-.notes-transcript-scroll {
-  max-height: 180px;
-  overflow-y: auto;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: #fafafa;
-}
-
-.notes-transcript-line {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.notes-time {
-  color: #888;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.notes-text {
-  color: #222;
 }
 
 .notes-summarising {
@@ -479,7 +436,9 @@ export default {
   animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 
 .notes-summary-box {
   border: 1px solid #e0e0e0;
@@ -518,7 +477,10 @@ export default {
   cursor: pointer;
   transition: background 0.2s;
 }
-.notes-dl-btn:hover { background: #1e3a8a; }
+
+.notes-dl-btn:hover {
+  background: #1e3a8a;
+}
 
 .notes-reset-btn {
   padding: 10px 14px;
@@ -531,7 +493,10 @@ export default {
   cursor: pointer;
   transition: background 0.2s;
 }
-.notes-reset-btn:hover { background: #e5e5e5; }
+
+.notes-reset-btn:hover {
+  background: #e5e5e5;
+}
 
 .notes-error {
   background: #fef2f2;
