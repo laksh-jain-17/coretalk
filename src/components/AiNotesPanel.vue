@@ -1,7 +1,7 @@
 <template>
   <div id="notes-panel">
     <div class="notes-header">
-      <span> AI Meeting Summary</span>
+      <span>🤖 AI Meeting Summary</span>
       <button @click="$emit('close')">✕</button>
     </div>
 
@@ -13,7 +13,7 @@
           then summarises everything when you stop.
         </p>
         <button class="notes-start-btn" @click="start">
-           Start taking notes
+          🎙 Start taking notes
         </button>
       </div>
 
@@ -24,7 +24,7 @@
           Recording — captures every 30s
         </div>
         <button class="notes-stop-btn" @click="stop">
-           Stop &amp; summarise
+          ⏹ Stop &amp; summarise
         </button>
         <div class="notes-waiting">
           {{ transcript.length ? `${transcript.length} segment(s) captured...` : 'Waiting for first transcription...' }}
@@ -34,7 +34,7 @@
       <!-- State: summarising -->
       <div v-if="state === 'summarising'" class="notes-summarising">
         <div class="notes-spinner" />
-        <p>Summarising your meeting...</p>
+        <p>{{ transcript.length ? 'Summarising your meeting...' : 'Finishing transcription...' }}</p>
       </div>
 
       <!-- State: done -->
@@ -45,7 +45,7 @@
         </div>
         <div class="notes-actions">
           <button class="notes-dl-btn" @click="download">
-             Download (.md)
+            ⬇ Download (.md)
           </button>
           <button class="notes-reset-btn" @click="reset">
             New session
@@ -73,12 +73,13 @@ export default {
 
   data() {
     return {
-      state: 'idle',      // 'idle' | 'recording' | 'summarising' | 'done'
-      transcript: [],     // [{ time, text }]
+      state: 'idle',        // 'idle' | 'recording' | 'summarising' | 'done'
+      transcript: [],       // [{ time, text }]
       summary: '',
       error: '',
       captureInterval: null,
-      micStream: null
+      micStream: null,
+      activeRecorder: null, // tracks the currently running MediaRecorder
     };
   },
 
@@ -105,7 +106,9 @@ export default {
       this.state = 'recording';
       this.transcript = [];
       this.summary = '';
+      this.error = '';
 
+      // Capture immediately, then every 30s
       this.captureAndTranscribe();
       this.captureInterval = setInterval(() => {
         this.captureAndTranscribe();
@@ -121,6 +124,7 @@ export default {
         this.micStream.getTracks().forEach(t => t.stop());
         this.micStream = null;
       }
+      this.activeRecorder = null;
     },
 
     async captureAndTranscribe() {
@@ -143,11 +147,19 @@ export default {
         }
 
         const chunks = [];
-        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
 
         recorder.onstop = async () => {
           const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-          if (blob.size < 1000) { resolve(); return; }
+
+          // Too small = silence, skip
+          if (blob.size < 1000) {
+            this.activeRecorder = null;
+            resolve();
+            return;
+          }
 
           const formData = new FormData();
           formData.append('file', blob, 'audio.webm');
@@ -164,6 +176,7 @@ export default {
             if (!res.ok) {
               const errData = await res.json().catch(() => ({}));
               console.error('Whisper error:', errData);
+              this.activeRecorder = null;
               resolve();
               return;
             }
@@ -179,10 +192,16 @@ export default {
           } catch (e) {
             console.error('Transcription failed:', e);
           }
+
+          this.activeRecorder = null;
           resolve();
         };
 
+        // Store reference so stop() can wait on it
+        this.activeRecorder = recorder;
         recorder.start();
+
+        // Record a 25s window (5s buffer before next interval fires)
         setTimeout(() => {
           if (recorder.state === 'recording') recorder.stop();
         }, 25000);
@@ -190,14 +209,38 @@ export default {
     },
 
     async stop() {
-      this.stopCapture();
+      // 1. Stop the interval so no new captures start
+      if (this.captureInterval) {
+        clearInterval(this.captureInterval);
+        this.captureInterval = null;
+      }
 
+      // 2. If a recorder is currently mid-recording, stop it and wait for
+      //    its onstop (which does the Whisper API call) to fully complete
+      if (this.activeRecorder && this.activeRecorder.state === 'recording') {
+        this.state = 'summarising'; // show spinner while waiting
+        await new Promise((resolve) => {
+          this.activeRecorder.addEventListener('stop', resolve, { once: true });
+          this.activeRecorder.stop();
+        });
+        // Buffer to let the async onstop handler (Whisper fetch) finish
+        await new Promise(r => setTimeout(r, 800));
+      }
+
+      // 3. Stop the mic stream
+      if (this.micStream) {
+        this.micStream.getTracks().forEach(t => t.stop());
+        this.micStream = null;
+      }
+
+      // 4. Check if we got anything
       if (!this.transcript.length) {
         this.state = 'done';
         this.summary = 'No speech was detected during this session.';
         return;
       }
 
+      // 5. Summarise with Groq
       this.state = 'summarising';
 
       const key = import.meta.env.VITE_GROQ_API_KEY;
@@ -277,6 +320,7 @@ export default {
       this.transcript = [];
       this.summary = '';
       this.error = '';
+      this.activeRecorder = null;
     }
   }
 };
@@ -319,6 +363,7 @@ export default {
   line-height: 1;
   padding: 2px 6px;
   border-radius: 4px;
+  transition: background 0.15s;
 }
 
 .notes-header button:hover {
@@ -335,6 +380,7 @@ export default {
   gap: 12px;
 }
 
+/* ---- Idle ---- */
 .notes-hint {
   font-size: 13px;
   color: #555;
@@ -359,6 +405,7 @@ export default {
   background: #059669;
 }
 
+/* ---- Recording ---- */
 .notes-recording-indicator {
   display: flex;
   align-items: center;
@@ -380,7 +427,7 @@ export default {
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.2; }
+  50%       { opacity: 0.2; }
 }
 
 .notes-stop-btn {
@@ -408,15 +455,7 @@ export default {
   padding: 12px 0;
 }
 
-.notes-section-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #888;
-  margin-bottom: 6px;
-}
-
+/* ---- Summarising ---- */
 .notes-summarising {
   display: flex;
   flex-direction: column;
@@ -440,12 +479,22 @@ export default {
   to { transform: rotate(360deg); }
 }
 
+/* ---- Done ---- */
+.notes-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin-bottom: 6px;
+}
+
 .notes-summary-box {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   padding: 12px;
   background: #fafafa;
-  max-height: 220px;
+  max-height: 260px;
   overflow-y: auto;
 }
 
@@ -498,6 +547,7 @@ export default {
   background: #e5e5e5;
 }
 
+/* ---- Error ---- */
 .notes-error {
   background: #fef2f2;
   color: #b91c1c;
