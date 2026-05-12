@@ -539,7 +539,15 @@
       </div>
     </div>
     <WhiteboardPanel v-if="showWhiteboard" :socket="socket" :roomId="roomId" @close="showWhiteboard = false"/>
-    <AiNotesPanel v-if="showAiNotes" :roomTitle="title" @close="showAiNotes = false"/>
+    <div
+      v-if="showAiNotes"
+      class="ai-notes-wrapper"
+      :class="{ 'ai-notes-faded': aiNotesFaded }"
+      @mouseenter="onAiNotesMouseEnter"
+      @mouseleave="onAiNotesMouseLeave"
+    >
+      <AiNotesPanel :roomTitle="title" @close="showAiNotes = false"/>
+    </div>
     <DocEnactPanel v-if="showDocEnact && livekitRoom" :livekitRoom="livekitRoom" :isHost="isHost" :userId="userId" :participants="participants" :roomId="roomId" :socket="socket" @close="toggleDocEnact"/>
   </div>
 </template>
@@ -641,6 +649,8 @@ export default {
       showExpelModal: false,
       expelSelected: [],
       guestInactivityTimer: null,
+      aiNotesFaded: false,
+      aiNotesFadeTimer: null,
     };
   },
 
@@ -676,6 +686,22 @@ export default {
       } else {
         console.log('Network normal -> Transcript disabled');
         this.recognition?.stop();
+      }
+    },
+
+    showAiNotes(newVal) {
+      if (newVal) {
+        if (this.aiNotesFadeTimer) clearTimeout(this.aiNotesFadeTimer);
+        this.aiNotesFadeTimer = setTimeout(() => {
+          this.aiNotesFaded = true;
+        }, 5000);
+      } 
+      else {
+        this.aiNotesFaded = false;
+        if (this.aiNotesFadeTimer) {
+          clearTimeout(this.aiNotesFadeTimer);
+          this.aiNotesFadeTimer = null;
+        }
       }
     },
 
@@ -1995,6 +2021,21 @@ export default {
         });
     },
 
+    onAiNotesMouseEnter() {
+      this.aiNotesFaded = false;
+      if (this.aiNotesFadeTimer) {
+        clearTimeout(this.aiNotesFadeTimer);
+        this.aiNotesFadeTimer = null;
+      }
+    },
+
+    onAiNotesMouseLeave() {
+      if (this.aiNotesFadeTimer) clearTimeout(this.aiNotesFadeTimer);
+      this.aiNotesFadeTimer = setTimeout(() => {
+        this.aiNotesFaded = true;
+      }, 5000);
+    },
+
     async exitFullscreenIfActive()
     {
       try
@@ -2460,6 +2501,12 @@ export default {
         localStorage.removeItem('guestId');
       }
 
+      if (this.aiNotesFadeTimer) {
+        clearTimeout(this.aiNotesFadeTimer);
+        this.aiNotesFadeTimer = null;
+      }
+      
+      this.aiNotesFaded = false;
       this.participants = [];
       this.messages = [];
       this.micon = false;
@@ -3798,6 +3845,22 @@ body {
 .expel-confirm-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* ==================== AI NOTES WRAPPER ==================== */
+.ai-notes-wrapper {
+  position: fixed;
+  bottom: 80px;
+  left: 20px;
+  z-index: 50;
+  width: 360px;
+  max-height: calc(100vh - 100px);
+  transition: opacity 0.6s ease;
+  opacity: 1;
+}
+
+.ai-notes-wrapper.ai-notes-faded {
+  opacity: 0.5;
 }
 
 /* ==================== RESPONSIVE DESIGN ==================== */
