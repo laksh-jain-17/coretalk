@@ -21,7 +21,7 @@
           {{ showDocEnact ? 'Doc Enact ON' : 'Doc Enact' }}
         </button>
         <button @click="showAiNotes = !showAiNotes" :class="{ 'active-feature': showAiNotes }">
-            {{ showAiNotes ? 'AI Notes ON' : 'AI Notes' }}
+            {{ showAiNotes ? 'AI Summary ON' : 'AI Summary' }}
         </button>
       </div>
     </transition>
