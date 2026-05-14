@@ -292,7 +292,7 @@ export default {
 
     async download() {
       const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
-        'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.min.js'
+        'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js'
       );
 
       const children = [];
