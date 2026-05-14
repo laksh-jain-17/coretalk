@@ -545,17 +545,18 @@ export default {
         const runs = [];
 
         if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.textContent;
-          if (!text) return runs;
-          runs.push(new TextRun({
-            text,
-            bold:      inheritedStyle.bold      || false,
-            italics:   inheritedStyle.italic     || false,
-            underline: inheritedStyle.underline  ? {} : undefined,
-            strike:    inheritedStyle.strike     || false,
-          }));
-          return runs;
-        }
+        // Replace non-breaking spaces (\u00A0) with regular spaces for docx
+        const text = node.textContent.replace(/\u00A0/g, ' ');
+        if (!text) return runs;
+        runs.push(new TextRun({
+          text,
+          bold:      inheritedStyle.bold      || false,
+          italics:   inheritedStyle.italic    || false,
+          underline: inheritedStyle.underline ? {} : undefined,
+          strike:    inheritedStyle.strike    || false,
+        }));
+        return runs;
+      }
 
         if (node.nodeType !== Node.ELEMENT_NODE) return runs;
 
@@ -574,11 +575,12 @@ export default {
       };
 
       const parseTopNode = (node) => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.textContent.trim();
-          if (text) children.push(new Paragraph({ children: [new TextRun(text)] }));
-          return;
-        }
+  if (node.nodeType === Node.TEXT_NODE) {
+    // was: node.textContent.trim() — this strips your tab spaces!
+    const text = node.textContent.replace(/\u00A0/g, ' ');
+    if (text) children.push(new Paragraph({ children: [new TextRun(text)] }));
+    return;
+  }
         if (node.nodeType !== Node.ELEMENT_NODE) return;
 
         const tag = node.tagName.toLowerCase();
