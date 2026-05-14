@@ -56,23 +56,77 @@
           </transition>
         </div>
 
-        <button @click="$emit('close')">✕</button>
+        <button class="close-btn" @click="$emit('close')">✕</button>
       </div>
     </div>
 
+    <!-- Toolbar: only shown when user can edit -->
     <div v-if="canEdit" class="doc-toolbar">
-      <button @mousedown.prevent="fmt('bold')"><b>B</b></button>
-      <button @mousedown.prevent="fmt('italic')"><i>I</i></button>
-      <button @mousedown.prevent="fmt('underline')"><u>U</u></button>
+      <button
+        @mousedown.prevent="fmt('bold')"
+        :class="{ active: activeFormats.bold }"
+        title="Bold (Ctrl+B)"
+      ><b>B</b></button>
+
+      <button
+        @mousedown.prevent="fmt('italic')"
+        :class="{ active: activeFormats.italic }"
+        title="Italic (Ctrl+I)"
+      ><i>I</i></button>
+
+      <button
+        @mousedown.prevent="fmt('underline')"
+        :class="{ active: activeFormats.underline }"
+        title="Underline (Ctrl+U)"
+      ><u>U</u></button>
+
+      <button
+        @mousedown.prevent="fmt('strikeThrough')"
+        :class="{ active: activeFormats.strike }"
+        title="Strikethrough"
+      ><s>S</s></button>
+
       <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="fmt('formatBlock', 'H1')">H1</button>
-      <button @mousedown.prevent="fmt('formatBlock', 'H2')">H2</button>
-      <button @mousedown.prevent="fmt('formatBlock', 'H3')">H3</button>
+
+      <button
+        @mousedown.prevent="fmtBlock('h1')"
+        :class="{ active: activeFormats.h1 }"
+        title="Heading 1"
+      >H1</button>
+
+      <button
+        @mousedown.prevent="fmtBlock('h2')"
+        :class="{ active: activeFormats.h2 }"
+        title="Heading 2"
+      >H2</button>
+
+      <button
+        @mousedown.prevent="fmtBlock('h3')"
+        :class="{ active: activeFormats.h3 }"
+        title="Heading 3"
+      >H3</button>
+
       <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="fmt('insertUnorderedList')">• List</button>
-      <button @mousedown.prevent="fmt('insertOrderedList')">1. List</button>
+
+      <button
+        @mousedown.prevent="fmt('insertUnorderedList')"
+        :class="{ active: activeFormats.ul }"
+        title="Bullet List"
+      >• List</button>
+
+      <button
+        @mousedown.prevent="fmt('insertOrderedList')"
+        :class="{ active: activeFormats.ol }"
+        title="Numbered List"
+      >1. List</button>
+
       <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="fmt('formatBlock', 'P')">¶</button>
+
+      <!-- Clear formatting / paragraph reset -->
+      <button
+        @mousedown.prevent="clearFormatting"
+        title="Clear formatting / paragraph"
+      >¶</button>
     </div>
 
     <div
@@ -82,15 +136,16 @@
       :class="{ 'doc-editable': canEdit, 'doc-readonly': !canEdit }"
       @input="onInput"
       @keydown="onKeydown"
-      @mouseup="saveMobileSelection"
-      @touchend="saveMobileSelection"
+      @mouseup="onCursorChange"
+      @keyup="onCursorChange"
+      @touchend="onCursorChange"
       spellcheck="true"
       data-placeholder="Start typing your document..."
     ></div>
 
     <div class="doc-footer">
       <span class="doc-status">{{ statusText }}</span>
-      <button v-if="canEdit" class="doc-download-btn" @click="downloadDoc">Download</button>
+      <button v-if="canEdit" class="doc-download-btn" @click="downloadDoc">⬇ Download</button>
     </div>
   </div>
 </template>
@@ -112,15 +167,28 @@ export default {
 
   data() {
     return {
-      editors:      [],
-      lastContent:  '',
+      editors:       [],
+      lastContent:   '',
       debounceTimer: null,
-      saveTimer:    null,
-      statusText:   'Connecting...',
-      isMobile:     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
-      savedRange:   null,
-      _dataHandler: null,
-      showMembers:  false,
+      saveTimer:     null,
+      statusText:    'Connecting...',
+      isMobile:      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+      savedRange:    null,
+      _dataHandler:  null,
+      showMembers:   false,
+
+      // Tracks active format state for toolbar button highlighting
+      activeFormats: {
+        bold:      false,
+        italic:    false,
+        underline: false,
+        strike:    false,
+        ul:        false,
+        ol:        false,
+        h1:        false,
+        h2:        false,
+        h3:        false,
+      },
     };
   },
 
@@ -135,10 +203,10 @@ export default {
     this.livekitRoom.on('dataReceived', this._dataHandler);
 
     if (this.socket) {
-      this._socketDocState          = (msg) => this._handleMsg({ type: 'doc-state',          ...msg });
-      this._socketDocUpdate         = (msg) => this._handleMsg({ type: 'doc-update',         ...msg });
-      this._socketDocAccessChanged  = (msg) => this._handleMsg({ type: 'doc-access-changed', ...msg });
-      this._socketDocRequestState   = (msg) => this._handleMsg({ type: 'doc-request-state',  ...msg });
+      this._socketDocState         = (msg) => this._handleMsg({ type: 'doc-state',          ...msg });
+      this._socketDocUpdate        = (msg) => this._handleMsg({ type: 'doc-update',         ...msg });
+      this._socketDocAccessChanged = (msg) => this._handleMsg({ type: 'doc-access-changed', ...msg });
+      this._socketDocRequestState  = (msg) => this._handleMsg({ type: 'doc-request-state',  ...msg });
 
       this.socket.on('doc-state',          this._socketDocState);
       this.socket.on('doc-update',         this._socketDocUpdate);
@@ -146,7 +214,25 @@ export default {
       this.socket.on('doc-request-state',  this._socketDocRequestState);
     }
 
+    // Close members dropdown when clicking outside
+    this._handleOutsideClick = (e) => {
+      if (
+        this.showMembers &&
+        this.$refs.membersWrapperRef &&
+        !this.$refs.membersWrapperRef.contains(e.target)
+      ) {
+        this.showMembers = false;
+      }
+    };
     document.addEventListener('mousedown', this._handleOutsideClick);
+
+    // Update toolbar active states whenever selection changes anywhere in document
+    this._onSelectionChange = () => {
+      if (this.$refs.docBody && document.activeElement === this.$refs.docBody) {
+        this._updateActiveFormats();
+      }
+    };
+    document.addEventListener('selectionchange', this._onSelectionChange);
 
     this.$nextTick(() => {
       if (this.isHost) {
@@ -172,6 +258,7 @@ export default {
       this.socket.off('doc-request-state',  this._socketDocRequestState);
     }
     document.removeEventListener('mousedown', this._handleOutsideClick);
+    document.removeEventListener('selectionchange', this._onSelectionChange);
     clearTimeout(this.debounceTimer);
     clearTimeout(this.saveTimer);
     clearTimeout(this._retry1);
@@ -180,26 +267,122 @@ export default {
 
   methods: {
 
-    toggleMembers() {
-      this.showMembers = !this.showMembers;
+    // ─── Toolbar active-state tracking ───────────────────────────────────────
+
+    _updateActiveFormats() {
+      try {
+        this.activeFormats.bold      = document.queryCommandState('bold');
+        this.activeFormats.italic    = document.queryCommandState('italic');
+        this.activeFormats.underline = document.queryCommandState('underline');
+        this.activeFormats.strike    = document.queryCommandState('strikeThrough');
+        this.activeFormats.ul        = document.queryCommandState('insertUnorderedList');
+        this.activeFormats.ol        = document.queryCommandState('insertOrderedList');
+
+        const block = (document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, '');
+        this.activeFormats.h1 = block === 'h1';
+        this.activeFormats.h2 = block === 'h2';
+        this.activeFormats.h3 = block === 'h3';
+      } catch (_) {}
     },
 
-    _handleOutsideClick(e) {
-      if (
-        this.showMembers &&
-        this.$refs.membersWrapperRef &&
-        !this.$refs.membersWrapperRef.contains(e.target)
-      ) {
-        this.showMembers = false;
+    // Called on mouseup / keyup / touchend inside editor
+    onCursorChange() {
+      this._updateActiveFormats();
+      if (this.isMobile) {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          try { this.savedRange = sel.getRangeAt(0).cloneRange(); } catch (_) {}
+        }
       }
     },
 
-    saveMobileSelection() {
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        try { this.savedRange = sel.getRangeAt(0).cloneRange(); } catch (_) {}
+    // ─── Formatting ──────────────────────────────────────────────────────────
+
+    /**
+     * Generic execCommand wrapper for inline formats and lists.
+     * Bold / italic / underline / strike toggle automatically via the browser.
+     * Lists also toggle (if already in a list, clicking again removes it).
+     */
+    fmt(command) {
+      this._restoreMobileSelection();
+      document.execCommand(command, false, null);
+      this.$refs.docBody?.focus();
+      this._updateActiveFormats();
+      this._broadcastContent();
+    },
+
+    /**
+     * Block-level formatting (H1, H2, H3).
+     * Toggles: if the cursor is already inside the requested heading,
+     * switch back to a normal paragraph; otherwise apply the heading.
+     */
+    fmtBlock(tag) {
+      this._restoreMobileSelection();
+
+      const current = (document.queryCommandValue('formatBlock') || '')
+        .toLowerCase()
+        .replace(/[<>]/g, '');
+
+      if (current === tag) {
+        // Already this heading → revert to paragraph
+        document.execCommand('formatBlock', false, 'p');
+      } else {
+        document.execCommand('formatBlock', false, tag);
+      }
+
+      this.$refs.docBody?.focus();
+      this._updateActiveFormats();
+      this._broadcastContent();
+    },
+
+    /**
+     * ¶ button — clears all inline formatting on the selection and
+     * resets the block to a normal paragraph.
+     */
+    clearFormatting() {
+      this._restoreMobileSelection();
+      document.execCommand('removeFormat', false, null);
+      document.execCommand('formatBlock',  false, 'p');
+      this.$refs.docBody?.focus();
+      this._updateActiveFormats();
+      this._broadcastContent();
+    },
+
+    /** On mobile the focus is lost when a toolbar button is tapped.
+     *  Restore the saved selection so execCommand acts on the right range. */
+    _restoreMobileSelection() {
+      if (this.isMobile && this.savedRange) {
+        try {
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(this.savedRange);
+        } catch (_) {}
       }
     },
+
+    // ─── Input / keyboard ────────────────────────────────────────────────────
+
+    onInput() {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = setTimeout(() => this._broadcastContent(), 150);
+    },
+
+    onKeydown(e) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+      }
+
+      // Keyboard shortcut pass-through: Ctrl/Cmd + B / I / U
+      // (browser handles these natively on contenteditable, but we must
+      //  update our active-format state afterwards)
+      if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+        // Let the browser handle the command, then update state on next tick
+        this.$nextTick(() => this._updateActiveFormats());
+      }
+    },
+
+    // ─── LiveKit / Socket data layer ─────────────────────────────────────────
 
     _sendLivekit(payload) {
       try {
@@ -277,31 +460,6 @@ export default {
       });
     },
 
-    fmt(command, value = null) {
-      if (this.isMobile && this.savedRange) {
-        try {
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(this.savedRange);
-        } catch (_) {}
-      }
-      document.execCommand(command, false, value);
-      this.$refs.docBody?.focus();
-      this._broadcastContent();
-    },
-
-    onInput() {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = setTimeout(() => this._broadcastContent(), 150);
-    },
-
-    onKeydown(e) {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
-      }
-    },
-
     _broadcastContent() {
       const content = this.$refs.docBody?.innerHTML || '';
       if (content === this.lastContent) return;
@@ -326,6 +484,12 @@ export default {
         this.$refs.docBody.innerHTML = html;
         this.lastContent = html;
       }
+    },
+
+    // ─── Members / access ────────────────────────────────────────────────────
+
+    toggleMembers() {
+      this.showMembers = !this.showMembers;
     },
 
     toggleAccess(participantId) {
@@ -356,74 +520,112 @@ export default {
       setTimeout(() => { this.statusText = 'Connected'; }, 2500);
     },
 
-    async downloadDoc() {
-  // Dynamically import docx from CDN
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
-    'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.min.js'
-  );
-
-  // Parse the innerHTML into docx paragraphs
-  const docBody = this.$refs.docBody;
-  const children = [];
-
-  const parseNode = (node) => {
-    if (node.nodeType === Node.TEXT_NODE) return;
-
-    const tag = node.tagName?.toLowerCase();
-    const text = node.innerText || '';
-
-    if (!text.trim()) return;
-
-    if (tag === 'h1') {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(text)] }));
-    } else if (tag === 'h2') {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(text)] }));
-    } else if (tag === 'h3') {
-      children.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: [new TextRun(text)] }));
-    } else if (tag === 'p' || tag === 'div') {
-      const isBold      = node.querySelector('b, strong') !== null;
-      const isItalic    = node.querySelector('i, em') !== null;
-      const isUnderline = node.querySelector('u') !== null;
-      children.push(new Paragraph({
-        children: [new TextRun({ text, bold: isBold, italics: isItalic, underline: isUnderline ? {} : undefined })]
-      }));
-    } else if (tag === 'ul' || tag === 'ol') {
-      node.querySelectorAll('li').forEach(li => {
-        children.push(new Paragraph({
-          bullet: { level: 0 },
-          children: [new TextRun(li.innerText || '')]
-        }));
-      });
-    } else {
-      // fallback — treat as plain paragraph
-      if (text.trim()) {
-        children.push(new Paragraph({ children: [new TextRun(text)] }));
-      }
-    }
-  };
-
-  Array.from(docBody.childNodes).forEach(parseNode);
-
-  if (children.length === 0) {
-    children.push(new Paragraph({ children: [new TextRun('')] }));
-  }
-
-  const doc = new Document({ sections: [{ children }] });
-  const buffer = await Packer.toBlob(doc);
-
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(buffer);
-  a.download = `doc-${this.roomId}-${Date.now()}.docx`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-},
-
     getInitials(name) {
       if (!name) return '?';
       const parts = name.trim().split(' ');
       if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
       return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     },
+
+    // ─── Download ────────────────────────────────────────────────────────────
+
+    async downloadDoc() {
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
+        'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.min.js'
+      );
+
+      const docBody  = this.$refs.docBody;
+      const children = [];
+
+      /**
+       * Recursively convert a DOM node into one or more docx Paragraphs.
+       * Handles: H1-H3, P, DIV, UL, OL, LI, B, I, U, S, SPAN, TEXT.
+       */
+      const buildRuns = (node, inheritedStyle = {}) => {
+        const runs = [];
+
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent;
+          if (!text) return runs;
+          runs.push(new TextRun({
+            text,
+            bold:      inheritedStyle.bold      || false,
+            italics:   inheritedStyle.italic     || false,
+            underline: inheritedStyle.underline  ? {} : undefined,
+            strike:    inheritedStyle.strike     || false,
+          }));
+          return runs;
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) return runs;
+
+        const tag = node.tagName.toLowerCase();
+        const style = {
+          bold:      inheritedStyle.bold      || ['b','strong'].includes(tag) || node.style?.fontWeight === 'bold',
+          italic:    inheritedStyle.italic    || ['i','em'].includes(tag)     || node.style?.fontStyle  === 'italic',
+          underline: inheritedStyle.underline || tag === 'u'                  || node.style?.textDecoration?.includes('underline'),
+          strike:    inheritedStyle.strike    || ['s','strike','del'].includes(tag) || node.style?.textDecoration?.includes('line-through'),
+        };
+
+        for (const child of node.childNodes) {
+          runs.push(...buildRuns(child, style));
+        }
+        return runs;
+      };
+
+      const parseTopNode = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent.trim();
+          if (text) children.push(new Paragraph({ children: [new TextRun(text)] }));
+          return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        const tag = node.tagName.toLowerCase();
+
+        if (tag === 'h1') {
+          children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: buildRuns(node) }));
+        } else if (tag === 'h2') {
+          children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: buildRuns(node) }));
+        } else if (tag === 'h3') {
+          children.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: buildRuns(node) }));
+        } else if (tag === 'ul' || tag === 'ol') {
+          node.querySelectorAll('li').forEach(li => {
+            children.push(new Paragraph({
+              bullet: { level: 0 },
+              children: buildRuns(li),
+            }));
+          });
+        } else if (tag === 'br') {
+          children.push(new Paragraph({ children: [new TextRun('')] }));
+        } else {
+          // P, DIV, SPAN, and everything else → paragraph with inline formatting preserved
+          const runs = buildRuns(node);
+          if (runs.length > 0) {
+            children.push(new Paragraph({ children: runs }));
+          } else if (node.textContent.trim() === '') {
+            children.push(new Paragraph({ children: [new TextRun('')] }));
+          }
+        }
+      };
+
+      Array.from(docBody.childNodes).forEach(parseTopNode);
+
+      if (children.length === 0) {
+        children.push(new Paragraph({ children: [new TextRun('')] }));
+      }
+
+      const doc    = new Document({ sections: [{ children }] });
+      const buffer = await Packer.toBlob(doc);
+
+      const a  = document.createElement('a');
+      a.href   = URL.createObjectURL(buffer);
+      a.download = `doc-${this.roomId}-${Date.now()}.docx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    },
+
+    // ─── Selection save/restore (for remote sync) ────────────────────────────
 
     _saveSelection() {
       try {
@@ -496,14 +698,15 @@ export default {
   padding: 14px 16px; background: #f5f5f5;
   border-bottom: 1px solid #e0e0e0;
   font-weight: 700; font-size: 15px; color: #000; flex-shrink: 0;
-  position: relative; /* stacking context for dropdown */
+  position: relative;
 }
 .doc-header-right { display: flex; align-items: center; gap: 8px; }
-.doc-header > .doc-header-right > button {
+
+.close-btn {
   background: none; border: none; font-size: 18px;
   cursor: pointer; color: #000; padding: 2px 6px; border-radius: 4px;
 }
-.doc-header > .doc-header-right > button:hover { background: #e0e0e0; }
+.close-btn:hover { background: #e0e0e0; }
 
 .role-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; }
 .host-badge  { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
@@ -511,9 +714,7 @@ export default {
 .view-badge  { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
 
 /* ── Members button ── */
-.members-wrapper {
-  position: relative;
-}
+.members-wrapper { position: relative; }
 .members-btn {
   display: flex; align-items: center; gap: 5px;
   font-size: 11px; font-weight: 600; color: #3730a3;
@@ -523,9 +724,7 @@ export default {
   transition: background 0.15s, border-color 0.15s;
 }
 .members-btn:hover,
-.members-btn.active {
-  background: #e0e7ff; border-color: #a5b4fc;
-}
+.members-btn.active { background: #e0e7ff; border-color: #a5b4fc; }
 .members-count {
   background: #4f46e5; color: #fff;
   border-radius: 10px; padding: 0 6px;
@@ -536,16 +735,11 @@ export default {
 
 /* ── Members dropdown ── */
 .members-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 280px;
-  background: #fff;
-  border: 1.5px solid #e0e7ff;
-  border-radius: 12px;
+  position: absolute; top: calc(100% + 8px); right: 0;
+  width: 280px; background: #fff;
+  border: 1.5px solid #e0e7ff; border-radius: 12px;
   box-shadow: 0 8px 24px rgba(79,70,229,0.13);
-  z-index: 200;
-  overflow: hidden;
+  z-index: 200; overflow: hidden;
 }
 .dropdown-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -553,7 +747,8 @@ export default {
   background: #f0f4ff; border-bottom: 1px solid #d0d8f0;
 }
 .dropdown-title {
-  font-size: 11px; font-weight: 700; color: #3730a3; letter-spacing: 0.4px; text-transform: uppercase;
+  font-size: 11px; font-weight: 700; color: #3730a3;
+  letter-spacing: 0.4px; text-transform: uppercase;
 }
 .access-bulk-btns { display: flex; gap: 6px; }
 .grant-all-btn, .revoke-all-btn {
@@ -564,11 +759,7 @@ export default {
 .revoke-all-btn { background: #f44336; color: white; }
 .grant-all-btn:hover  { background: #43a047; }
 .revoke-all-btn:hover { background: #e53935; }
-
-.access-list {
-  max-height: 220px; overflow-y: auto;
-  padding: 6px 0;
-}
+.access-list { max-height: 220px; overflow-y: auto; padding: 6px 0; }
 .access-row {
   display: flex; justify-content: space-between; align-items: center;
   padding: 7px 14px; transition: background 0.1s;
@@ -584,11 +775,12 @@ export default {
 .access-name { font-size: 13px; color: #333; font-weight: 500; }
 .no-participants { font-size: 12px; color: #888; text-align: center; padding: 12px 0; }
 
-/* Toggle */
+/* Toggle switch */
 .toggle-switch { position: relative; width: 38px; height: 20px; display: inline-block; cursor: pointer; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-slider {
-  position: absolute; inset: 0; background: #ccc; border-radius: 20px; transition: background 0.2s;
+  position: absolute; inset: 0; background: #ccc;
+  border-radius: 20px; transition: background 0.2s;
 }
 .toggle-slider::before {
   content: ''; position: absolute; width: 14px; height: 14px;
@@ -604,33 +796,64 @@ export default {
 
 /* ── Toolbar ── */
 .doc-toolbar {
-  display: flex; align-items: center; gap: 3px;
+  display: flex; align-items: center; gap: 2px;
   padding: 6px 10px; background: #fafafa;
   border-bottom: 1px solid #e0e0e0;
   flex-wrap: wrap; flex-shrink: 0;
 }
 .doc-toolbar button {
-  background: none; border: 1px solid transparent;
-  border-radius: 4px; padding: 4px 8px; cursor: pointer;
-  font-size: 13px; color: #333; min-width: 28px; transition: background 0.15s;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  min-width: 28px;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.doc-toolbar button:hover { background: #e8e8e8; border-color: #ccc; }
-.toolbar-sep { width: 1px; height: 20px; background: #ddd; margin: 0 4px; }
+.doc-toolbar button:hover {
+  background: #e8e8e8;
+  border-color: #ccc;
+}
+/* Active state — pressed / format is active at cursor */
+.doc-toolbar button.active {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+.toolbar-sep { width: 1px; height: 20px; background: #ddd; margin: 0 3px; flex-shrink: 0; }
 
 /* ── Editor body ── */
 .doc-body {
   flex: 1; padding: 20px 24px; overflow-y: auto;
-  font-size: 15px; line-height: 1.7; color: #1a1a1a; outline: none; min-height: 0;
+  font-size: 15px; line-height: 1.7; color: #1a1a1a;
+  outline: none; min-height: 0;
+  word-break: break-word;
 }
 .doc-body[data-placeholder]:empty::before {
-  content: attr(data-placeholder); color: #bbb; pointer-events: none;
+  content: attr(data-placeholder);
+  color: #bbb;
+  pointer-events: none;
+  display: block;
 }
 .doc-editable { cursor: text; border-top: 2px solid #4CAF5033; }
 .doc-readonly  { cursor: default; background: #fafafa; border-top: 2px solid #e0e0e0; }
-.doc-body :deep(h1) { font-size: 2em;   margin: 0.4em 0; }
-.doc-body :deep(h2) { font-size: 1.5em; margin: 0.4em 0; }
-.doc-body :deep(h3) { font-size: 1.2em; margin: 0.4em 0; }
-.doc-body :deep(ul), .doc-body :deep(ol) { padding-left: 24px; }
+.doc-body :deep(h1) { font-size: 2em;   margin: 0.4em 0; font-weight: 700; }
+.doc-body :deep(h2) { font-size: 1.5em; margin: 0.4em 0; font-weight: 700; }
+.doc-body :deep(h3) { font-size: 1.2em; margin: 0.4em 0; font-weight: 700; }
+.doc-body :deep(ul),
+.doc-body :deep(ol) { padding-left: 24px; }
+.doc-body :deep(b),
+.doc-body :deep(strong) { font-weight: 700; }
+.doc-body :deep(i),
+.doc-body :deep(em) { font-style: italic; }
+.doc-body :deep(u) { text-decoration: underline; }
+.doc-body :deep(s),
+.doc-body :deep(strike) { text-decoration: line-through; }
 
 /* ── Footer ── */
 .doc-footer {
@@ -642,6 +865,7 @@ export default {
 .doc-download-btn {
   font-size: 12px; padding: 5px 12px; background: black; color: white;
   border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
+  transition: background 0.2s;
 }
 .doc-download-btn:hover { background: #312e81; }
 
