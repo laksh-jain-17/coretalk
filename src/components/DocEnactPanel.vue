@@ -356,18 +356,67 @@ export default {
       setTimeout(() => { this.statusText = 'Connected'; }, 2500);
     },
 
-    downloadDoc() {
-      const content = this.$refs.docBody?.innerHTML || '';
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Doc Enact</title>
-<style>body{font-family:'Segoe UI',sans-serif;max-width:800px;margin:40px auto;padding:0 24px;line-height:1.7;color:#1a1a1a;}
-h1{font-size:2em;}h2{font-size:1.5em;}h3{font-size:1.2em;}ul,ol{padding-left:24px;}</style>
-</head><body>${content}</body></html>`;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-      a.download = `doc-${this.roomId}-${Date.now()}.html`;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    },
+    async downloadDoc() {
+  // Dynamically import docx from CDN
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
+    'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.min.js'
+  );
+
+  // Parse the innerHTML into docx paragraphs
+  const docBody = this.$refs.docBody;
+  const children = [];
+
+  const parseNode = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) return;
+
+    const tag = node.tagName?.toLowerCase();
+    const text = node.innerText || '';
+
+    if (!text.trim()) return;
+
+    if (tag === 'h1') {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(text)] }));
+    } else if (tag === 'h2') {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(text)] }));
+    } else if (tag === 'h3') {
+      children.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: [new TextRun(text)] }));
+    } else if (tag === 'p' || tag === 'div') {
+      const isBold      = node.querySelector('b, strong') !== null;
+      const isItalic    = node.querySelector('i, em') !== null;
+      const isUnderline = node.querySelector('u') !== null;
+      children.push(new Paragraph({
+        children: [new TextRun({ text, bold: isBold, italics: isItalic, underline: isUnderline ? {} : undefined })]
+      }));
+    } else if (tag === 'ul' || tag === 'ol') {
+      node.querySelectorAll('li').forEach(li => {
+        children.push(new Paragraph({
+          bullet: { level: 0 },
+          children: [new TextRun(li.innerText || '')]
+        }));
+      });
+    } else {
+      // fallback — treat as plain paragraph
+      if (text.trim()) {
+        children.push(new Paragraph({ children: [new TextRun(text)] }));
+      }
+    }
+  };
+
+  Array.from(docBody.childNodes).forEach(parseNode);
+
+  if (children.length === 0) {
+    children.push(new Paragraph({ children: [new TextRun('')] }));
+  }
+
+  const doc = new Document({ sections: [{ children }] });
+  const buffer = await Packer.toBlob(doc);
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(buffer);
+  a.download = `doc-${this.roomId}-${Date.now()}.docx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+},
 
     getInitials(name) {
       if (!name) return '?';
