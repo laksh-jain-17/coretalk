@@ -650,6 +650,7 @@ export default {
       guestInactivityTimer: null,
       aiNotesFaded: false,
       aiNotesFadeTimer: null,
+      remoteAudioElements: new Map(),
     };
   },
 
@@ -1467,6 +1468,16 @@ export default {
     },
 
     handleTrackUnsubscribed(track, participant) {
+      if (track.kind === Track.Kind.Audio) {
+        const id = participant.identity;
+        if (this.remoteAudioElements.has(id)) {
+          const el = this.remoteAudioElements.get(id);
+          try { track.detach(el); } catch (_) {}
+          el.srcObject = null;
+          el.remove();
+          this.remoteAudioElements.delete(id);
+        }
+      }
       this.updateRemoteTrackDisplay(participant);
     },
 
@@ -1501,9 +1512,27 @@ export default {
     },
 
     attachAudio(track, participant) {
-      const audioElement = track.attach();
-      audioElement.play().catch(err => {
-        console.error('Error playing audio:', err);
+      const id = participant.identity;
+
+      // Remove any previous audio element for this participant
+      if (this.remoteAudioElements.has(id)) {
+        const old = this.remoteAudioElements.get(id);
+        try { track.detach(old); } catch (_) {}
+        old.srcObject = null;
+        old.remove();
+        this.remoteAudioElements.delete(id);
+      }
+
+      const audioEl = track.attach();
+      audioEl.muted = false;
+      audioEl.autoplay = true;
+      // Critical: never play remote audio through the local speaker loop
+      audioEl.setAttribute('playsinline', '');
+      document.body.appendChild(audioEl);
+      this.remoteAudioElements.set(id, audioEl);
+
+      audioEl.play().catch(err => {
+        console.warn('Audio play failed (autoplay policy):', err);
       });
     },
 
@@ -1793,8 +1822,11 @@ export default {
           } catch (permError) {
             console.warn('Permission request failed:', permError);
           }
-
-          await this.livekitRoom.localParticipant.setMicrophoneEnabled(true);
+          await this.livekitRoom.localParticipant.setMicrophoneEnabled(true, {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          });
           this.micon = true;
           console.log('Microphone enabled');
         }
@@ -2517,6 +2549,13 @@ export default {
         clearTimeout(this.aiNotesFadeTimer);
         this.aiNotesFadeTimer = null;
       }
+
+      this.remoteAudioElements.forEach((el) => {
+        el.srcObject = null;
+        el.remove();
+      });
+
+      this.remoteAudioElements.clear();
       
       this.aiNotesFaded = false;
       this.participants = [];
