@@ -1,8 +1,17 @@
 # CoreTalk v3
-
 > The meeting platform that does more — without switching tabs.
 
-CoreTalk is a production-ready online meeting platform built on the MEVN stack, powered by LiveKit. It covers everything you'd expect from a modern video conferencing tool — and goes further with features no other platform offers out of the box, like **Gmail actions inside meetings** and **file attachments in chat**.
+🔴 **Live Demo → [coretalk.vercel.app](https://coretalk.vercel.app)**
+
+![CoreTalk Meeting Room](public/screenshots/meeting.png)
+
+CoreTalk is a production-ready online meeting platform built on the MEVN stack, powered by LiveKit. It goes further than standard video conferencing with **Gmail actions inside meetings**, **AI meeting summaries**, **collaborative whiteboard**, and **file attachments in chat** — all without switching tabs.
+
+---
+
+## Why CoreTalk?
+
+No other video conferencing platform lets you compose and read emails, collaborate on a whiteboard, get AI-generated meeting notes, and share files — all inside the call itself.
 
 ---
 
@@ -13,37 +22,36 @@ CoreTalk is a production-ready online meeting platform built on the MEVN stack, 
 - **Screen Sharing** — Share your full screen or a specific window
 - **Live Captions** — Real-time auto-generated captions during calls
 - **Recording** — Record meetings directly from within the call
-- **Background Noise Suppression** — AI-powered silent background, no more fan or keyboard noise
-- **End for All / Leave Alone** — Hosts can end the meeting for everyone, or participants can quietly leave
+- **Background Noise Suppression** — Silent background, no more fan or keyboard noise
+- **End for All / Leave Alone** — Hosts can end for everyone, or participants can quietly leave
 
 ### 💬 In-Meeting Chat
 - Real-time messaging during calls
-- **File Attachments** — Share files directly in the meeting chat, no third-party tools needed
+- **File Attachments** — Share files directly in chat, no third-party tools needed
 
 ### 📧 Gmail Integration *(Unique to CoreTalk)*
-Take Gmail actions — compose, reply, manage emails — without ever leaving your meeting. No other video conferencing platform has this built in.
+Compose, reply, and manage emails without ever leaving your meeting.
+
+### 🤖 AI Meeting Summary
+Auto-generated notes and summaries from your meeting conversation.
+
+### 🖊️ Collaborative Whiteboard
+Draw and brainstorm together in real time during the call.
 
 ### 🔐 Authentication
-- **Google Sign-In** — One-click sign-in with your Google account
-- **OTP Verification** — Email OTP for new registrations and forgot password flows
+- **Google Sign-In** — One-click sign-in
+- **OTP Verification** — Email OTP for registration and password reset
 
 ### 👤 Account Management
-- Profile management — update your name, avatar, and preferences
+- Profile management — name, avatar, preferences
 - Delete account with full data removal
-- Built-in feedback and complaints system
+- Built-in feedback system
 
 ---
 
 ## Tech Stack
-
-- **Frontend** — Vue 3, Vite → deployed on Vercel
-- **Backend** — Node.js, Express.js → deployed on Render
+- **Frontend** — Vue 3, Vite → Vercel
+- **Backend** — Node.js, Express.js → Render
 - **Database** — MongoDB
-- **Real-time Media** — LiveKit API (WebRTC)
+- **Real-time Media** — LiveKit (WebRTC)
 - **Auth** — Google OAuth 2.0, JWT, Email OTP
-
----
-
-## Live
-
-[coretalk.vercel.app](https://coretalk.vercel.app)
