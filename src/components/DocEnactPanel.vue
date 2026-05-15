@@ -122,7 +122,6 @@
 
       <div class="toolbar-sep"></div>
 
-      <!-- Clear formatting / paragraph reset -->
       <button
         @mousedown.prevent="clearFormatting"
         title="Clear formatting / paragraph"
@@ -177,7 +176,6 @@ export default {
       _dataHandler:  null,
       showMembers:   false,
 
-      // Tracks active format state for toolbar button highlighting
       activeFormats: {
         bold:      false,
         italic:    false,
@@ -214,7 +212,6 @@ export default {
       this.socket.on('doc-request-state',  this._socketDocRequestState);
     }
 
-    // Close members dropdown when clicking outside
     this._handleOutsideClick = (e) => {
       if (
         this.showMembers &&
@@ -226,7 +223,6 @@ export default {
     };
     document.addEventListener('mousedown', this._handleOutsideClick);
 
-    // Update toolbar active states whenever selection changes anywhere in document
     this._onSelectionChange = () => {
       if (this.$refs.docBody && document.activeElement === this.$refs.docBody) {
         this._updateActiveFormats();
@@ -285,7 +281,6 @@ export default {
       } catch (_) {}
     },
 
-    // Called on mouseup / keyup / touchend inside editor
     onCursorChange() {
       this._updateActiveFormats();
       if (this.isMobile) {
@@ -298,11 +293,6 @@ export default {
 
     // ─── Formatting ──────────────────────────────────────────────────────────
 
-    /**
-     * Generic execCommand wrapper for inline formats and lists.
-     * Bold / italic / underline / strike toggle automatically via the browser.
-     * Lists also toggle (if already in a list, clicking again removes it).
-     */
     fmt(command) {
       this._restoreMobileSelection();
       document.execCommand(command, false, null);
@@ -311,11 +301,6 @@ export default {
       this._broadcastContent();
     },
 
-    /**
-     * Block-level formatting (H1, H2, H3).
-     * Toggles: if the cursor is already inside the requested heading,
-     * switch back to a normal paragraph; otherwise apply the heading.
-     */
     fmtBlock(tag) {
       this._restoreMobileSelection();
 
@@ -324,7 +309,6 @@ export default {
         .replace(/[<>]/g, '');
 
       if (current === tag) {
-        // Already this heading → revert to paragraph
         document.execCommand('formatBlock', false, 'p');
       } else {
         document.execCommand('formatBlock', false, tag);
@@ -335,10 +319,6 @@ export default {
       this._broadcastContent();
     },
 
-    /**
-     * ¶ button — clears all inline formatting on the selection and
-     * resets the block to a normal paragraph.
-     */
     clearFormatting() {
       this._restoreMobileSelection();
       document.execCommand('removeFormat', false, null);
@@ -348,8 +328,6 @@ export default {
       this._broadcastContent();
     },
 
-    /** On mobile the focus is lost when a toolbar button is tapped.
-     *  Restore the saved selection so execCommand acts on the right range. */
     _restoreMobileSelection() {
       if (this.isMobile && this.savedRange) {
         try {
@@ -367,17 +345,18 @@ export default {
       this.debounceTimer = setTimeout(() => this._broadcastContent(), 150);
     },
 
+    // FIX: Use insertText with a real \t character instead of &nbsp; HTML entities.
+    // The &nbsp; approach caused contenteditable to wrap content in a new <span>
+    // block, which then got parsed as a separate top-level node → separate Paragraph
+    // in docx → new line in the downloaded document.
+    // insertText('\t') stays within the same text node, keeping the line intact.
     onKeydown(e) {
       if (e.key === 'Tab') {
         e.preventDefault();
-        document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+        document.execCommand('insertText', false, '\t');
       }
 
-      // Keyboard shortcut pass-through: Ctrl/Cmd + B / I / U
-      // (browser handles these natively on contenteditable, but we must
-      //  update our active-format state afterwards)
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
-        // Let the browser handle the command, then update state on next tick
         this.$nextTick(() => this._updateActiveFormats());
       }
     },
@@ -531,41 +510,41 @@ export default {
 
     async downloadDoc() {
       const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
-          'https://esm.sh/docx@8.5.0'
+        'https://esm.sh/docx@8.5.0'
       );
 
       const docBody  = this.$refs.docBody;
       const children = [];
 
-      /**
-       * Recursively convert a DOM node into one or more docx Paragraphs.
-       * Handles: H1-H3, P, DIV, UL, OL, LI, B, I, U, S, SPAN, TEXT.
-       */
+      // ── buildRuns: recursively converts a DOM subtree to docx TextRuns ──────
+      // FIX: tab characters (\t) are converted to 4 spaces because docx TextRun
+      // does not render raw \t characters. Non-breaking spaces are normalised too.
       const buildRuns = (node, inheritedStyle = {}) => {
         const runs = [];
 
         if (node.nodeType === Node.TEXT_NODE) {
-        // Replace non-breaking spaces (\u00A0) with regular spaces for docx
-        const text = node.textContent.replace(/\u00A0/g, ' ');
-        if (!text) return runs;
-        runs.push(new TextRun({
-          text,
-          bold:      inheritedStyle.bold      || false,
-          italics:   inheritedStyle.italic    || false,
-          underline: inheritedStyle.underline ? {} : undefined,
-          strike:    inheritedStyle.strike    || false,
-        }));
-        return runs;
-      }
+          const text = node.textContent
+            .replace(/\u00A0/g, ' ')   // non-breaking space → regular space
+            .replace(/\t/g, '    ');   // tab → 4 spaces (Word ignores raw \t in TextRun)
+          if (!text) return runs;
+          runs.push(new TextRun({
+            text,
+            bold:      inheritedStyle.bold      || false,
+            italics:   inheritedStyle.italic    || false,
+            underline: inheritedStyle.underline ? {} : undefined,
+            strike:    inheritedStyle.strike    || false,
+          }));
+          return runs;
+        }
 
         if (node.nodeType !== Node.ELEMENT_NODE) return runs;
 
         const tag = node.tagName.toLowerCase();
         const style = {
-          bold:      inheritedStyle.bold      || ['b','strong'].includes(tag) || node.style?.fontWeight === 'bold',
-          italic:    inheritedStyle.italic    || ['i','em'].includes(tag)     || node.style?.fontStyle  === 'italic',
-          underline: inheritedStyle.underline || tag === 'u'                  || node.style?.textDecoration?.includes('underline'),
-          strike:    inheritedStyle.strike    || ['s','strike','del'].includes(tag) || node.style?.textDecoration?.includes('line-through'),
+          bold:      inheritedStyle.bold      || ['b', 'strong'].includes(tag) || node.style?.fontWeight === 'bold',
+          italic:    inheritedStyle.italic    || ['i', 'em'].includes(tag)     || node.style?.fontStyle  === 'italic',
+          underline: inheritedStyle.underline || tag === 'u'                   || node.style?.textDecoration?.includes('underline'),
+          strike:    inheritedStyle.strike    || ['s', 'strike', 'del'].includes(tag) || node.style?.textDecoration?.includes('line-through'),
         };
 
         for (const child of node.childNodes) {
@@ -574,13 +553,43 @@ export default {
         return runs;
       };
 
+      // ── Block-tag detection ───────────────────────────────────────────────
+      // FIX: inline nodes (spans, text nodes, etc.) that were split by the tab
+      // insertion are now grouped together into a single Paragraph instead of
+      // each becoming its own Paragraph (which caused the spurious new lines).
+      const BLOCK_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','div','ul','ol','br','li','blockquote','pre']);
+
+      const isInline = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) return true;
+        if (node.nodeType !== Node.ELEMENT_NODE) return false;
+        return !BLOCK_TAGS.has(node.tagName.toLowerCase());
+      };
+
+      // Flush a collected group of consecutive inline nodes as one Paragraph
+      const flushInlineGroup = (group) => {
+        if (group.length === 0) return;
+        const runs = [];
+        for (const n of group) runs.push(...buildRuns(n));
+        if (runs.length > 0) {
+          children.push(new Paragraph({ children: runs }));
+        } else {
+          children.push(new Paragraph({ children: [new TextRun('')] }));
+        }
+      };
+
+      // ── parseTopNode: maps each top-level DOM node to docx Paragraph(s) ──
       const parseTopNode = (node) => {
-  if (node.nodeType === Node.TEXT_NODE) {
-    // was: node.textContent.trim() — this strips your tab spaces!
-    const text = node.textContent.replace(/\u00A0/g, ' ');
-    if (text) children.push(new Paragraph({ children: [new TextRun(text)] }));
-    return;
-  }
+        // Top-level text nodes (rare, but handle gracefully)
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent
+            .replace(/\u00A0/g, ' ')
+            .replace(/\t/g, '    ');
+          if (text.trim()) {
+            children.push(new Paragraph({ children: [new TextRun(text)] }));
+          }
+          return;
+        }
+
         if (node.nodeType !== Node.ELEMENT_NODE) return;
 
         const tag = node.tagName.toLowerCase();
@@ -600,12 +609,36 @@ export default {
           });
         } else if (tag === 'br') {
           children.push(new Paragraph({ children: [new TextRun('')] }));
+
+        } else if (tag === 'div' || tag === 'p') {
+          // FIX: Walk children and GROUP consecutive inline nodes into one Paragraph.
+          // Previously each child (text node, span, etc.) became its own Paragraph,
+          // so "Start\t[span]Now OR[/span]\t[span]Abort[/span]" became 5 paragraphs.
+          // Now they are merged into one: "Start    Now OR    Abort".
+          let inlineGroup = [];
+
+          for (const child of node.childNodes) {
+            if (isInline(child)) {
+              inlineGroup.push(child);
+            } else {
+              flushInlineGroup(inlineGroup);
+              inlineGroup = [];
+              parseTopNode(child); // recurse for nested block elements
+            }
+          }
+          flushInlineGroup(inlineGroup);
+
+          // Emit an empty paragraph for truly empty div/p elements
+          if (node.childNodes.length === 0 || node.textContent.trim() === '') {
+            children.push(new Paragraph({ children: [new TextRun('')] }));
+          }
+
         } else {
-          // P, DIV, SPAN, and everything else → paragraph with inline formatting preserved
+          // Any other element — treat as inline paragraph
           const runs = buildRuns(node);
           if (runs.length > 0) {
             children.push(new Paragraph({ children: runs }));
-          } else if (node.textContent.trim() === '') {
+          } else {
             children.push(new Paragraph({ children: [new TextRun('')] }));
           }
         }
@@ -620,8 +653,8 @@ export default {
       const doc    = new Document({ sections: [{ children }] });
       const buffer = await Packer.toBlob(doc);
 
-      const a  = document.createElement('a');
-      a.href   = URL.createObjectURL(buffer);
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(buffer);
       a.download = `doc-${this.roomId}-${Date.now()}.docx`;
       a.click();
       URL.revokeObjectURL(a.href);
@@ -820,7 +853,6 @@ export default {
   background: #e8e8e8;
   border-color: #ccc;
 }
-/* Active state — pressed / format is active at cursor */
 .doc-toolbar button.active {
   background: #dbeafe;
   border-color: #93c5fd;
@@ -835,6 +867,11 @@ export default {
   font-size: 15px; line-height: 1.7; color: #1a1a1a;
   outline: none; min-height: 0;
   word-break: break-word;
+
+  /* Render tab stops so \t characters display as indentation in the editor */
+  tab-size: 4;
+  -moz-tab-size: 4;
+  white-space: pre-wrap;
 }
 .doc-body[data-placeholder]:empty::before {
   content: attr(data-placeholder);
