@@ -28,7 +28,7 @@
           </svg>
         </div>
         <p class="idle-title">Ready to take notes</p>
-        <p class="idle-desc">Captures your meeting every 30 seconds and generates concise, intelligent notes — like Gemini or ChatGPT.</p>
+        <p class="idle-desc">Captures your meeting every 30 seconds and generates concise, intelligent notes</p>
         <button class="btn-primary" @click="start">Start Recording</button>
       </div>
 
