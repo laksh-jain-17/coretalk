@@ -121,6 +121,8 @@ export default {
         bold: false, italic: false, underline: false, strike: false,
         ul: false, ol: false, h1: false, h2: false, h3: false,
       },
+      _retry1: null,
+      _retry2: null,
     };
   },
 
@@ -278,7 +280,7 @@ export default {
     _sendLivekit(payload) {
       try {
         const lp = this.livekitRoom?.localParticipant;
-        if (!lp) return;
+        if (!lp || !this.livekitRoom.state === 'connected') return; // add this check
         lp.publishData(new TextEncoder().encode(JSON.stringify(payload)), 1);
       } catch (err) {
         console.warn('[DocEnact] LiveKit send failed:', err.message);
@@ -492,7 +494,7 @@ export default {
             }
           }
           flushInlineGroup(inlineGroup);
-          if (!node.childNodes.length || !node.textContent.trim()) {
+          if (!node.childNodes.length) {
             children.push(new Paragraph({ children: [new TextRun('')] }));
           }
         }
