@@ -7,7 +7,7 @@
             <path d="M12 2a5 5 0 1 0 5 5A5 5 0 0 0 12 2zm0 8a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm9 11v-1a7 7 0 0 0-7-7h-4a7 7 0 0 0-7 7v1"/>
           </svg>
         </div>
-        <span class="header-title">AI Notes</span>
+        <span class="header-title">AI Summary</span>
         <span v-if="state === 'recording'" class="pulse-badge">LIVE</span>
       </div>
       <button class="close-btn" @click="$emit('close')" aria-label="Close">
@@ -42,15 +42,15 @@
           <span class="rec-dot" />
           <span class="rec-label">Recording in progress</span>
         </div>
-        <div class="segment-counter">
+        <!--div class="segment-counter">
           <span class="seg-num">{{ transcript.length }}</span>
           <span class="seg-text">{{ transcript.length === 1 ? 'segment captured' : 'segments captured' }}</span>
-        </div>
+        </div-->
         <div class="wave-container" v-if="transcript.length === 0">
           <div class="wave-idle">Listening for speech…</div>
         </div>
         <div v-else class="latest-preview">
-          <div class="preview-label">Latest capture</div>
+          <div class="preview-label">Latest recording</div>
           <div class="preview-text">{{ transcript[transcript.length - 1].text }}</div>
         </div>
         <button class="btn-stop" @click="stop">
