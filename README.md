@@ -1,9 +1,9 @@
 # CoreTalk v3
 > The meeting platform that does more — without switching tabs.
 
-🔴 **Live Demo → [coretalk.vercel.app](https://coretalk.vercel.app)**
+**Live Demo → [coretalk.vercel.app](https://coretalk.vercel.app)**
 
-![CoreTalk Meeting Room](public/screenshots/meeting.png)
+![CoreTalk Meeting Room](public/screenshots/1.png)
 
 CoreTalk is a production-ready online meeting platform built on the MEVN stack, powered by LiveKit. It goes further than standard video conferencing with **Gmail actions inside meetings**, **AI meeting summaries**, **collaborative whiteboard**, and **file attachments in chat** — all without switching tabs.
 
@@ -17,7 +17,7 @@ No other video conferencing platform lets you compose and read emails, collabora
 
 ## Features
 
-### 🎥 Core Meeting
+###  Core Meeting
 - **HD Video & Audio** — Crystal-clear calls powered by LiveKit's WebRTC infrastructure
 - **Screen Sharing** — Share your full screen or a specific window
 - **Live Captions** — Real-time auto-generated captions during calls
@@ -25,24 +25,24 @@ No other video conferencing platform lets you compose and read emails, collabora
 - **Background Noise Suppression** — Silent background, no more fan or keyboard noise
 - **End for All / Leave Alone** — Hosts can end for everyone, or participants can quietly leave
 
-### 💬 In-Meeting Chat
+###  In-Meeting Chat
 - Real-time messaging during calls
 - **File Attachments** — Share files directly in chat, no third-party tools needed
 
-### 📧 Gmail Integration *(Unique to CoreTalk)*
+###  Gmail Integration *(Unique to CoreTalk)*
 Compose, reply, and manage emails without ever leaving your meeting.
 
-### 🤖 AI Meeting Summary
+###  AI Meeting Summary
 Auto-generated notes and summaries from your meeting conversation.
 
-### 🖊️ Collaborative Whiteboard
+###  Collaborative Whiteboard
 Draw and brainstorm together in real time during the call.
 
-### 🔐 Authentication
+###  Authentication
 - **Google Sign-In** — One-click sign-in
 - **OTP Verification** — Email OTP for registration and password reset
 
-### 👤 Account Management
+###  Account Management
 - Profile management — name, avatar, preferences
 - Delete account with full data removal
 - Built-in feedback system
