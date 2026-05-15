@@ -21,14 +21,18 @@
 
       <!-- IDLE -->
       <div v-if="state === 'idle'" class="state-idle">
-        <div class="idle-icon">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
-          </svg>
+        <div class="idle-row">
+          <div class="idle-mic-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+            </svg>
+          </div>
+          <div class="idle-text">
+            <p class="idle-title">Ready to take notes</p>
+            <p class="idle-desc">Captures every 30s · generates intelligent notes</p>
+          </div>
         </div>
-        <p class="idle-title">Ready to take notes</p>
-        <p class="idle-desc">Captures your meeting every 30 seconds and generates concise, intelligent notes</p>
         <button class="btn-primary" @click="start">Start Recording</button>
       </div>
 
@@ -372,6 +376,7 @@ export default {
 /* ── Root ── */
 #notes-panel {
   width: 100%;
+  /* Compact: no taller than needed; grows for recording/done states */
   max-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
@@ -385,7 +390,7 @@ export default {
 
 /* ── Header ── */
 .notes-header {
-  padding: 13px 16px;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -401,10 +406,10 @@ export default {
 }
 
 .header-icon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   background: linear-gradient(135deg, #5b6cf8, #8b5cf6);
-  border-radius: 7px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -413,7 +418,7 @@ export default {
 }
 
 .header-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: #f0f0f2;
@@ -437,8 +442,8 @@ export default {
 }
 
 .close-btn {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -455,47 +460,55 @@ export default {
 .notes-body {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 16px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
-/* ── Idle ── */
+/* ── Idle — COMPACT horizontal layout ── */
 .state-idle {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 10px;
-  padding: 20px 8px;
+  gap: 8px;
 }
 
-.idle-icon {
-  width: 64px;
-  height: 64px;
+.idle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.idle-mic-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
   background: rgba(91,108,248,0.1);
   border: 1px solid rgba(91,108,248,0.2);
-  border-radius: 20px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #8b9cf8;
-  margin-bottom: 4px;
+}
+
+.idle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .idle-title {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
   color: #f0f0f2;
   margin: 0;
 }
 
 .idle-desc {
-  font-size: 13px;
-  color: rgba(255,255,255,0.45);
-  line-height: 1.65;
-  max-width: 260px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  line-height: 1.4;
   margin: 0;
 }
 
@@ -503,7 +516,7 @@ export default {
 .state-recording {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .recording-status {
@@ -538,14 +551,14 @@ export default {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 10px;
 }
 
 .seg-num {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.03em;
   background: linear-gradient(135deg, #a5b4fc, #818cf8);
@@ -555,20 +568,20 @@ export default {
 }
 
 .seg-text {
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255,255,255,0.4);
 }
 
 .wave-idle {
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255,255,255,0.3);
   text-align: center;
-  padding: 10px 0;
+  padding: 6px 0;
   font-style: italic;
 }
 
 .latest-preview {
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: rgba(91,108,248,0.07);
   border: 1px solid rgba(91,108,248,0.15);
   border-radius: 10px;
@@ -580,13 +593,13 @@ export default {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(165,180,252,0.6);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .preview-text {
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255,255,255,0.6);
-  line-height: 1.6;
+  line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -599,15 +612,15 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  padding: 30px 0;
+  gap: 12px;
+  padding: 16px 0;
 }
 
 .gen-loader {
   display: flex;
   align-items: flex-end;
   gap: 5px;
-  height: 32px;
+  height: 28px;
 }
 
 .gen-bar {
@@ -616,18 +629,18 @@ export default {
   background: linear-gradient(180deg, #818cf8, #5b6cf8);
   animation: barBounce 0.9s ease-in-out infinite alternate;
 }
-.gen-bar:nth-child(1) { height: 14px; }
-.gen-bar:nth-child(2) { height: 22px; }
-.gen-bar:nth-child(3) { height: 30px; }
-.gen-bar:nth-child(4) { height: 22px; }
-.gen-bar:nth-child(5) { height: 14px; }
+.gen-bar:nth-child(1) { height: 12px; }
+.gen-bar:nth-child(2) { height: 20px; }
+.gen-bar:nth-child(3) { height: 26px; }
+.gen-bar:nth-child(4) { height: 20px; }
+.gen-bar:nth-child(5) { height: 12px; }
 
 @keyframes barBounce {
-  to { height: 8px; opacity: 0.4; }
+  to { height: 6px; opacity: 0.4; }
 }
 
 .gen-text {
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255,255,255,0.4);
   margin: 0;
   font-style: italic;
@@ -637,13 +650,13 @@ export default {
 .state-done {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .notes-output {
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
 }
 
@@ -651,13 +664,13 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   background: rgba(255,255,255,0.02);
 }
 
 .output-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -665,50 +678,37 @@ export default {
 }
 
 .output-time {
-  font-size: 11px;
+  font-size: 10px;
   color: rgba(255,255,255,0.25);
 }
 
 .notes-content {
-  padding: 14px;
-  max-height: 280px;
+  padding: 12px;
+  max-height: 220px;
   overflow-y: auto;
-  font-size: 13.5px;
-  line-height: 1.75;
+  font-size: 12.5px;
+  line-height: 1.7;
   color: rgba(255,255,255,0.8);
 }
 
-.notes-content :deep(p) {
-  margin: 0 0 10px;
-}
-.notes-content :deep(p:last-child) {
-  margin-bottom: 0;
-}
-.notes-content :deep(ul) {
-  margin: 6px 0 10px;
-  padding-left: 18px;
-}
-.notes-content :deep(li) {
-  margin-bottom: 5px;
-  color: rgba(255,255,255,0.72);
-}
+.notes-content :deep(p) { margin: 0 0 8px; }
+.notes-content :deep(p:last-child) { margin-bottom: 0; }
+.notes-content :deep(ul) { margin: 4px 0 8px; padding-left: 16px; }
+.notes-content :deep(li) { margin-bottom: 4px; color: rgba(255,255,255,0.72); }
 .notes-content :deep(h4) {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: rgba(165,180,252,0.6);
-  margin: 14px 0 6px;
+  margin: 10px 0 4px;
 }
-.notes-content :deep(strong) {
-  font-weight: 600;
-  color: rgba(255,255,255,0.95);
-}
+.notes-content :deep(strong) { font-weight: 600; color: rgba(255,255,255,0.95); }
 
 /* ── Actions ── */
 .done-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* ── Shared Buttons ── */
@@ -716,15 +716,15 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   width: 100%;
   border: none;
-  border-radius: 9px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.15s;
-  padding: 12px 16px;
+  padding: 9px 14px;
 }
 
 .btn-primary {
@@ -743,8 +743,8 @@ export default {
   background: rgba(91,108,248,0.12);
   color: #a5b4fc;
   border: 1px solid rgba(91,108,248,0.2);
-  padding: 10px 14px;
-  font-size: 13px;
+  padding: 8px 12px;
+  font-size: 12px;
 }
 
 .btn-primary:hover, .btn-stop:hover, .btn-download:hover {
@@ -756,12 +756,12 @@ export default {
 }
 
 .btn-ghost {
-  padding: 10px 14px;
+  padding: 8px 12px;
   background: rgba(255,255,255,0.05);
   color: rgba(255,255,255,0.45);
   border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 9px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -776,17 +776,14 @@ export default {
   gap: 8px;
   background: rgba(239,68,68,0.08);
   border: 1px solid rgba(239,68,68,0.18);
-  border-radius: 9px;
-  padding: 10px 12px;
-  font-size: 12.5px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
   color: #f87171;
   line-height: 1.5;
 }
 
-.notes-error svg {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
+.notes-error svg { flex-shrink: 0; margin-top: 1px; }
 
 /* ── Scrollbar ── */
 .notes-body::-webkit-scrollbar,
