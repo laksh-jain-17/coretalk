@@ -7,7 +7,6 @@
         <span v-else-if="canEdit" class="role-badge edit-badge">Editor</span>
         <span v-else class="role-badge view-badge">View Only</span>
 
-        <!-- Members dropdown (host only) -->
         <div v-if="isHost" class="members-wrapper" ref="membersWrapperRef">
           <button class="members-btn" @click="toggleMembers" :class="{ active: showMembers }">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -23,7 +22,6 @@
             </svg>
           </button>
 
-          <!-- Dropdown panel -->
           <transition name="dropdown">
             <div class="members-dropdown" v-if="showMembers">
               <div class="dropdown-header">
@@ -43,11 +41,7 @@
                     <span class="access-name">{{ p.name }}</span>
                   </div>
                   <label class="toggle-switch">
-                    <input
-                      type="checkbox"
-                      :checked="editors.includes(p.id)"
-                      @change="toggleAccess(p.id)"
-                    />
+                    <input type="checkbox" :checked="editors.includes(p.id)" @change="toggleAccess(p.id)" />
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
@@ -60,72 +54,20 @@
       </div>
     </div>
 
-    <!-- Toolbar: only shown when user can edit -->
     <div v-if="canEdit" class="doc-toolbar">
-      <button
-        @mousedown.prevent="fmt('bold')"
-        :class="{ active: activeFormats.bold }"
-        title="Bold (Ctrl+B)"
-      ><b>B</b></button>
-
-      <button
-        @mousedown.prevent="fmt('italic')"
-        :class="{ active: activeFormats.italic }"
-        title="Italic (Ctrl+I)"
-      ><i>I</i></button>
-
-      <button
-        @mousedown.prevent="fmt('underline')"
-        :class="{ active: activeFormats.underline }"
-        title="Underline (Ctrl+U)"
-      ><u>U</u></button>
-
-      <button
-        @mousedown.prevent="fmt('strikeThrough')"
-        :class="{ active: activeFormats.strike }"
-        title="Strikethrough"
-      ><s>S</s></button>
-
+      <button @mousedown.prevent="fmt('bold')"               :class="{ active: activeFormats.bold }"      title="Bold (Ctrl+B)"><b>B</b></button>
+      <button @mousedown.prevent="fmt('italic')"             :class="{ active: activeFormats.italic }"    title="Italic (Ctrl+I)"><i>I</i></button>
+      <button @mousedown.prevent="fmt('underline')"          :class="{ active: activeFormats.underline }" title="Underline (Ctrl+U)"><u>U</u></button>
+      <button @mousedown.prevent="fmt('strikeThrough')"      :class="{ active: activeFormats.strike }"    title="Strikethrough"><s>S</s></button>
       <div class="toolbar-sep"></div>
-
-      <button
-        @mousedown.prevent="fmtBlock('h1')"
-        :class="{ active: activeFormats.h1 }"
-        title="Heading 1"
-      >H1</button>
-
-      <button
-        @mousedown.prevent="fmtBlock('h2')"
-        :class="{ active: activeFormats.h2 }"
-        title="Heading 2"
-      >H2</button>
-
-      <button
-        @mousedown.prevent="fmtBlock('h3')"
-        :class="{ active: activeFormats.h3 }"
-        title="Heading 3"
-      >H3</button>
-
+      <button @mousedown.prevent="fmtBlock('h1')"            :class="{ active: activeFormats.h1 }"        title="Heading 1">H1</button>
+      <button @mousedown.prevent="fmtBlock('h2')"            :class="{ active: activeFormats.h2 }"        title="Heading 2">H2</button>
+      <button @mousedown.prevent="fmtBlock('h3')"            :class="{ active: activeFormats.h3 }"        title="Heading 3">H3</button>
       <div class="toolbar-sep"></div>
-
-      <button
-        @mousedown.prevent="fmt('insertUnorderedList')"
-        :class="{ active: activeFormats.ul }"
-        title="Bullet List"
-      >• List</button>
-
-      <button
-        @mousedown.prevent="fmt('insertOrderedList')"
-        :class="{ active: activeFormats.ol }"
-        title="Numbered List"
-      >1. List</button>
-
+      <button @mousedown.prevent="fmt('insertUnorderedList')" :class="{ active: activeFormats.ul }"       title="Bullet List">• List</button>
+      <button @mousedown.prevent="fmt('insertOrderedList')"   :class="{ active: activeFormats.ol }"       title="Numbered List">1. List</button>
       <div class="toolbar-sep"></div>
-
-      <button
-        @mousedown.prevent="clearFormatting"
-        title="Clear formatting / paragraph"
-      >¶</button>
+      <button @mousedown.prevent="clearFormatting" title="Clear formatting">¶</button>
     </div>
 
     <div
@@ -175,17 +117,9 @@ export default {
       savedRange:    null,
       _dataHandler:  null,
       showMembers:   false,
-
       activeFormats: {
-        bold:      false,
-        italic:    false,
-        underline: false,
-        strike:    false,
-        ul:        false,
-        ol:        false,
-        h1:        false,
-        h2:        false,
-        h3:        false,
+        bold: false, italic: false, underline: false, strike: false,
+        ul: false, ol: false, h1: false, h2: false, h3: false,
       },
     };
   },
@@ -205,7 +139,6 @@ export default {
       this._socketDocUpdate        = (msg) => this._handleMsg({ type: 'doc-update',         ...msg });
       this._socketDocAccessChanged = (msg) => this._handleMsg({ type: 'doc-access-changed', ...msg });
       this._socketDocRequestState  = (msg) => this._handleMsg({ type: 'doc-request-state',  ...msg });
-
       this.socket.on('doc-state',          this._socketDocState);
       this.socket.on('doc-update',         this._socketDocUpdate);
       this.socket.on('doc-access-changed', this._socketDocAccessChanged);
@@ -213,11 +146,7 @@ export default {
     }
 
     this._handleOutsideClick = (e) => {
-      if (
-        this.showMembers &&
-        this.$refs.membersWrapperRef &&
-        !this.$refs.membersWrapperRef.contains(e.target)
-      ) {
+      if (this.showMembers && this.$refs.membersWrapperRef && !this.$refs.membersWrapperRef.contains(e.target)) {
         this.showMembers = false;
       }
     };
@@ -244,9 +173,7 @@ export default {
   },
 
   beforeUnmount() {
-    if (this._dataHandler) {
-      this.livekitRoom.off('dataReceived', this._dataHandler);
-    }
+    if (this._dataHandler) this.livekitRoom.off('dataReceived', this._dataHandler);
     if (this.socket) {
       this.socket.off('doc-state',          this._socketDocState);
       this.socket.off('doc-update',         this._socketDocUpdate);
@@ -263,7 +190,7 @@ export default {
 
   methods: {
 
-    // ─── Toolbar active-state tracking ───────────────────────────────────────
+    // ─── Toolbar ─────────────────────────────────────────────────────────────
 
     _updateActiveFormats() {
       try {
@@ -273,7 +200,6 @@ export default {
         this.activeFormats.strike    = document.queryCommandState('strikeThrough');
         this.activeFormats.ul        = document.queryCommandState('insertUnorderedList');
         this.activeFormats.ol        = document.queryCommandState('insertOrderedList');
-
         const block = (document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, '');
         this.activeFormats.h1 = block === 'h1';
         this.activeFormats.h2 = block === 'h2';
@@ -291,8 +217,6 @@ export default {
       }
     },
 
-    // ─── Formatting ──────────────────────────────────────────────────────────
-
     fmt(command) {
       this._restoreMobileSelection();
       document.execCommand(command, false, null);
@@ -303,17 +227,8 @@ export default {
 
     fmtBlock(tag) {
       this._restoreMobileSelection();
-
-      const current = (document.queryCommandValue('formatBlock') || '')
-        .toLowerCase()
-        .replace(/[<>]/g, '');
-
-      if (current === tag) {
-        document.execCommand('formatBlock', false, 'p');
-      } else {
-        document.execCommand('formatBlock', false, tag);
-      }
-
+      const current = (document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, '');
+      document.execCommand('formatBlock', false, current === tag ? 'p' : tag);
       this.$refs.docBody?.focus();
       this._updateActiveFormats();
       this._broadcastContent();
@@ -345,23 +260,20 @@ export default {
       this.debounceTimer = setTimeout(() => this._broadcastContent(), 150);
     },
 
-    // FIX: Use insertText with a real \t character instead of &nbsp; HTML entities.
-    // The &nbsp; approach caused contenteditable to wrap content in a new <span>
-    // block, which then got parsed as a separate top-level node → separate Paragraph
-    // in docx → new line in the downloaded document.
-    // insertText('\t') stays within the same text node, keeping the line intact.
     onKeydown(e) {
       if (e.key === 'Tab') {
         e.preventDefault();
-        document.execCommand('insertText', false, '\t');
+        // Insert 4 non-breaking spaces (\u00a0) as a visible tab indent.
+        // Regular spaces collapse in HTML; \u00a0 always renders visibly.
+        // In downloadDoc, \u00a0 is converted back to regular spaces for docx.
+        document.execCommand('insertText', false, '\u00a0\u00a0\u00a0\u00a0');
       }
-
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         this.$nextTick(() => this._updateActiveFormats());
       }
     },
 
-    // ─── LiveKit / Socket data layer ─────────────────────────────────────────
+    // ─── LiveKit / Socket ─────────────────────────────────────────────────────
 
     _sendLivekit(payload) {
       try {
@@ -389,10 +301,8 @@ export default {
 
     _onLivekitData(payload) {
       try {
-        const text = typeof payload === 'string'
-          ? payload
-          : new TextDecoder().decode(payload);
-        const msg = JSON.parse(text);
+        const text = typeof payload === 'string' ? payload : new TextDecoder().decode(payload);
+        const msg  = JSON.parse(text);
         if (!msg.type?.startsWith('doc-')) return;
         this._handleMsg(msg);
       } catch (_) {}
@@ -400,11 +310,9 @@ export default {
 
     _handleMsg(msg) {
       switch (msg.type) {
-
         case 'doc-request-state':
           if (this.isHost) this.broadcastFullState();
           break;
-
         case 'doc-state':
           clearTimeout(this._retry1);
           clearTimeout(this._retry2);
@@ -414,18 +322,14 @@ export default {
           this.statusText = this.isHost ? 'Connected' : (this.canEdit ? '✏️ Edit access granted' : '👁 View only');
           setTimeout(() => { this.statusText = 'Connected'; }, 2000);
           break;
-
         case 'doc-update':
           if (msg.senderId === this.userId) return;
           this._applyRemote(msg.content || '');
           break;
-
         case 'doc-access-changed':
           this.editors = Array.isArray(msg.editors) ? msg.editors : [];
           this._updateAccessStatus();
-          if (this.canEdit && !this.isHost) {
-            setTimeout(() => this._requestState(), 300);
-          }
+          if (this.canEdit && !this.isHost) setTimeout(() => this._requestState(), 300);
           break;
       }
     },
@@ -467,9 +371,7 @@ export default {
 
     // ─── Members / access ────────────────────────────────────────────────────
 
-    toggleMembers() {
-      this.showMembers = !this.showMembers;
-    },
+    toggleMembers() { this.showMembers = !this.showMembers; },
 
     toggleAccess(participantId) {
       this.editors = this.editors.includes(participantId)
@@ -478,15 +380,8 @@ export default {
       this._broadcastAccess();
     },
 
-    grantAll() {
-      this.editors = this.participants.map(p => p.id);
-      this._broadcastAccess();
-    },
-
-    revokeAll() {
-      this.editors = [];
-      this._broadcastAccess();
-    },
+    grantAll()  { this.editors = this.participants.map(p => p.id); this._broadcastAccess(); },
+    revokeAll() { this.editors = []; this._broadcastAccess(); },
 
     _broadcastAccess() {
       this.sendData({ type: 'doc-access-changed', editors: this.editors, senderId: this.userId });
@@ -502,8 +397,9 @@ export default {
     getInitials(name) {
       if (!name) return '?';
       const parts = name.trim().split(' ');
-      if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+      return parts.length === 1
+        ? parts[0].charAt(0).toUpperCase()
+        : (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
     },
 
     // ─── Download ────────────────────────────────────────────────────────────
@@ -516,16 +412,13 @@ export default {
       const docBody  = this.$refs.docBody;
       const children = [];
 
-      // ── buildRuns: recursively converts a DOM subtree to docx TextRuns ──────
-      // FIX: tab characters (\t) are converted to 4 spaces because docx TextRun
-      // does not render raw \t characters. Non-breaking spaces are normalised too.
+      // Recursively converts a DOM subtree to docx TextRuns.
+      // \u00a0 (non-breaking spaces used for tab indent) → regular spaces.
       const buildRuns = (node, inheritedStyle = {}) => {
         const runs = [];
 
         if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.textContent
-            .replace(/\u00A0/g, ' ')   // non-breaking space → regular space
-            .replace(/\t/g, '    ');   // tab → 4 spaces (Word ignores raw \t in TextRun)
+          const text = node.textContent.replace(/\u00A0/g, ' ');
           if (!text) return runs;
           runs.push(new TextRun({
             text,
@@ -539,128 +432,89 @@ export default {
 
         if (node.nodeType !== Node.ELEMENT_NODE) return runs;
 
-        const tag = node.tagName.toLowerCase();
+        const tag   = node.tagName.toLowerCase();
         const style = {
-          bold:      inheritedStyle.bold      || ['b', 'strong'].includes(tag) || node.style?.fontWeight === 'bold',
-          italic:    inheritedStyle.italic    || ['i', 'em'].includes(tag)     || node.style?.fontStyle  === 'italic',
-          underline: inheritedStyle.underline || tag === 'u'                   || node.style?.textDecoration?.includes('underline'),
-          strike:    inheritedStyle.strike    || ['s', 'strike', 'del'].includes(tag) || node.style?.textDecoration?.includes('line-through'),
+          bold:      inheritedStyle.bold      || ['b','strong'].includes(tag) || node.style?.fontWeight === 'bold',
+          italic:    inheritedStyle.italic    || ['i','em'].includes(tag)     || node.style?.fontStyle  === 'italic',
+          underline: inheritedStyle.underline || tag === 'u'                  || node.style?.textDecoration?.includes('underline'),
+          strike:    inheritedStyle.strike    || ['s','strike','del'].includes(tag) || node.style?.textDecoration?.includes('line-through'),
         };
 
-        for (const child of node.childNodes) {
-          runs.push(...buildRuns(child, style));
-        }
+        for (const child of node.childNodes) runs.push(...buildRuns(child, style));
         return runs;
       };
 
-      // ── Block-tag detection ───────────────────────────────────────────────
-      // FIX: inline nodes (spans, text nodes, etc.) that were split by the tab
-      // insertion are now grouped together into a single Paragraph instead of
-      // each becoming its own Paragraph (which caused the spurious new lines).
+      // Consecutive inline nodes are merged into one Paragraph so that
+      // tab-indented content on the same line stays on that same line in docx.
       const BLOCK_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','div','ul','ol','br','li','blockquote','pre']);
-
-      const isInline = (node) => {
+      const isInline   = (node) => {
         if (node.nodeType === Node.TEXT_NODE) return true;
         if (node.nodeType !== Node.ELEMENT_NODE) return false;
         return !BLOCK_TAGS.has(node.tagName.toLowerCase());
       };
 
-      // Flush a collected group of consecutive inline nodes as one Paragraph
       const flushInlineGroup = (group) => {
-        if (group.length === 0) return;
-        const runs = [];
-        for (const n of group) runs.push(...buildRuns(n));
-        if (runs.length > 0) {
-          children.push(new Paragraph({ children: runs }));
-        } else {
-          children.push(new Paragraph({ children: [new TextRun('')] }));
-        }
+        if (!group.length) return;
+        const runs = group.flatMap(n => buildRuns(n));
+        children.push(new Paragraph({ children: runs.length ? runs : [new TextRun('')] }));
       };
 
-      // ── parseTopNode: maps each top-level DOM node to docx Paragraph(s) ──
       const parseTopNode = (node) => {
-        // Top-level text nodes (rare, but handle gracefully)
         if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.textContent
-            .replace(/\u00A0/g, ' ')
-            .replace(/\t/g, '    ');
-          if (text.trim()) {
-            children.push(new Paragraph({ children: [new TextRun(text)] }));
-          }
+          const text = node.textContent.replace(/\u00A0/g, ' ');
+          if (text.trim()) children.push(new Paragraph({ children: [new TextRun(text)] }));
           return;
         }
-
         if (node.nodeType !== Node.ELEMENT_NODE) return;
 
         const tag = node.tagName.toLowerCase();
 
-        if (tag === 'h1') {
-          children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: buildRuns(node) }));
-        } else if (tag === 'h2') {
-          children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: buildRuns(node) }));
-        } else if (tag === 'h3') {
-          children.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: buildRuns(node) }));
-        } else if (tag === 'ul' || tag === 'ol') {
-          node.querySelectorAll('li').forEach(li => {
-            children.push(new Paragraph({
-              bullet: { level: 0 },
-              children: buildRuns(li),
-            }));
-          });
-        } else if (tag === 'br') {
+        if      (tag === 'h1') children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: buildRuns(node) }));
+        else if (tag === 'h2') children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: buildRuns(node) }));
+        else if (tag === 'h3') children.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: buildRuns(node) }));
+        else if (tag === 'ul' || tag === 'ol') {
+          node.querySelectorAll('li').forEach(li =>
+            children.push(new Paragraph({ bullet: { level: 0 }, children: buildRuns(li) }))
+          );
+        }
+        else if (tag === 'br') {
           children.push(new Paragraph({ children: [new TextRun('')] }));
-
-        } else if (tag === 'div' || tag === 'p') {
-          // FIX: Walk children and GROUP consecutive inline nodes into one Paragraph.
-          // Previously each child (text node, span, etc.) became its own Paragraph,
-          // so "Start\t[span]Now OR[/span]\t[span]Abort[/span]" became 5 paragraphs.
-          // Now they are merged into one: "Start    Now OR    Abort".
+        }
+        else if (tag === 'div' || tag === 'p') {
           let inlineGroup = [];
-
           for (const child of node.childNodes) {
             if (isInline(child)) {
               inlineGroup.push(child);
             } else {
               flushInlineGroup(inlineGroup);
               inlineGroup = [];
-              parseTopNode(child); // recurse for nested block elements
+              parseTopNode(child);
             }
           }
           flushInlineGroup(inlineGroup);
-
-          // Emit an empty paragraph for truly empty div/p elements
-          if (node.childNodes.length === 0 || node.textContent.trim() === '') {
+          if (!node.childNodes.length || !node.textContent.trim()) {
             children.push(new Paragraph({ children: [new TextRun('')] }));
           }
-
-        } else {
-          // Any other element — treat as inline paragraph
+        }
+        else {
           const runs = buildRuns(node);
-          if (runs.length > 0) {
-            children.push(new Paragraph({ children: runs }));
-          } else {
-            children.push(new Paragraph({ children: [new TextRun('')] }));
-          }
+          children.push(new Paragraph({ children: runs.length ? runs : [new TextRun('')] }));
         }
       };
 
       Array.from(docBody.childNodes).forEach(parseTopNode);
-
-      if (children.length === 0) {
-        children.push(new Paragraph({ children: [new TextRun('')] }));
-      }
+      if (!children.length) children.push(new Paragraph({ children: [new TextRun('')] }));
 
       const doc    = new Document({ sections: [{ children }] });
       const buffer = await Packer.toBlob(doc);
-
-      const a    = document.createElement('a');
-      a.href     = URL.createObjectURL(buffer);
-      a.download = `doc-${this.roomId}-${Date.now()}.docx`;
+      const a      = document.createElement('a');
+      a.href       = URL.createObjectURL(buffer);
+      a.download   = `doc-${this.roomId}-${Date.now()}.docx`;
       a.click();
       URL.revokeObjectURL(a.href);
     },
 
-    // ─── Selection save/restore (for remote sync) ────────────────────────────
+    // ─── Selection save/restore ───────────────────────────────────────────────
 
     _saveSelection() {
       try {
@@ -732,23 +586,18 @@ export default {
   display: flex; justify-content: space-between; align-items: center;
   padding: 14px 16px; background: #f5f5f5;
   border-bottom: 1px solid #e0e0e0;
-  font-weight: 700; font-size: 15px; color: #000; flex-shrink: 0;
-  position: relative;
+  font-weight: 700; font-size: 15px; color: #000;
+  flex-shrink: 0; position: relative;
 }
 .doc-header-right { display: flex; align-items: center; gap: 8px; }
-
-.close-btn {
-  background: none; border: none; font-size: 18px;
-  cursor: pointer; color: #000; padding: 2px 6px; border-radius: 4px;
-}
+.close-btn { background: none; border: none; font-size: 18px; cursor: pointer; color: #000; padding: 2px 6px; border-radius: 4px; }
 .close-btn:hover { background: #e0e0e0; }
-
 .role-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 12px; }
 .host-badge  { background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; }
 .edit-badge  { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
 .view-badge  { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
 
-/* ── Members button ── */
+/* ── Members ── */
 .members-wrapper { position: relative; }
 .members-btn {
   display: flex; align-items: center; gap: 5px;
@@ -758,8 +607,7 @@ export default {
   cursor: pointer; white-space: nowrap;
   transition: background 0.15s, border-color 0.15s;
 }
-.members-btn:hover,
-.members-btn.active { background: #e0e7ff; border-color: #a5b4fc; }
+.members-btn:hover, .members-btn.active { background: #e0e7ff; border-color: #a5b4fc; }
 .members-count {
   background: #4f46e5; color: #fff;
   border-radius: 10px; padding: 0 6px;
@@ -768,7 +616,6 @@ export default {
 .chevron { opacity: 0.6; transition: transform 0.2s; }
 .chevron.open { transform: rotate(180deg); }
 
-/* ── Members dropdown ── */
 .members-dropdown {
   position: absolute; top: calc(100% + 8px); right: 0;
   width: 280px; background: #fff;
@@ -781,24 +628,15 @@ export default {
   padding: 10px 14px 8px;
   background: #f0f4ff; border-bottom: 1px solid #d0d8f0;
 }
-.dropdown-title {
-  font-size: 11px; font-weight: 700; color: #3730a3;
-  letter-spacing: 0.4px; text-transform: uppercase;
-}
+.dropdown-title { font-size: 11px; font-weight: 700; color: #3730a3; letter-spacing: 0.4px; text-transform: uppercase; }
 .access-bulk-btns { display: flex; gap: 6px; }
-.grant-all-btn, .revoke-all-btn {
-  font-size: 10px; padding: 3px 9px; border: none;
-  border-radius: 10px; cursor: pointer; font-weight: 700;
-}
+.grant-all-btn, .revoke-all-btn { font-size: 10px; padding: 3px 9px; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; }
 .grant-all-btn  { background: #4CAF50; color: white; }
 .revoke-all-btn { background: #f44336; color: white; }
 .grant-all-btn:hover  { background: #43a047; }
 .revoke-all-btn:hover { background: #e53935; }
 .access-list { max-height: 220px; overflow-y: auto; padding: 6px 0; }
-.access-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 7px 14px; transition: background 0.1s;
-}
+.access-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 14px; transition: background 0.1s; }
 .access-row:hover { background: #f7f8ff; }
 .access-name-wrap { display: flex; align-items: center; gap: 8px; }
 .access-avatar {
@@ -810,13 +648,9 @@ export default {
 .access-name { font-size: 13px; color: #333; font-weight: 500; }
 .no-participants { font-size: 12px; color: #888; text-align: center; padding: 12px 0; }
 
-/* Toggle switch */
 .toggle-switch { position: relative; width: 38px; height: 20px; display: inline-block; cursor: pointer; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
-.toggle-slider {
-  position: absolute; inset: 0; background: #ccc;
-  border-radius: 20px; transition: background 0.2s;
-}
+.toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 20px; transition: background 0.2s; }
 .toggle-slider::before {
   content: ''; position: absolute; width: 14px; height: 14px;
   left: 3px; bottom: 3px; background: white; border-radius: 50%;
@@ -825,7 +659,6 @@ export default {
 .toggle-switch input:checked + .toggle-slider { background: #4CAF50; }
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
 
-/* Dropdown transition */
 .dropdown-enter-active, .dropdown-leave-active { transition: opacity 0.15s, transform 0.15s; }
 .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-6px) scale(0.97); }
 
@@ -837,28 +670,13 @@ export default {
   flex-wrap: wrap; flex-shrink: 0;
 }
 .doc-toolbar button {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #333;
-  min-width: 28px;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-  user-select: none;
-  -webkit-user-select: none;
+  background: none; border: 1px solid transparent; border-radius: 5px;
+  padding: 4px 8px; cursor: pointer; font-size: 13px; color: #333;
+  min-width: 28px; transition: background 0.12s, border-color 0.12s, color 0.12s;
+  user-select: none; -webkit-user-select: none;
 }
-.doc-toolbar button:hover {
-  background: #e8e8e8;
-  border-color: #ccc;
-}
-.doc-toolbar button.active {
-  background: #dbeafe;
-  border-color: #93c5fd;
-  color: #1d4ed8;
-  font-weight: 700;
-}
+.doc-toolbar button:hover { background: #e8e8e8; border-color: #ccc; }
+.doc-toolbar button.active { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; font-weight: 700; }
 .toolbar-sep { width: 1px; height: 20px; background: #ddd; margin: 0 3px; flex-shrink: 0; }
 
 /* ── Editor body ── */
@@ -867,32 +685,22 @@ export default {
   font-size: 15px; line-height: 1.7; color: #1a1a1a;
   outline: none; min-height: 0;
   word-break: break-word;
-
-  /* Render tab stops so \t characters display as indentation in the editor */
-  tab-size: 4;
-  -moz-tab-size: 4;
-  white-space: pre-wrap;
+  /* No white-space:pre-wrap — that breaks normal line wrapping.
+     Tab indents are \u00a0 chars which always render visibly without it. */
 }
 .doc-body[data-placeholder]:empty::before {
-  content: attr(data-placeholder);
-  color: #bbb;
-  pointer-events: none;
-  display: block;
+  content: attr(data-placeholder); color: #bbb; pointer-events: none; display: block;
 }
 .doc-editable { cursor: text; border-top: 2px solid #4CAF5033; }
 .doc-readonly  { cursor: default; background: #fafafa; border-top: 2px solid #e0e0e0; }
 .doc-body :deep(h1) { font-size: 2em;   margin: 0.4em 0; font-weight: 700; }
 .doc-body :deep(h2) { font-size: 1.5em; margin: 0.4em 0; font-weight: 700; }
 .doc-body :deep(h3) { font-size: 1.2em; margin: 0.4em 0; font-weight: 700; }
-.doc-body :deep(ul),
-.doc-body :deep(ol) { padding-left: 24px; }
-.doc-body :deep(b),
-.doc-body :deep(strong) { font-weight: 700; }
-.doc-body :deep(i),
-.doc-body :deep(em) { font-style: italic; }
+.doc-body :deep(ul), .doc-body :deep(ol) { padding-left: 24px; }
+.doc-body :deep(b), .doc-body :deep(strong) { font-weight: 700; }
+.doc-body :deep(i), .doc-body :deep(em) { font-style: italic; }
 .doc-body :deep(u) { text-decoration: underline; }
-.doc-body :deep(s),
-.doc-body :deep(strike) { text-decoration: line-through; }
+.doc-body :deep(s), .doc-body :deep(strike) { text-decoration: line-through; }
 
 /* ── Footer ── */
 .doc-footer {
