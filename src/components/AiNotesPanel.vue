@@ -1,67 +1,140 @@
 <template>
   <div id="notes-panel">
     <div class="notes-header">
-      <span> AI Meeting Summary</span>
-      <button @click="$emit('close')">✕</button>
+      <div class="header-left">
+        <div class="header-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a5 5 0 1 0 5 5A5 5 0 0 0 12 2zm0 8a3 3 0 1 1 3-3 3 3 0 0 1-3 3zm9 11v-1a7 7 0 0 0-7-7h-4a7 7 0 0 0-7 7v1"/>
+          </svg>
+        </div>
+        <span class="header-title">AI Notes</span>
+        <span v-if="state === 'recording'" class="pulse-badge">LIVE</span>
+      </div>
+      <button class="close-btn" @click="$emit('close')" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </div>
 
     <div class="notes-body">
-      <!-- State: idle -->
-      <div v-if="state === 'idle'" class="notes-idle">
-        <p class="notes-hint">
-          AI notes uses your microphone to transcribe the meeting every 30 seconds,
-          then summarises everything when you stop.
-        </p>
-        <button class="notes-start-btn" @click="start">
-           Start taking notes
+
+      <!-- IDLE -->
+      <div v-if="state === 'idle'" class="state-idle">
+        <div class="idle-icon">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+          </svg>
+        </div>
+        <p class="idle-title">Ready to take notes</p>
+        <p class="idle-desc">Captures your meeting every 30 seconds and generates concise, intelligent notes — like Gemini or ChatGPT.</p>
+        <button class="btn-primary" @click="start">Start Recording</button>
+      </div>
+
+      <!-- RECORDING -->
+      <div v-if="state === 'recording'" class="state-recording">
+        <div class="recording-status">
+          <span class="rec-dot" />
+          <span class="rec-label">Recording in progress</span>
+        </div>
+        <div class="segment-counter">
+          <span class="seg-num">{{ transcript.length }}</span>
+          <span class="seg-text">{{ transcript.length === 1 ? 'segment captured' : 'segments captured' }}</span>
+        </div>
+        <div class="wave-container" v-if="transcript.length === 0">
+          <div class="wave-idle">Listening for speech…</div>
+        </div>
+        <div v-else class="latest-preview">
+          <div class="preview-label">Latest capture</div>
+          <div class="preview-text">{{ transcript[transcript.length - 1].text }}</div>
+        </div>
+        <button class="btn-stop" @click="stop">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+          </svg>
+          Stop &amp; Generate Notes
         </button>
       </div>
 
-      <!-- State: recording -->
-      <div v-if="state === 'recording'" class="notes-recording">
-        <div class="notes-recording-indicator">
-          <span class="notes-dot" />
-          Recording — captures every 30s
+      <!-- SUMMARISING -->
+      <div v-if="state === 'summarising'" class="state-summarising">
+        <div class="gen-loader">
+          <div class="gen-bar" v-for="i in 5" :key="i" :style="`animation-delay: ${(i-1)*0.12}s`" />
         </div>
-        <button class="notes-stop-btn" @click="stop">
-           Stop &amp; summarise
-        </button>
-        <div class="notes-waiting">
-          {{ transcript.length ? `${transcript.length} segment(s) captured...` : 'Waiting for first transcription...' }}
-        </div>
+        <p class="gen-text">{{ transcript.length ? 'Generating your notes…' : 'Finishing transcription…' }}</p>
       </div>
 
-      <!-- State: summarising -->
-      <div v-if="state === 'summarising'" class="notes-summarising">
-        <div class="notes-spinner" />
-        <p>{{ transcript.length ? 'Summarising your meeting...' : 'Finishing transcription...' }}</p>
-      </div>
-
-      <!-- State: done -->
-      <div v-if="state === 'done'" class="notes-done">
-        <div class="notes-section-label">Summary</div>
-        <div class="notes-summary-box">
-          <pre class="notes-summary-text">{{ summary }}</pre>
+      <!-- DONE -->
+      <div v-if="state === 'done'" class="state-done">
+        <div class="notes-output">
+          <div class="output-header">
+            <span class="output-label">Meeting Notes</span>
+            <span class="output-time">{{ sessionDate }}</span>
+          </div>
+          <div class="notes-content" v-html="renderedSummary" />
         </div>
-        <div class="notes-actions">
-          <button class="notes-dl-btn" @click="download">
-             Download (.docx)
+        <div class="done-actions">
+          <button class="btn-download" @click="download">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download .docx
           </button>
-          <button class="notes-reset-btn" @click="reset">
-            New session
-          </button>
+          <button class="btn-ghost" @click="reset">New Session</button>
         </div>
       </div>
 
-      <!-- Error banner -->
+      <!-- ERROR -->
       <div v-if="error" class="notes-error">
-        ⚠️ {{ error }}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        {{ error }}
       </div>
+
     </div>
   </div>
 </template>
+
 <script>
 const GROQ_API = 'https://api.groq.com/openai/v1';
+
+function parseSummaryToHtml(text) {
+  const lines = text.split('\n');
+  let html = '';
+  let inList = false;
+
+  for (let raw of lines) {
+    let line = raw.trim();
+    if (!line) {
+      if (inList) { html += '</ul>'; inList = false; }
+      continue;
+    }
+    const isItem = /^[-•*]\s+/.test(line) || /^\d+\.\s+/.test(line);
+    line = line
+      .replace(/^[-•*]\s+/, '')
+      .replace(/^\d+\.\s+/, '')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    if (isItem) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += `<li>${line}</li>`;
+    } else {
+      if (inList) { html += '</ul>'; inList = false; }
+      if (/^#{1,3}\s/.test(raw)) {
+        const clean = line.replace(/^#+\s*/, '');
+        html += `<h4>${clean}</h4>`;
+      } else {
+        html += `<p>${line}</p>`;
+      }
+    }
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
 
 export default {
   name: 'AiNotesPanel',
@@ -72,14 +145,21 @@ export default {
 
   data() {
     return {
-      state: 'idle',        // 'idle' | 'recording' | 'summarising' | 'done'
-      transcript: [],       // [{ time, text }]
+      state: 'idle',
+      transcript: [],
       summary: '',
       error: '',
+      sessionDate: '',
       captureInterval: null,
       micStream: null,
-      activeRecorder: null, // tracks the currently running MediaRecorder
+      activeRecorder: null,
     };
+  },
+
+  computed: {
+    renderedSummary() {
+      return parseSummaryToHtml(this.summary);
+    }
   },
 
   beforeUnmount() {
@@ -94,41 +174,28 @@ export default {
         this.error = 'VITE_GROQ_API_KEY is not set in your .env file.';
         return;
       }
-
       try {
         this.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch {
         this.error = 'Microphone permission denied.';
         return;
       }
-
       this.state = 'recording';
       this.transcript = [];
       this.summary = '';
       this.error = '';
-
-      // Capture immediately, then every 30s
       this.captureAndTranscribe();
-      this.captureInterval = setInterval(() => {
-        this.captureAndTranscribe();
-      }, 30000);
+      this.captureInterval = setInterval(() => this.captureAndTranscribe(), 30000);
     },
 
     stopCapture() {
-      if (this.captureInterval) {
-        clearInterval(this.captureInterval);
-        this.captureInterval = null;
-      }
-      if (this.micStream) {
-        this.micStream.getTracks().forEach(t => t.stop());
-        this.micStream = null;
-      }
+      if (this.captureInterval) { clearInterval(this.captureInterval); this.captureInterval = null; }
+      if (this.micStream) { this.micStream.getTracks().forEach(t => t.stop()); this.micStream = null; }
       this.activeRecorder = null;
     },
 
     async captureAndTranscribe() {
       if (!this.micStream) return;
-
       const key = import.meta.env.VITE_GROQ_API_KEY;
 
       return new Promise((resolve) => {
@@ -136,34 +203,22 @@ export default {
         try {
           recorder = new MediaRecorder(this.micStream, { mimeType: 'audio/webm' });
         } catch {
-          try {
-            recorder = new MediaRecorder(this.micStream);
-          } catch (e) {
-            this.error = 'MediaRecorder not supported: ' + e.message;
-            resolve();
-            return;
-          }
+          try { recorder = new MediaRecorder(this.micStream); }
+          catch (e) { this.error = 'MediaRecorder not supported: ' + e.message; resolve(); return; }
         }
 
         const chunks = [];
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunks.push(e.data);
-        };
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
         recorder.onstop = async () => {
           const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-
-          // Too small = silence, skip
-          if (blob.size < 1000) {
-            this.activeRecorder = null;
-            resolve();
-            return;
-          }
+          if (blob.size < 1000) { this.activeRecorder = null; resolve(); return; }
 
           const formData = new FormData();
           formData.append('file', blob, 'audio.webm');
           formData.append('model', 'whisper-large-v3');
           formData.append('response_format', 'json');
+          formData.append('language', 'en');
 
           try {
             const res = await fetch(`${GROQ_API}/audio/transcriptions`, {
@@ -171,89 +226,56 @@ export default {
               headers: { Authorization: `Bearer ${key}` },
               body: formData
             });
-
-            if (!res.ok) {
-              const errData = await res.json().catch(() => ({}));
-              console.error('Whisper error:', errData);
-              this.activeRecorder = null;
-              resolve();
-              return;
-            }
-
+            if (!res.ok) { this.activeRecorder = null; resolve(); return; }
             const data = await res.json();
             const text = (data.text || '').trim();
-            if (text) {
-              this.transcript.push({
-                time: new Date().toLocaleTimeString(),
-                text
-              });
-            }
+            if (text) this.transcript.push({ time: new Date().toLocaleTimeString(), text });
           } catch (e) {
             console.error('Transcription failed:', e);
           }
-
           this.activeRecorder = null;
           resolve();
         };
 
-        // Store reference so stop() can wait on it
         this.activeRecorder = recorder;
         recorder.start();
-
-        // Record a 25s window (5s buffer before next interval fires)
-        setTimeout(() => {
-          if (recorder.state === 'recording') recorder.stop();
-        }, 25000);
+        setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 25000);
       });
     },
 
     async stop() {
-      // 1. Stop the interval so no new captures start
-      if (this.captureInterval) {
-        clearInterval(this.captureInterval);
-        this.captureInterval = null;
-      }
+      if (this.captureInterval) { clearInterval(this.captureInterval); this.captureInterval = null; }
 
-      // 2. If a recorder is currently mid-recording, stop it and wait for
-      //    its onstop (which does the Whisper API call) to fully complete
       if (this.activeRecorder && this.activeRecorder.state === 'recording') {
-        this.state = 'summarising'; // show spinner while waiting
+        this.state = 'summarising';
         await new Promise((resolve) => {
           this.activeRecorder.addEventListener('stop', resolve, { once: true });
           this.activeRecorder.stop();
         });
-        // Buffer to let the async onstop handler (Whisper fetch) finish
         await new Promise(r => setTimeout(r, 800));
       }
 
-      // 3. Stop the mic stream
-      if (this.micStream) {
-        this.micStream.getTracks().forEach(t => t.stop());
-        this.micStream = null;
-      }
+      if (this.micStream) { this.micStream.getTracks().forEach(t => t.stop()); this.micStream = null; }
 
-      // 4. Check if we got anything
+      this.sessionDate = new Date().toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+
       if (!this.transcript.length) {
         this.state = 'done';
-        this.summary = 'No speech was detected during this session.';
+        this.summary = 'No speech was detected in this session.';
         return;
       }
 
-      // 5. Summarise with Groq
       this.state = 'summarising';
-
       const key = import.meta.env.VITE_GROQ_API_KEY;
-      const fullText = this.transcript
-        .map(t => `[${t.time}] ${t.text}`)
-        .join('\n');
+      const fullText = this.transcript.map(t => `[${t.time}] ${t.text}`).join('\n');
 
       try {
         const res = await fetch(`${GROQ_API}/chat/completions`, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${key}`,
-            'Content-Type': 'application/json'
-          },
+          headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'llama-3.3-70b-versatile',
             max_tokens: 1024,
@@ -261,11 +283,12 @@ export default {
               {
                 role: 'system',
                 content:
-                  'You are a precise meeting notes assistant. From the transcript, extract:\n' +
-                  '1. **Key discussion points** (bullet list)\n' +
-                  '2. **Decisions made** (bullet list, or "None" if absent)\n' +
-                  '3. **Action items** (bullet list with owner if mentioned, or "None" if absent)\n\n' +
-                  'Be concise. Ignore filler words and repetitions.'
+                  'You are a smart meeting notes assistant. Read the transcript and write SHORT, MEANINGFUL notes — exactly like Google Gemini or ChatGPT would. ' +
+                  'Write in plain natural language. Use brief bullet points only when listing distinct items. ' +
+                  'Do NOT include section headers like "Key Points", "Decisions", or "Action Items". ' +
+                  'Do NOT use structured templates or categories. ' +
+                  'Simply capture what was discussed in a clear, concise paragraph or two, then list any specific things mentioned (tasks, names, topics, numbers) as brief bullets if helpful. ' +
+                  'Be direct. Skip filler, pleasantries, and repetition. Keep the total under 150 words unless the meeting was very long.'
               },
               {
                 role: 'user',
@@ -275,16 +298,13 @@ export default {
           })
         });
 
-        if (!res.ok) {
-          throw new Error(`Groq API error: ${res.status}`);
-        }
-
+        if (!res.ok) throw new Error(`Groq API error: ${res.status}`);
         const data = await res.json();
-        this.summary = data.choices?.[0]?.message?.content || 'Could not generate summary.';
+        this.summary = data.choices?.[0]?.message?.content || 'Could not generate notes.';
         this.state = 'done';
       } catch (e) {
-        console.error('Summary error:', e);
-        this.error = 'Could not summarise: ' + e.message;
+        console.error('Notes error:', e);
+        this.error = 'Could not generate notes: ' + e.message;
         this.state = 'done';
         this.summary = '';
       }
@@ -294,53 +314,35 @@ export default {
       const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
         'https://esm.sh/docx@8.5.0'
       );
-
       const children = [];
 
-      // Title
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_1,
-        children: [new TextRun(`Meeting Notes — ${this.roomTitle}`)]
+        children: [new TextRun(`${this.roomTitle} — Notes`)]
       }));
 
-      // Generated date
       children.push(new Paragraph({
-        children: [new TextRun({
-          text: `Generated by CoreTalk AI on ${new Date().toLocaleString()}`,
-          italics: true
-        })]
+        children: [new TextRun({ text: this.sessionDate, italics: true })]
       }));
 
-      // Spacer
       children.push(new Paragraph({ children: [new TextRun('')] }));
 
-      // Summary heading
-      children.push(new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        children: [new TextRun('Summary')]
-      }));
-
-      // Summary lines — strip markdown bold markers
       this.summary.split('\n').forEach(line => {
-        children.push(new Paragraph({
-          children: [new TextRun(line.replace(/\*\*/g, ''))]
-        }));
+        const clean = line.replace(/\*\*/g, '').trim();
+        if (!clean) return;
+        children.push(new Paragraph({ children: [new TextRun(clean)] }));
       });
 
-      // Spacer
       children.push(new Paragraph({ children: [new TextRun('')] }));
-
-      // Transcript heading
       children.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
         children: [new TextRun('Full Transcript')]
       }));
 
-      // Transcript lines with bold timestamps
       this.transcript.forEach(t => {
         children.push(new Paragraph({
           children: [
-            new TextRun({ text: `[${t.time}] `, bold: true }),
+            new TextRun({ text: `[${t.time}]  `, bold: true }),
             new TextRun(t.text)
           ]
         }));
@@ -348,10 +350,9 @@ export default {
 
       const doc = new Document({ sections: [{ children }] });
       const blob = await Packer.toBlob(doc);
-
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `coretalk-notes-${Date.now()}.docx`;
+      link.download = `notes-${Date.now()}.docx`;
       link.click();
       URL.revokeObjectURL(link.href);
     },
@@ -368,233 +369,430 @@ export default {
 </script>
 
 <style scoped>
+/* ── Root ── */
 #notes-panel {
-  position: relative;
   width: 100%;
-  max-height: calc(100vh - 100px);
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  border: 1px solid #e0e0e0;
+  max-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
-  color: #111;
+  background: #0f0f11;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #f0f0f2;
+  font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   overflow: hidden;
 }
 
+/* ── Header ── */
 .notes-header {
-  padding: 14px 16px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
-  border-radius: 12px 12px 0 0;
-  font-weight: 600;
-  font-size: 15px;
+  padding: 13px 16px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.03);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #5b6cf8, #8b5cf6);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
   flex-shrink: 0;
 }
 
-.notes-header button {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  color: #555;
-  line-height: 1;
-  padding: 2px 6px;
+.header-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f0f0f2;
+}
+
+.pulse-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ef4444;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.25);
   border-radius: 4px;
-  transition: background 0.15s;
+  padding: 2px 6px;
+  animation: badgePulse 2s ease-in-out infinite;
 }
 
-.notes-header button:hover {
-  background: #e0e0e0;
-  color: #000;
+@keyframes badgePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
+.close-btn {
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.4);
+  transition: background 0.15s, color 0.15s;
+}
+.close-btn:hover { background: rgba(255,255,255,0.08); color: #f0f0f2; }
+
+/* ── Body ── */
 .notes-body {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
-/* ---- Idle ---- */
-.notes-hint {
-  font-size: 13px;
-  color: #555;
-  line-height: 1.6;
-  margin: 0 0 12px;
-}
-
-.notes-start-btn {
-  width: 100%;
-  padding: 12px;
-  background: #10b981;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.notes-start-btn:hover {
-  background: #059669;
-}
-
-/* ---- Recording ---- */
-.notes-recording-indicator {
+/* ── Idle ── */
+.state-idle {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #ef4444;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.notes-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #ef4444;
-  animation: blink 1s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.2; }
-}
-
-.notes-stop-btn {
-  width: 100%;
-  padding: 11px;
-  background: #1e40af;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s;
-  margin-bottom: 12px;
-}
-
-.notes-stop-btn:hover {
-  background: #1e3a8a;
-}
-
-.notes-waiting {
-  font-size: 13px;
-  color: #888;
   text-align: center;
-  padding: 12px 0;
+  gap: 10px;
+  padding: 20px 8px;
 }
 
-/* ---- Summarising ---- */
-.notes-summarising {
+.idle-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(91,108,248,0.1);
+  border: 1px solid rgba(91,108,248,0.2);
+  border-radius: 20px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 24px 0;
-  color: #555;
-  font-size: 14px;
+  justify-content: center;
+  color: #8b9cf8;
+  margin-bottom: 4px;
 }
 
-.notes-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #e0e0e0;
-  border-top-color: #10b981;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ---- Done ---- */
-.notes-section-label {
-  font-size: 11px;
+.idle-title {
+  font-size: 16px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #888;
-  margin-bottom: 6px;
-}
-
-.notes-summary-box {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 12px;
-  background: #fafafa;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.notes-summary-text {
-  font-size: 13px;
-  line-height: 1.7;
-  color: #222;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
+  color: #f0f0f2;
   margin: 0;
 }
 
-.notes-actions {
+.idle-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.65;
+  max-width: 260px;
+  margin: 0;
+}
+
+/* ── Recording ── */
+.state-recording {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.recording-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 0 rgba(239,68,68,0.5);
+  animation: ripple 1.4s ease-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes ripple {
+  0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+
+.rec-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.7);
+}
+
+.segment-counter {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+}
+
+.seg-num {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #a5b4fc, #818cf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.seg-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+}
+
+.wave-idle {
+  font-size: 13px;
+  color: rgba(255,255,255,0.3);
+  text-align: center;
+  padding: 10px 0;
+  font-style: italic;
+}
+
+.latest-preview {
+  padding: 12px 14px;
+  background: rgba(91,108,248,0.07);
+  border: 1px solid rgba(91,108,248,0.15);
+  border-radius: 10px;
+}
+
+.preview-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(165,180,252,0.6);
+  margin-bottom: 6px;
+}
+
+.preview-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Summarising ── */
+.state-summarising {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 30px 0;
+}
+
+.gen-loader {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 32px;
+}
+
+.gen-bar {
+  width: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #818cf8, #5b6cf8);
+  animation: barBounce 0.9s ease-in-out infinite alternate;
+}
+.gen-bar:nth-child(1) { height: 14px; }
+.gen-bar:nth-child(2) { height: 22px; }
+.gen-bar:nth-child(3) { height: 30px; }
+.gen-bar:nth-child(4) { height: 22px; }
+.gen-bar:nth-child(5) { height: 14px; }
+
+@keyframes barBounce {
+  to { height: 8px; opacity: 0.4; }
+}
+
+.gen-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  margin: 0;
+  font-style: italic;
+}
+
+/* ── Done ── */
+.state-done {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notes-output {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+}
+
+.output-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(165,180,252,0.7);
+}
+
+.output-time {
+  font-size: 11px;
+  color: rgba(255,255,255,0.25);
+}
+
+.notes-content {
+  padding: 14px;
+  max-height: 280px;
+  overflow-y: auto;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: rgba(255,255,255,0.8);
+}
+
+.notes-content :deep(p) {
+  margin: 0 0 10px;
+}
+.notes-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.notes-content :deep(ul) {
+  margin: 6px 0 10px;
+  padding-left: 18px;
+}
+.notes-content :deep(li) {
+  margin-bottom: 5px;
+  color: rgba(255,255,255,0.72);
+}
+.notes-content :deep(h4) {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(165,180,252,0.6);
+  margin: 14px 0 6px;
+}
+.notes-content :deep(strong) {
+  font-weight: 600;
+  color: rgba(255,255,255,0.95);
+}
+
+/* ── Actions ── */
+.done-actions {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
 }
 
-.notes-dl-btn {
-  flex: 1;
-  padding: 10px;
-  background: #1e40af;
-  color: white;
+/* ── Shared Buttons ── */
+.btn-primary, .btn-stop, .btn-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: 9px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: opacity 0.2s, transform 0.15s;
+  padding: 12px 16px;
 }
 
-.notes-dl-btn:hover {
-  background: #1e3a8a;
+.btn-primary {
+  background: linear-gradient(135deg, #5b6cf8, #8b5cf6);
+  color: white;
 }
 
-.notes-reset-btn {
+.btn-stop {
+  background: rgba(239,68,68,0.12);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.2);
+}
+
+.btn-download {
+  flex: 1;
+  background: rgba(91,108,248,0.12);
+  color: #a5b4fc;
+  border: 1px solid rgba(91,108,248,0.2);
   padding: 10px 14px;
-  background: #f5f5f5;
-  color: #333;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
+}
+
+.btn-primary:hover, .btn-stop:hover, .btn-download:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+.btn-primary:active, .btn-stop:active, .btn-download:active {
+  transform: scale(0.98);
+}
+
+.btn-ghost {
+  padding: 10px 14px;
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.45);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
 }
+.btn-ghost:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
 
-.notes-reset-btn:hover {
-  background: #e5e5e5;
-}
-
-/* ---- Error ---- */
+/* ── Error ── */
 .notes-error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.18);
+  border-radius: 9px;
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: 12.5px;
+  color: #f87171;
+  line-height: 1.5;
 }
+
+.notes-error svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Scrollbar ── */
+.notes-body::-webkit-scrollbar,
+.notes-content::-webkit-scrollbar { width: 4px; }
+.notes-body::-webkit-scrollbar-track,
+.notes-content::-webkit-scrollbar-track { background: transparent; }
+.notes-body::-webkit-scrollbar-thumb,
+.notes-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 </style>
