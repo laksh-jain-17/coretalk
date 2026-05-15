@@ -92,6 +92,7 @@
 </template>
 
 <script>
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 export default {
   name: 'DocEnactPanel',
 
@@ -407,9 +408,9 @@ export default {
     // ─── Download ────────────────────────────────────────────────────────────
 
     async downloadDoc() {
-      const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
+      /*const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
         'https://esm.sh/docx@8.5.0'
-      );
+      );*/
 
       const docBody  = this.$refs.docBody;
       const children = [];
