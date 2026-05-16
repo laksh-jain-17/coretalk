@@ -448,7 +448,29 @@
       <!-- Compose Tab -->
       <template v-if="emailActiveTab === 'compose'">
         <div class="email-body-panel">
-          <input v-model="emailTo" type="email" placeholder="To" class="email-field" />
+          <!--input v-model="emailTo" type="email" placeholder="To" class="email-field" /-->
+          <div class="email-recipients-wrapper">
+            <div class="email-chips-row">
+            <span
+              v-for="(addr, i) in emailToList"
+              :key="i"
+              class="email-chip"
+            >
+            {{ addr }}
+              <button @click="removeRecipient(i)">✕</button>
+            </span>
+            <input
+              v-model="emailToInput"
+              type="text"
+              placeholder="Add recipient & press Enter or comma"
+              class="email-chip-input"
+              @keydown.enter.prevent="addRecipient"
+              @keydown.tab.prevent="addRecipient"
+              @keydown.","="addRecipient"
+              @blur="addRecipient"
+            />
+          </div>
+          </div>
           <input v-model="emailSubject" type="text" placeholder="Subject" class="email-field" />
           <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
           <div class="email-attach-row">
@@ -651,6 +673,9 @@ export default {
       aiNotesFaded: false,
       aiNotesFadeTimer: null,
       remoteAudioElements: new Map(),
+
+      emailToList: [],       
+      emailToInput: '', 
     };
   },
 
@@ -2347,86 +2372,116 @@ export default {
     },
 
     async sendEmail() {
-  // Guard: Gmail must be connected
-  if (!this.gmailAccessToken) {
-    //alert('Gmail not connected. Please click "Gmail Enact" first.');//
-    return;
-  }
-
-  // Guard: required fields
-  if (!this.emailTo || !this.emailSubject || !this.emailBody) {
-    //alert('Please fill in To, Subject, and Message fields.');//
-    return;
-  }
-
-  // Guard: basic email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(this.emailTo.trim())) {
-  //  alert('Please enter a valid recipient email address.');//
-    return;
-  }
-
-  this.emailSending = true;
-
-  try {
-    const authToken = localStorage.getItem('token');
-    const senderEmail =
-      localStorage.getItem('username') ||
-      this.userName ||
-      '';
-
-    // Sanitize attachments — drop any with missing base64
-    const attachments = (this.emailAttachments || [])
-      .map(a => ({
-        name: a.name || 'attachment',
-        base64: a.base64 || '',
-        mimeType: a.mimeType || 'application/octet-stream',
-      }))
-      .filter(a => a.base64.length > 0);
-
-    const response = await fetch(
-      `${import.meta.env.VITE_API_URL}/api/send-email`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          accessToken: this.gmailAccessToken,
-          senderEmail,
-          to: this.emailTo.trim(),
-          subject: this.emailSubject.trim(),
-          body: this.emailBody.trim(),
-          attachments,
-        }),
+      // Guard: Gmail must be connected
+      if (!this.gmailAccessToken) {
+        return;
       }
-    );
 
-    if (!response.ok) {
-      // Try to surface the backend error message
-      let errMsg = `Server error (${response.status})`;
+      // Flush any partially typed address in the input box
+      if (this.emailToInput && this.emailToInput.trim()) {
+        this.addRecipient();
+      }
+
+      // Guard: at least one recipient required
+      if (!this.emailToList || this.emailToList.length === 0) {
+        return;
+      }
+
+      // Guard: subject and body required
+      if (!this.emailSubject || !this.emailSubject.trim()) {
+        return;
+      }
+      if (!this.emailBody || !this.emailBody.trim()) {
+        return;
+      }
+
+      // Guard: validate every recipient email address
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const invalidAddresses = this.emailToList.filter(
+        addr => !emailRegex.test(addr.trim())
+      );
+      if (invalidAddresses.length > 0) {
+        return;
+      }
+
+      this.emailSending = true;
+
       try {
-        const errData = await response.json();
-        errMsg = errData.message || errData.error || errMsg;
-      } catch (_) {}
-      throw new Error(errMsg);
-    }
+        const authToken = localStorage.getItem('token');
+        const senderEmail =
+          localStorage.getItem('username') ||
+          this.userName ||
+          '';
 
-    // Success — reset form
-    this.emailTo = '';
-    this.emailSubject = '';
-    this.emailBody = '';
-    this.emailAttachments = [];
-    this.showEmailPanel = false;
-    //alert('Email sent successfully!');//
-  } catch (err) {
-    console.error('sendEmail error:', err);
-    //alert('Failed to send email: ' + err.message);//
-  } finally {
-    this.emailSending = false;
-  }
-},
+          // Sanitize attachments — drop any with missing base64
+        const attachments = (this.emailAttachments || [])
+          .map(a => ({
+          name: a.name || 'attachment',
+          base64: a.base64 || '',
+          mimeType: a.mimeType || 'application/octet-stream',
+        }))
+        .filter(a => a.base64.length > 0);
+
+        // Join all recipients as comma-separated string for the backend
+        const toField = this.emailToList.map(addr => addr.trim()).join(', ');
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/send-email`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            },
+            body: JSON.stringify({
+              accessToken: this.gmailAccessToken,
+              senderEmail,
+              to: toField,
+              subject: this.emailSubject.trim(),
+              body: this.emailBody.trim(),
+              attachments,
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          let errMsg = `Server error (${response.status})`;
+          try {
+            const errData = await response.json();
+            errMsg = errData.message || errData.error || errMsg;
+          } catch (_) {}
+          throw new Error(errMsg);
+        }
+
+        // Success — reset entire form
+        this.emailToList = [];
+        this.emailToInput = '';
+        this.emailSubject = '';
+        this.emailBody = '';
+        this.emailAttachments = [];
+        this.showEmailPanel = false;
+
+    } catch (err) {
+      console.error('sendEmail error:', err);
+    } finally {
+      this.emailSending = false;
+    }
+  },
+
+    addRecipient() {
+      const val = this.emailToInput.trim().replace(/,$/, '');
+      if (!val) return;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(val)) return; // silently ignore invalid
+      if (!this.emailToList.includes(val)) {
+        this.emailToList.push(val);
+      }
+      this.emailToInput = '';
+    },
+
+    removeRecipient(index) {
+      this.emailToList.splice(index, 1);
+    },
 
     handleChatAttachments(event) {
       const files = Array.from(event.target.files);
@@ -2581,6 +2636,8 @@ export default {
       this.showWhiteboard = false;
       this.showAiNotes = false;
       this.showDocEnact = false;
+      this.emailToList = [];
+      this.emailToInput = '';
     }
   },
 
@@ -3739,6 +3796,54 @@ body {
   font-size: 13px;
   padding: 0;
   line-height: 1;
+}
+
+.email-recipients-wrapper {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #f9f9f9;
+  padding: 6px 8px;
+  min-height: 40px;
+}
+
+.email-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.email-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e8f0fe;
+  color: #1a73e8;
+  border-radius: 16px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.email-chip button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #1a73e8;
+  font-size: 13px;
+  padding: 0;
+  line-height: 1;
+}
+
+.email-chip-input {
+  flex: 1;
+  min-width: 140px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: #000;
+  padding: 2px 4px;
 }
 
 .perm-deny    { background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
