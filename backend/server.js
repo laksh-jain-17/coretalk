@@ -121,6 +121,10 @@ io.on('connection', (socket) => {
     }
 
     socket.join(roomId);
+    if(rooms[roomId]._muteLocked)
+    {
+      socket.emit('all-muted',{locked:true});
+    }
     io.to(roomId).emit('participants-list', rooms[roomId]);
     const existingUsers = rooms[roomId].filter(p => p.id !== socket.id);
     socket.emit('existing-users', existingUsers);
