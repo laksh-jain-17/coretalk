@@ -393,7 +393,10 @@ app.post('/api/mute-all', authMiddleware, async (req, res) => {
   const isHost = await verifyIsHost(req.user.id, roomId);
   if (!isHost) return res.status(403).json({ success: false, message: 'Access denied.' });
 
-  if (rooms[roomId]) io.to(roomId).emit('all-muted');
+  if (rooms[roomId]) {
+    rooms[roomId]._muteLocked = !!locked;
+    io.to(roomId).emit('all-muted', { locked: !!locked });
+  }
   res.json({ success: true, message: 'All participants muted' });
 });
 
