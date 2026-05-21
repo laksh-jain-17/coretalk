@@ -118,11 +118,14 @@
       <div id="navbar" v-show="trayVisible">
         <ul>
           <li>
+            <!-- AFTER -->
             <button
               @mouseenter="() => setHover('mic')"
               @mouseleave="() => setHover(null)"
               @click="toggleMic"
               :class="{ 'active': micon, 'inactive': !micon }"
+              :style="isHostMuteLocked && !isHost ? 'opacity:0.4; cursor:not-allowed;' : ''"
+              :title="isHostMuteLocked && !isHost ? 'Muted by host' : ''"
             >
               <IconMaterialSymbolsHeadsetMic />
             </button>
@@ -308,8 +311,8 @@
               <li @click.stop="toggle_info">
                 ℹ️ Meeting Info
               </li>
-              <li v-if="isHost" @click.stop="muteAll">
-                🔇 Mute All
+              <li v-if="isHost" @click.stop="muteAll" :style="isMuteAllActive ? 'color:#f44336' : ''">
+                {{ isMuteAllActive ? '🔇 Unmute All' : '🔇 Mute All' }}
               </li>
               <li v-if="isHost" @click.stop="openExpelModal">
                 🚫 Expel Members
@@ -676,6 +679,8 @@ export default {
 
       emailToList: [],       
       emailToInput: '', 
+      isHostMuteLocked: false,
+      isMuteAllActive: false,
     };
   },
 
@@ -1678,10 +1683,16 @@ export default {
         else window.location.href = '/Ending';
       });
 
-      this.socket.on('all-muted', () => {
-        if (!this.isHost && this.micon) {
-          this.toggleMic();
-        }
+      this.socket.on('all-muted', ({ locked }) => {
+        this.isHostMuteLocked = locked;
+        if (!this.isHost) {
+          if (locked && this.micon) {
+            this.toggleMic(); // force mute
+          }
+        } else {
+          // Keep host's toggle button in sync
+          this.isMuteAllActive = locked;
+        }  
       });
 
       this.socket.on('expelled', () => {
@@ -1822,6 +1833,11 @@ export default {
     async toggleMic() {
       if (this.isInitializingMedia) {
         console.log('Media initialization in progress, ignoring toggle');
+        return;
+      }
+
+      if(this.isHostMuteLocked && !this.isHost)
+      {
         return;
       }
 
@@ -2157,19 +2173,21 @@ export default {
 
     async muteAll() {
       if (!this.isHost) return;
+      this.isMuteAllActive = !this.isMuteAllActive;
       try {
-        const authToken = localStorage.getItem('token'); // ADD THIS
+        const authToken = localStorage.getItem('token');
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`  // ADD THIS
+            'Authorization': `Bearer ${authToken}`
           },
-          body: JSON.stringify({ roomId: this.roomId })
+          body: JSON.stringify({ roomId: this.roomId, locked: this.isMuteAllActive })
         });
-        if (res.ok) console.log('All participants muted');
+        if (!res.ok) this.isMuteAllActive = !this.isMuteAllActive; // revert on failure
       } catch (err) {
-        console.error('Error muting all:', err);
+        console.error('Error toggling mute all:', err);
+        this.isMuteAllActive = !this.isMuteAllActive; // revert on failure
       }
     },
 
@@ -2638,6 +2656,8 @@ export default {
       this.showDocEnact = false;
       this.emailToList = [];
       this.emailToInput = '';
+      this.isHostMuteLocked = false;
+      this.isMuteAllActive = false;
     }
   },
 
