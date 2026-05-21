@@ -318,7 +318,9 @@ io.on('connection', (socket) => {
     if (!roomId || !socketUserId) return;
     const isHost = await verifyIsHost(socketUserId, roomId);
     if (!isHost) return;
-    io.to(roomId).emit('all-muted');
+    if(!rooms[roomId]) return;
+    rooms[roomId]._muteLocked = !!locked;
+    io.to(roomId).emit('all-muted',{locked:!!locked});
   });
 
   socket.on('lock-meeting', async ({ roomId, locked }) => {
