@@ -450,51 +450,75 @@
 
       <!-- Compose Tab -->
       <template v-if="emailActiveTab === 'compose'">
-        <div class="email-body-panel">
-          <!--input v-model="emailTo" type="email" placeholder="To" class="email-field" /-->
-          <div class="email-recipients-wrapper">
-            <div class="email-chips-row">
-            <span
-              v-for="(addr, i) in emailToList"
-              :key="i"
-              class="email-chip"
-            >
+  <div class="email-body-panel">
+    <!--input v-model="emailTo" type="email" placeholder="To" class="email-field" /-->
+    <div>
+      <div class="email-recipients-wrapper" :class="{ 'field-error-border': emailErrors.recipients }">
+        <div class="email-chips-row">
+          <span
+            v-for="(addr, i) in emailToList"
+            :key="i"
+            class="email-chip"
+          >
             {{ addr }}
-              <button @click="removeRecipient(i)">✕</button>
-            </span>
-            <input
-              v-model="emailToInput"
-              type="text"
-              placeholder="Add recipient & press Enter or comma"
-              class="email-chip-input"
-              @keydown.enter.prevent="addRecipient"
-              @keydown.tab.prevent="addRecipient"
-              @keydown.","="addRecipient"
-              @blur="addRecipient"
-            />
-          </div>
-          </div>
-          <input v-model="emailSubject" type="text" placeholder="Subject" class="email-field" />
-          <textarea v-model="emailBody" placeholder="Write your message..." class="email-textarea"></textarea>
-          <div class="email-attach-row">
-            <label class="email-attach-btn">
-               Attach files
-              <input type="file" multiple ref="emailFileInput" @change="handleEmailAttachments" style="display:none" />
-            </label>
-            <div class="email-attach-list">
-              <span v-for="(f, i) in emailAttachments" :key="i" class="email-attach-chip">
-                {{ f.name }}
-                <button @click="removeAttachment(i)">✕</button>
-              </span>
-            </div>
-          </div>
+            <button @click="removeRecipient(i)">✕</button>
+          </span>
+          <input
+            v-model="emailToInput"
+            type="text"
+            placeholder="Add recipient & press Enter or comma"
+            class="email-chip-input"
+            @keydown.enter.prevent="addRecipient"
+            @keydown.tab.prevent="addRecipient"
+            @keydown.","="addRecipient"
+            @blur="addRecipient"
+          />
         </div>
-        <div class="email-footer">
-          <button @click="sendEmail" :disabled="emailSending" class="email-send-btn">
-            {{ emailSending ? 'Sending...' : 'Send' }}
-          </button>
-        </div>
-      </template>
+      </div>
+      <span v-if="emailErrors.recipients" class="field-error-msg">{{ emailErrors.recipients }}</span>
+    </div>
+
+    <div>
+      <input
+        v-model="emailSubject"
+        type="text"
+        placeholder="Subject"
+        class="email-field"
+        :class="{ 'field-error-border': emailErrors.subject }"
+      />
+      <span v-if="emailErrors.subject" class="field-error-msg">{{ emailErrors.subject }}</span>
+    </div>
+
+    <div>
+      <textarea
+        v-model="emailBody"
+        placeholder="Write your message..."
+        class="email-textarea"
+        :class="{ 'field-error-border': emailErrors.body }"
+      ></textarea>
+      <span v-if="emailErrors.body" class="field-error-msg">{{ emailErrors.body }}</span>
+    </div>
+
+    <div class="email-attach-row">
+      <label class="email-attach-btn">
+        Attach files
+        <input type="file" multiple ref="emailFileInput" @change="handleEmailAttachments" style="display:none" />
+      </label>
+      <div class="email-attach-list">
+        <span v-for="(f, i) in emailAttachments" :key="i" class="email-attach-chip">
+          {{ f.name }}
+          <button @click="removeAttachment(i)">✕</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="email-footer">
+    <button @click="sendEmail" :disabled="emailSending" class="email-send-btn">
+      {{ emailSending ? 'Sending...' : 'Send' }}
+    </button>
+  </div>
+</template>
 
       <!-- Inbox Tab -->
       <template v-if="emailActiveTab === 'inbox'">
@@ -651,6 +675,7 @@ export default {
       emailTo: '',
       emailSubject: '',
       emailBody: '',
+      emailErrors: { recipients: '', subject: '', body: '' },
       emailSending: false,
       emailActiveTab: 'compose',
       inboxMessages: [],
@@ -2390,101 +2415,106 @@ export default {
     },
 
     async sendEmail() {
-      // Guard: Gmail must be connected
-      if (!this.gmailAccessToken) {
-        return;
-      }
+  if (!this.gmailAccessToken) return;
 
-      // Flush any partially typed address in the input box
-      if (this.emailToInput && this.emailToInput.trim()) {
-        this.addRecipient();
-      }
+  // Flush any partially typed address in the input box
+  if (this.emailToInput && this.emailToInput.trim()) {
+    this.addRecipient();
+  }
 
-      // Guard: at least one recipient required
-      if (!this.emailToList || this.emailToList.length === 0) {
-        return;
-      }
+  // Reset previous errors
+  this.emailErrors = { recipients: '', subject: '', body: '' };
 
-      // Guard: subject and body required
-      if (!this.emailSubject || !this.emailSubject.trim()) {
-        return;
-      }
-      if (!this.emailBody || !this.emailBody.trim()) {
-        return;
-      }
+  let hasError = false;
 
-      // Guard: validate every recipient email address
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      const invalidAddresses = this.emailToList.filter(
-        addr => !emailRegex.test(addr.trim())
-      );
-      if (invalidAddresses.length > 0) {
-        return;
-      }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-      this.emailSending = true;
-
-      try {
-        const authToken = localStorage.getItem('token');
-        const senderEmail =
-          localStorage.getItem('username') ||
-          this.userName ||
-          '';
-
-          // Sanitize attachments — drop any with missing base64
-        const attachments = (this.emailAttachments || [])
-          .map(a => ({
-          name: a.name || 'attachment',
-          base64: a.base64 || '',
-          mimeType: a.mimeType || 'application/octet-stream',
-        }))
-        .filter(a => a.base64.length > 0);
-
-        // Join all recipients as comma-separated string for the backend
-        const toField = this.emailToList.map(addr => addr.trim()).join(', ');
-
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/send-email`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-            },
-            body: JSON.stringify({
-              accessToken: this.gmailAccessToken,
-              senderEmail,
-              to: toField,
-              subject: this.emailSubject.trim(),
-              body: this.emailBody.trim(),
-              attachments,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          let errMsg = `Server error (${response.status})`;
-          try {
-            const errData = await response.json();
-            errMsg = errData.message || errData.error || errMsg;
-          } catch (_) {}
-          throw new Error(errMsg);
-        }
-
-        // Success — reset entire form
-        this.emailToList = [];
-        this.emailToInput = '';
-        this.emailSubject = '';
-        this.emailBody = '';
-        this.emailAttachments = [];
-        this.showEmailPanel = false;
-
-    } catch (err) {
-      console.error('sendEmail error:', err);
-    } finally {
-      this.emailSending = false;
+  if (!this.emailToList || this.emailToList.length === 0) {
+    this.emailErrors.recipients = 'At least one recipient email is required.';
+    hasError = true;
+  } else {
+    const invalidAddresses = this.emailToList.filter(addr => !emailRegex.test(addr.trim()));
+    if (invalidAddresses.length > 0) {
+      this.emailErrors.recipients = `Invalid email address: ${invalidAddresses.join(', ')}`;
+      hasError = true;
     }
-  },
+  }
+
+  if (!this.emailSubject || !this.emailSubject.trim()) {
+    this.emailErrors.subject = 'Subject is required.';
+    hasError = true;
+  }
+
+  if (!this.emailBody || !this.emailBody.trim()) {
+    this.emailErrors.body = 'Message body is required.';
+    hasError = true;
+  }
+
+  if (hasError) return;
+
+  this.emailSending = true;
+  try {
+    const authToken = localStorage.getItem('token');
+    const senderEmail =
+      localStorage.getItem('username') ||
+      this.userName ||
+      '';
+
+    // Sanitize attachments — drop any with missing base64
+    const attachments = (this.emailAttachments || [])
+      .map(a => ({
+        name: a.name || 'attachment',
+        base64: a.base64 || '',
+        mimeType: a.mimeType || 'application/octet-stream',
+      }))
+      .filter(a => a.base64.length > 0);
+
+    // Join all recipients as comma-separated string for the backend
+    const toField = this.emailToList.map(addr => addr.trim()).join(', ');
+
+    const response = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/send-email`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          accessToken: this.gmailAccessToken,
+          senderEmail,
+          to: toField,
+          subject: this.emailSubject.trim(),
+          body: this.emailBody.trim(),
+          attachments,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      let errMsg = `Server error (${response.status})`;
+      try {
+        const errData = await response.json();
+        errMsg = errData.message || errData.error || errMsg;
+      } catch (_) {}
+      throw new Error(errMsg);
+    }
+
+    // Success — reset entire form
+    this.emailToList = [];
+    this.emailToInput = '';
+    this.emailSubject = '';
+    this.emailBody = '';
+    this.emailAttachments = [];
+    this.emailErrors = { recipients: '', subject: '', body: '' };
+    this.showEmailPanel = false;
+
+  } catch (err) {
+    console.error('sendEmail error:', err);
+  } finally {
+    this.emailSending = false;
+  }
+},
 
     addRecipient() {
       const val = this.emailToInput.trim().replace(/,$/, '');
@@ -3864,6 +3894,17 @@ body {
   font-size: 13px;
   color: #000;
   padding: 2px 4px;
+}
+
+.field-error-border {
+  border: 1px solid #e53935 !important;
+}
+
+.field-error-msg {
+  color: #e53935;
+  font-size: 11px;
+  margin-top: 3px;
+  display: block;
 }
 
 .perm-deny    { background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; }
