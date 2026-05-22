@@ -11,6 +11,9 @@ import { getToken, logout } from './auth'
 
 const user = ref(null);
 onMounted(async() => {
+  const ping = () => fetch(`${import.meta.env.VITE_API_URL}/api/health`).catch(() => {});
+  ping(); 
+  setInterval(ping, 10 * 60 * 1000);
   const token = getToken();
   if(token)
   {
