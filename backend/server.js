@@ -318,13 +318,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('mute-all', async ({ roomId }) => {
+  socket.on('mute-all', async ({ roomId, locked }) => {  // ← add 'locked' here
     if (!roomId || !socketUserId) return;
     const isHost = await verifyIsHost(socketUserId, roomId);
     if (!isHost) return;
-    if(!rooms[roomId]) return;
+    if (!rooms[roomId]) return;
     rooms[roomId]._muteLocked = !!locked;
-    io.to(roomId).emit('all-muted',{locked:!!locked});
+    io.to(roomId).emit('all-muted', { locked: !!locked });
   });
 
   socket.on('lock-meeting', async ({ roomId, locked }) => {
@@ -391,7 +391,7 @@ app.post('/api/end-meeting', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/mute-all', authMiddleware, async (req, res) => {
-  const { roomId } = req.body;
+  const { roomId, locked } = req.body;  // ← add 'locked' here
   if (!roomId) return res.status(400).json({ success: false, message: 'roomId is required' });
 
   const isHost = await verifyIsHost(req.user.id, roomId);
@@ -401,7 +401,7 @@ app.post('/api/mute-all', authMiddleware, async (req, res) => {
     rooms[roomId]._muteLocked = !!locked;
     io.to(roomId).emit('all-muted', { locked: !!locked });
   }
-  res.json({ success: true, message: 'All participants muted' });
+  res.json({ success: true, message: 'Mute state updated' });
 });
 
 app.post('/api/lock-meeting', authMiddleware, async (req, res) => {
