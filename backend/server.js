@@ -58,6 +58,8 @@ app.use('/api/admin', adminRoutes);
 
 app.get('/', (req, res) => res.send('Backend is running'));
 
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
 app.use('/api/livekit', livekitRoutes);
 
 mongoose.connect(process.env.MONGO_URL)
