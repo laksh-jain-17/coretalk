@@ -1708,19 +1708,35 @@ export default {
         else window.location.href = '/Ending';
       });
 
-      this.socket.on('all-muted', ({ locked }) => {
+      this.socket.on('all-muted', async ({ locked }) => {
         if (this.isHost) {
-        // Host: sync the button label/style only. Never lock the host out.
+        // Host: update button state only. Never mute the host.
           this.isMuteAllActive = locked;
-        } else {
-          // Non-host: lock them out of unmuting themselves.
-          this.isHostMuteLocked = locked;
-          // Force-mute immediately if the host just enabled the lock.
-          if (locked && this.micon) {
-            this.toggleMic();
+          return;
+        }
+ 
+         // ── Non-host path ──────────────────────────────────────────────
+        // Lock the UI so they can't click Unmute while host lock is active.
+        this.isHostMuteLocked = locked;
+ 
+        if (locked) {
+          // ACTUALLY mute the LiveKit track — kills the audio stream immediately,
+          // not just grays out a button. This is what stops a speaking member mid-sentence.
+          if (this.livekitRoom?.localParticipant) {
+          try {
+            await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
+          } 
+          catch (err) {
+            console.error('Force-mute failed:', err);
           }
         }
-      });
+        // Sync UI state regardless of whether LiveKit call succeeded.
+        this.micon = false;
+      }
+      // When locked === false (host lifts the mute), we intentionally do NOT
+      // auto-unmute members. They should choose to unmute themselves.
+      // Just clearing isHostMuteLocked (done above) re-enables their mic button.
+    });
 
       this.socket.on('expelled', () => {
       //  alert('You have been removed from the meeting by the host.');//
@@ -2199,26 +2215,25 @@ export default {
     },
 
     async muteAll() {
-  if (!this.isHost) return;
-  const nextState = !this.isMuteAllActive; // compute desired state, don't set yet
-  try {
-    const authToken = localStorage.getItem('token');
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
-      },
-      body: JSON.stringify({ roomId: this.roomId, locked: nextState })
-    });
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      console.error('muteAll failed:', res.status, errData);
-      // Nothing to revert — we never wrote locally.
-    }
-    // On success the server emits 'all-muted' to everyone in the room,
-    // including this host. The handler below updates isMuteAllActive.
-  } catch (err) {
+      if (!this.isHost) return;
+      const nextState = !this.isMuteAllActive;
+      try {
+        const authToken = localStorage.getItem('token');
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ roomId: this.roomId, locked: nextState })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error('muteAll failed:', res.status, errData);
+      }
+      // isMuteAllActive is set by the 'all-muted' socket event below — not here.
+    } 
+    catch (err) {
     console.error('Error toggling mute all:', err);
   }
 },
