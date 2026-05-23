@@ -1709,15 +1709,17 @@ export default {
       });
 
       this.socket.on('all-muted', ({ locked }) => {
-        this.isHostMuteLocked = locked;
-        if (!this.isHost) {
-          if (locked && this.micon) {
-            this.toggleMic(); // force mute
-          }
-        } else {
-          // Keep host's toggle button in sync
+        if (this.isHost) {
+        // Host: sync the button label/style only. Never lock the host out.
           this.isMuteAllActive = locked;
-        }  
+        } else {
+          // Non-host: lock them out of unmuting themselves.
+          this.isHostMuteLocked = locked;
+          // Force-mute immediately if the host just enabled the lock.
+          if (locked && this.micon) {
+            this.toggleMic();
+          }
+        }
       });
 
       this.socket.on('expelled', () => {
