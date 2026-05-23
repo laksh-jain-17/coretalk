@@ -2197,24 +2197,29 @@ export default {
     },
 
     async muteAll() {
-      if (!this.isHost) return;
-      this.isMuteAllActive = !this.isMuteAllActive;
-      try {
-        const authToken = localStorage.getItem('token');
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`
-          },
-          body: JSON.stringify({ roomId: this.roomId, locked: this.isMuteAllActive })
-        });
-        if (!res.ok) this.isMuteAllActive = !this.isMuteAllActive; // revert on failure
-      } catch (err) {
-        console.error('Error toggling mute all:', err);
-        this.isMuteAllActive = !this.isMuteAllActive; // revert on failure
-      }
-    },
+  if (!this.isHost) return;
+  const nextState = !this.isMuteAllActive; // compute desired state, don't set yet
+  try {
+    const authToken = localStorage.getItem('token');
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ roomId: this.roomId, locked: nextState })
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      console.error('muteAll failed:', res.status, errData);
+      // Nothing to revert — we never wrote locally.
+    }
+    // On success the server emits 'all-muted' to everyone in the room,
+    // including this host. The handler below updates isMuteAllActive.
+  } catch (err) {
+    console.error('Error toggling mute all:', err);
+  }
+},
 
     openExpelModal() {
       this.expelSelected = [];
