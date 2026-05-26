@@ -124,6 +124,7 @@
               @mouseleave="() => setHover(null)"
               @click="toggleMic"
               :class="{ 'active': micon, 'inactive': !micon }"
+              :disabled="isHostMuteLocked && !isHost"
               :style="isHostMuteLocked && !isHost ? 'opacity:0.4; cursor:not-allowed;' : ''"
               :title="isHostMuteLocked && !isHost ? 'Muted by host' : ''"
             >
@@ -1709,34 +1710,25 @@ export default {
       });
 
       this.socket.on('all-muted', async ({ locked }) => {
-        if (this.isHost) {
-        // Host: update button state only. Never mute the host.
+        if (this.isHost) 
+        {
           this.isMuteAllActive = locked;
           return;
         }
- 
-         // ── Non-host path ──────────────────────────────────────────────
-        // Lock the UI so they can't click Unmute while host lock is active.
         this.isHostMuteLocked = locked;
- 
-        if (locked) {
-          // ACTUALLY mute the LiveKit track — kills the audio stream immediately,
-          // not just grays out a button. This is what stops a speaking member mid-sentence.
-          if (this.livekitRoom?.localParticipant) {
+
+        if (locked) 
+        {
+          if (this.micon && this.livekitRoom?.localParticipant) {
           try {
             await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
-          } 
-          catch (err) {
+          } catch (err) {
             console.error('Force-mute failed:', err);
           }
         }
-        // Sync UI state regardless of whether LiveKit call succeeded.
         this.micon = false;
       }
-      // When locked === false (host lifts the mute), we intentionally do NOT
-      // auto-unmute members. They should choose to unmute themselves.
-      // Just clearing isHostMuteLocked (done above) re-enables their mic button.
-    });
+      });
 
       this.socket.on('expelled', () => {
       //  alert('You have been removed from the meeting by the host.');//
