@@ -1366,6 +1366,14 @@ export default {
       this.livekitRoom = new Room({
         adaptiveStream: true,
         dynacast: true,
+        audioCaptureDefaults: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        audioOutput: {
+          deviceId: 'default',
+        },
       });
 
       this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
