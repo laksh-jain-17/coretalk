@@ -229,8 +229,9 @@
                       <option
                         v-for="p in participants"
                         :key="p.socketId || p.id"
-                        :value="p.socketId"   
-                        > {{ p.name }}</option>
+                        :value="p.socketId || p.id"
+                        :disabled="!p.socketId"
+                      >{{ p.name }}{{ !p.socketId ? ' (connecting...)' : '' }}</option>
                   </select>
                 </div>
               <button @click="togglePanel(null)">✕</button>  
@@ -1520,21 +1521,17 @@ export default {
     },
 
     handleParticipantConnected(participant) {
-      // Remove any duplicate first
-      this.participants = this.participants.filter(
-        p => p.id !== participant.identity
-      );
-
+      this.participants = this.participants.filter(p => p.id !== participant.identity);
       this.participants.push({
         id: participant.identity,
         userId: participant.identity,
+        socketId: null,          // ← explicit null; filled by participants-list
         name: participant.name || participant.identity,
         isHost: false,
         hasMic: false,
         hasVideo: false,
         captions: ''
       });
-
       this.remoteParticipants.set(participant.identity, participant);
     },
 
@@ -2125,14 +2122,16 @@ export default {
       const text = (this.newMessage || '').trim();
       if (!text && this.chatAttachments.length === 0) return;
 
-      const targetSocketId = this.selectedRecipient === 'all'
-        ? 'all'
-        : (this.participants.find(p => (p.socketId || p.id) === this.selectedRecipient)?.socketId || null);
+      const recipientParticipant = this.selectedRecipient === 'all' ? null : this.participants.find(p => (p.socketId || p.id) === this.selectedRecipient);
 
-      if (this.selectedRecipient !== 'all' && !targetSocketId) {
-        console.warn('Cannot send private message: no socket ID for recipient');
+      if (this.selectedRecipient !== 'all' && (!recipientParticipant || !recipientParticipant.socketId)) {
+        console.warn('Cannot send private message: recipient socket ID not yet available');
+        // Reset to all so user isn't stuck
+        this.selectedRecipient = 'all';
         return;
       }
+
+      const targetSocketId = recipientParticipant ? recipientParticipant.socketId : 'all';
 
       const message = {
         sender: this.userName,
