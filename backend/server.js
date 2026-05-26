@@ -242,7 +242,7 @@ io.on('connection', (socket) => {
   // ── chat-message ───────────────────────────────────────────────────────────
   // FIX: use joinedRoom (server-verified) for the emit, not the client-supplied
   // roomId. A malicious client could otherwise broadcast to an arbitrary room.
-  socket.on('chat-message', ({ sender, text, timestamp, attachments }) => {
+ /* socket.on('chat-message', ({ sender, text, timestamp, attachments }) => {
     if (!joinedRoom) return;
 
     const safeText    = typeof text   === 'string' ? text.slice(0, 2000) : '';
@@ -264,7 +264,48 @@ io.on('connection', (socket) => {
       timestamp:   timestamp || Date.now(),
       attachments: safeAttachments
     });
-  });
+  }); old function*/
+
+  socket.on('chat-message', ({ sender, text, timestamp, attachments, targetSocketId }) => {
+  if (!joinedRoom) return;
+
+  const safeText    = typeof text   === 'string' ? text.slice(0, 2000) : '';
+  const safeSender  = typeof sender === 'string' ? sender.slice(0, 60) : 'Unknown';
+  const safeAttachments = Array.isArray(attachments)
+    ? attachments.slice(0, 5).map(a => ({
+        name:     typeof a.name     === 'string' ? a.name.slice(0, 200)     : '',
+        mimeType: typeof a.mimeType === 'string' ? a.mimeType.slice(0, 100) : '',
+        base64:   typeof a.base64   === 'string' && a.base64.length < 2_800_000 ? a.base64 : '',
+        size:     typeof a.size     === 'number' ? a.size : 0,
+      }))
+    : [];
+
+  if (!safeText && safeAttachments.length === 0) return;
+
+  const payload = {
+    sender:      safeSender,
+    text:        safeText,
+    timestamp:   timestamp || Date.now(),
+    attachments: safeAttachments,
+  };
+
+  if (targetSocketId && targetSocketId !== 'all') {
+    // Validate the target is actually in the same room
+    const targetInRoom = rooms[joinedRoom]?.find(p => p.id === targetSocketId);
+    if (!targetInRoom) return;
+
+    payload.isPrivate = true;
+    payload.privateLabel = `(private to ${targetInRoom.name})`;
+
+    // Send to recipient
+    io.to(targetSocketId).emit('chat-message', { ...payload, privateLabel: `(private from ${safeSender})` });
+    // Echo back to sender only (don't use io.to(joinedRoom))
+    socket.emit('chat-message', { ...payload, privateLabel: `(private to ${targetInRoom.name})` });
+  } else {
+    io.to(joinedRoom).emit('chat-message', payload);
+  }
+});
+  
 
   // ── hand-raised ────────────────────────────────────────────────────────────
   // FIX: use joinedRoom for emit, not client-supplied roomId.
