@@ -217,12 +217,33 @@
             </ul>
             <div id="chat-box" v-if="activePanel === 'chat'">
               <div class="chat-header">
-                Chat
-                <button @click="togglePanel(null)">✕</button>
-              </div>
+                <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+                  <span style="font-size:16px; font-weight:600; color:#000;">Chat</span>
+                  <select
+                    v-model="selectedRecipient"
+                    style="font-size:12px; border:1px solid #e0e0e0; border-radius:6px;
+                    padding:3px 6px; color:#333; background:#f9f9f9; cursor:pointer;
+                     max-width:200px; outline:none;"
+                    >
+                      <option value="all">📢 All Participants</option>
+                      <option
+                        v-for="p in participants"
+                        :key="p.socketId || p.id"
+                        :value="p.socketId || p.id"
+                      > {{ p.name }}</option>
+                  </select>
+                </div>
+              <button @click="togglePanel(null)">✕</button>  
+            </div>
               <div class="chat-body" ref="chatBody">
-                <div v-for="(msg, index) in messages" :key="index" class="message">
+                <div v-for="(msg, index) in messages" :key="index"
+                   class="message"
+                   :style="msg.isPrivate ? 'border-left: 3px solid #7c3aed; background:#f5f3ff;' : ''">
                   <div class="message-sender">{{ msg.sender }}</div>
+                    <div v-if="msg.privateLabel"
+                     style="font-size:11px; color:#7c3aed; font-weight:600; margin-bottom:3px;">
+                       {{ msg.privateLabel }}
+                    </div>
                   <div class="message-text">{{ msg.text }}</div>
                   <div v-if="msg.attachments && msg.attachments.length > 0">
                     <div v-for="(att, i) in msg.attachments" :key="i">
@@ -707,6 +728,7 @@ export default {
       emailToInput: '', 
       isHostMuteLocked: false,
       isMuteAllActive: false,
+      selectedRecipient: 'all',
     };
   },
 
@@ -1676,7 +1698,7 @@ export default {
         this.isSocketConnected = false;
       });
 
-      this.socket.on('chat-message', ({ sender, text, timestamp, attachments }) => {
+     /* this.socket.on('chat-message', ({ sender, text, timestamp, attachments }) => {
         const message = {
           sender: sender || 'Unknown',
           text: text || '',
@@ -1695,7 +1717,24 @@ export default {
             chatBody.scrollTop = chatBody.scrollHeight;
           }
         });
-      });
+      });*/
+
+      this.socket.on('chat-message', ({ sender, text, timestamp, attachments, isPrivate, privateLabel }) => {
+  const message = {
+    sender: sender || 'Unknown',
+    text: text || '',
+    timestamp: timestamp || Date.now(),
+    attachments: attachments || [],
+    isPrivate: isPrivate || false,
+    privateLabel: privateLabel || '',
+  };
+  this.messages.push(message);
+  if (this.activePanel !== 'chat') this.unreadMessages++;
+  this.$nextTick(() => {
+    const chatBody = this.$refs.chatBody;
+    if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+  });
+});
 
       this.socket.on('hand-raised', ({ userId, userName, isRaised }) => {
         if (isRaised) {
@@ -2091,10 +2130,11 @@ export default {
         attachments: this.chatAttachments.map(a => ({
           name: a.name,
           mimeType: a.mimeType,
-          previewUrl: a.previewUrl,  // images only, others null
-          base64: a.base64, 
+          previewUrl: a.previewUrl,
+          base64: a.base64,
           size: a.size
-        }))
+        })),
+        targetSocketId: this.selectedRecipient,  // 'all' or a specific socket ID
       };
 
       this.safeBroadcast('chat-message', {
@@ -2106,9 +2146,7 @@ export default {
       this.chatAttachments = [];
       this.$nextTick(() => {
         const chatBody = this.$refs.chatBody;
-        if (chatBody) {
-          chatBody.scrollTop = chatBody.scrollHeight;
-        }
+        if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
       });
     },
 
