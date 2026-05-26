@@ -2092,9 +2092,11 @@ export default {
     togglePanel(panel) {
       this.activePanel = this.activePanel === panel ? null : panel;
       this.activeDropdown = null;
-
       if (panel === 'chat') {
         this.unreadMessages = 0;
+      }
+      if (!panel) {
+        this.selectedRecipient = 'all'; 
       }
     },
 
