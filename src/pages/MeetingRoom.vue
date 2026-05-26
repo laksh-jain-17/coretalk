@@ -2750,7 +2750,7 @@ export default {
       this.emailToInput = '';
       this.isHostMuteLocked = false;
       this.isMuteAllActive = false;
-      this.selectedRecipient: 'all';
+      this.selectedRecipient = 'all';
     }
   },
 
