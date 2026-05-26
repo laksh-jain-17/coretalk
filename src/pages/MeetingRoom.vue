@@ -225,12 +225,12 @@
                     padding:3px 6px; color:#333; background:#f9f9f9; cursor:pointer;
                      max-width:200px; outline:none;"
                     >
-                      <option value="all">📢 All Participants</option>
+                      <option value="all">All Participants</option>
                       <option
                         v-for="p in participants"
                         :key="p.socketId || p.id"
-                        :value="p.socketId || p.id"
-                      > {{ p.name }}</option>
+                        :value="p.socketId"   
+                        > {{ p.name }}</option>
                   </select>
                 </div>
               <button @click="togglePanel(null)">✕</button>  
@@ -2125,6 +2125,15 @@ export default {
       const text = (this.newMessage || '').trim();
       if (!text && this.chatAttachments.length === 0) return;
 
+      const targetSocketId = this.selectedRecipient === 'all'
+        ? 'all'
+        : (this.participants.find(p => (p.socketId || p.id) === this.selectedRecipient)?.socketId || null);
+
+      if (this.selectedRecipient !== 'all' && !targetSocketId) {
+        console.warn('Cannot send private message: no socket ID for recipient');
+        return;
+      }
+
       const message = {
         sender: this.userName,
         text,
@@ -2136,9 +2145,9 @@ export default {
           base64: a.base64,
           size: a.size
         })),
-        targetSocketId: this.selectedRecipient,  // 'all' or a specific socket ID
+        targetSocketId: targetSocketId || 'all',
       };
-
+      
       this.safeBroadcast('chat-message', {
         roomId: this.roomId,
         ...message
