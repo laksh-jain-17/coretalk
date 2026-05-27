@@ -237,7 +237,7 @@
               <button @click="togglePanel(null)">✕</button>  
             </div>
               <div class="chat-body" ref="chatBody">
-                <div v-for="(msg, index) in messages" :key="index"
+                <div v-for="(msg, index) in filteredMessages" :key="index"
                    class="message"
                    :style="msg.isPrivate ? 'border-left: 3px solid #7c3aed; background:#f5f3ff;' : ''">
                   <div class="message-sender">{{ msg.sender }}</div>
@@ -782,6 +782,23 @@ export default {
           this.aiNotesFadeTimer = null;
         }
       }
+    },
+
+    filteredMessages() {
+      if (this.selectedRecipient === 'all') {
+        return this.messages.filter(msg => !msg.isPrivate);
+      }
+      const recipient = this.participants.find(
+        p => (p.socketId || p.userId || p.id) === this.selectedRecipient
+      );
+      const recipientName = recipient?.name;
+      return this.messages.filter(msg => {
+        if (!msg.isPrivate) return false;
+        return (
+          msg.privateLabel?.includes(`to ${recipientName}`) ||
+          msg.privateLabel?.includes(`from ${recipientName}`)
+        );
+      });
     },
 
     activePanel(newVal) {
@@ -1782,50 +1799,58 @@ export default {
       });
 
       this.socket.on('participants-list', (list) => {
-        console.log('participants-list received:', JSON.stringify(list));
+  console.log('participants-list received:', JSON.stringify(list));
 
-        const selfEntry = list.find(p => p.userId === this.userId);
-        if (selfEntry) {
-          this.isHost = selfEntry.isHost || false;
-          localStorage.setItem('isHost', String(this.isHost));
-        }
+  const selfEntry = list.find(p => p.userId === this.userId);
+  if (selfEntry) {
+    this.isHost = selfEntry.isHost || false;
+    localStorage.setItem('isHost', String(this.isHost));
+  }
 
-        list
-          .filter(p => p.userId !== this.userId)
-          .forEach(p => {
-            const existing = this.participants.find(
-              ep => ep.userId === p.userId || ep.id === p.userId
-            );
-            if (existing) {
-              existing.isHost = p.isHost || false;
-              existing.name = p.name || existing.name;
-              existing.socketId = p.id;   // keep socket ID current (reconnects change it)
-            } else {
-              this.participants.push({
-                id: p.userId,
-                socketId: p.id,       // real socket.id from server
-                userId: p.userId,
-                name: p.name || p.userId,
-                isHost: p.isHost || false,
-                hasMic: false,
-                hasVideo: false,
-                captions: ''
-              });
-            }
-          });
-
-        this.$nextTick(() => {
-          if (!this.livekitRoom || !this.livekitRoom.remoteParticipants) return;
-          this.livekitRoom.remoteParticipants.forEach((participant) => {
-            if (!participant.trackPublications) return;
-            participant.trackPublications.forEach((publication) => {
-              if (publication.isSubscribed && publication.track) {
-                this.handleTrackSubscribed(publication.track, participant);
-              }
-            });
-          });
+  list
+    .filter(p => p.userId !== this.userId)
+    .forEach(p => {
+      const existing = this.participants.find(
+        ep => ep.userId === p.userId || ep.id === p.userId
+      );
+      if (existing) {
+        existing.isHost = p.isHost || false;
+        existing.name = p.name || existing.name;
+        existing.socketId = p.id;
+      } else {
+        this.participants.push({
+          id: p.userId,
+          socketId: p.id,
+          userId: p.userId,
+          name: p.name || p.userId,
+          isHost: p.isHost || false,
+          hasMic: false,
+          hasVideo: false,
+          captions: ''
         });
+      }
+    });
+
+  // ADD THIS BLOCK HERE:
+  if (this.selectedRecipient !== 'all') {
+    const stillValid = this.participants.find(
+      p => (p.socketId || p.userId || p.id) === this.selectedRecipient
+    );
+    if (!stillValid) this.selectedRecipient = 'all';
+  }
+
+  this.$nextTick(() => {
+    if (!this.livekitRoom || !this.livekitRoom.remoteParticipants) return;
+    this.livekitRoom.remoteParticipants.forEach((participant) => {
+      if (!participant.trackPublications) return;
+      participant.trackPublications.forEach((publication) => {
+        if (publication.isSubscribed && publication.track) {
+          this.handleTrackSubscribed(publication.track, participant);
+        }
       });
+    });
+  });
+});
 
       this.socket.on('participant-waiting', ({ socketId, userId, userName }) => {
         console.log('HOST RECEIVED participant-waiting from:', userName, socketId);
