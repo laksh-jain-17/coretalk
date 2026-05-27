@@ -291,7 +291,7 @@ io.on('connection', (socket) => {
 
   if (targetSocketId && targetSocketId !== 'all') {
     // Validate the target is actually in the same room
-    const targetInRoom = rooms[joinedRoom]?.find(p => p.id === targetSocketId);
+    const targetInRoom = rooms[joinedRoom]?.find(p => p.id === targetSocketId || p.userId === targetSocketId);
     if (!targetInRoom) return;
 
     payload.isPrivate = true;
