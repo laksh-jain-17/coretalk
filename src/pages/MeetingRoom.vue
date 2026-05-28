@@ -229,9 +229,8 @@
                       <option
                         v-for="p in participants"
                         :key="p.socketId || p.id"
-                        :value="p.socketId || p.id"
-                        :disabled="!p.socketId"
-                      >{{ p.name }}{{ !p.socketId ? ' (connecting...)' : '' }}</option>
+                        :value="p.socketId || p.userId || p.id"
+                        >{{ p.name }}</option>
                   </select>
                 </div>
               <button @click="togglePanel(null)">✕</button>  
@@ -414,7 +413,7 @@
           <span class="info-label">Participants:</span>
           <span class="info-value">{{ totalParticipantCount }}</span>
         </div>
-        <button id="copylink" @click="copystring">📋 Copy Meeting Link</button>
+        <button id="copylink" @click="copystring">Copy Meeting Link</button>
       </div>
     </div>
 
@@ -785,10 +784,7 @@ export default {
     },
 
     filteredMessages() {
-      if (this.selectedRecipient === 'all') {
-        return this.messages;
-      }
-      return this.messages.filter(msg => msg.isPrivate);
+      return this.messages;
     },
 
     activePanel(newVal) {
@@ -2134,44 +2130,44 @@ export default {
     },
 
     sendMessage() {
-  const text = (this.newMessage || '').trim();
-  if (!text && this.chatAttachments.length === 0) return;
+      const text = (this.newMessage || '').trim();
+      if (!text && this.chatAttachments.length === 0) return;
 
-  let targetSocketId = 'all';
-  if (this.selectedRecipient !== 'all') {
-    const recipientParticipant = this.participants.find(
-      p => p.socketId === this.selectedRecipient
-    );
-    if (!recipientParticipant?.socketId) return;
-    targetSocketId = recipientParticipant.socketId;
-  }
+      let targetSocketId = 'all';
+      if (this.selectedRecipient !== 'all') {
+        const recipientParticipant = this.participants.find(
+          p => (p.socketId || p.userId || p.id) === this.selectedRecipient
+        );
+        if (!recipientParticipant) return;
+        targetSocketId = recipientParticipant.socketId || recipientParticipant.userId || recipientParticipant.id;
+      }
 
-  const message = {
-    sender: this.userName,
-    text,
-    timestamp: Date.now(),
-    attachments: this.chatAttachments.map(a => ({
-      name: a.name,
-      mimeType: a.mimeType,
-      previewUrl: a.previewUrl,
-      base64: a.base64,
-      size: a.size
-    })),
-    targetSocketId,
-  };
+      const message = {
+        sender: this.userName,
+        text,
+        timestamp: Date.now(),
+        attachments: this.chatAttachments.map(a => ({
+        name: a.name,
+        mimeType: a.mimeType,
+        previewUrl: a.previewUrl,
+        base64: a.base64,
+        size: a.size
+      })),
+      targetSocketId,
+    };
 
-  this.safeBroadcast('chat-message', {
-    roomId: this.roomId,
-    ...message
-  });
+    this.safeBroadcast('chat-message', {
+      roomId: this.roomId,
+      ...message
+    });
 
-  this.newMessage = '';
-  this.chatAttachments = [];
-  this.$nextTick(() => {
-    const chatBody = this.$refs.chatBody;
-    if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
-  });
-},
+    this.newMessage = '';
+    this.chatAttachments = [];
+    this.$nextTick(() => {
+      const chatBody = this.$refs.chatBody;
+      if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+    });
+  },
 
     hand_raised() {
       this.hand = !this.hand;
