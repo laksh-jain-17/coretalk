@@ -269,8 +269,8 @@ io.on('connection', (socket) => {
   socket.on('chat-message', ({ sender, text, timestamp, attachments, targetSocketId }) => {
   if (!joinedRoom) return;
 
-  const safeText    = typeof text   === 'string' ? text.slice(0, 2000) : '';
-  const safeSender  = typeof sender === 'string' ? sender.slice(0, 60) : 'Unknown';
+  const safeText = typeof text === 'string' ? text.slice(0, 2000) : '';
+  const safeSender = typeof sender === 'string' ? sender.slice(0, 60) : 'Unknown';
   const safeAttachments = Array.isArray(attachments)
     ? attachments.slice(0, 5).map(a => ({
         name:     typeof a.name     === 'string' ? a.name.slice(0, 200)     : '',
@@ -290,17 +290,25 @@ io.on('connection', (socket) => {
   };
 
   if (targetSocketId && targetSocketId !== 'all') {
-    // Validate the target is actually in the same room
-    const targetInRoom = rooms[joinedRoom]?.find(p => p.id === targetSocketId || p.userId === targetSocketId);
-    if (!targetInRoom) return;
+    const targetInRoom = rooms[joinedRoom]?.find(
+      p => p.id === targetSocketId || p.userId === targetSocketId
+    );
+    if (!targetInRoom) {
+      console.log('Target not found. targetSocketId:', targetSocketId, 'room:', rooms[joinedRoom]);
+      return;
+    }
 
     payload.isPrivate = true;
-    payload.privateLabel = `(private to ${targetInRoom.name})`;
 
-    // Send to recipient
-    io.to(targetSocketId).emit('chat-message', { ...payload, privateLabel: `(private from ${safeSender})` });
-    // Echo back to sender only (don't use io.to(joinedRoom))
-    socket.emit('chat-message', { ...payload, privateLabel: `(private to ${targetInRoom.name})` });
+    // Always use targetInRoom.id (real socket ID) for emit
+    io.to(targetInRoom.id).emit('chat-message', {
+      ...payload,
+      privateLabel: `(private from ${safeSender})`
+    });
+    socket.emit('chat-message', {
+      ...payload,
+      privateLabel: `(private to ${targetInRoom.name})`
+    });
   } else {
     io.to(joinedRoom).emit('chat-message', payload);
   }
