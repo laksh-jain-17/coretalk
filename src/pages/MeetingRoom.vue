@@ -757,18 +757,18 @@ export default {
 
     filteredMessages() {
       if (this.selectedRecipient === 'all') {
-        return this.messages.filter(msg => !msg.isPrivate || !msg.fromMe);
+        return this.messages.filter(msg => !msg.isPrivate);
       }
       const recipient = this.participants.find(
         p => (p.socketId || p.userId || p.id) === this.selectedRecipient
       );
       const recipientName = recipient?.name;
-      return this.messages.filter(msg =>
-        msg.isPrivate && (
-          msg.privateLabel?.includes(recipientName) ||
-          msg.sender === recipientName
-        )
-      );
+      return this.messages.filter(msg => {
+        if (!msg.isPrivate) return false;
+        if (msg.privateLabel?.includes(recipientName)) return true;
+        if (msg.sender === recipientName) return true;
+        return false;
+      });
     },
   },
 
@@ -1739,15 +1739,14 @@ export default {
           attachments: attachments || [],
           isPrivate: isPrivate || false,
           privateLabel: privateLabel || '',
-          fromMe: sender === this.userName,
         };
         this.messages.push(message);
         if (this.activePanel !== 'chat') this.unreadMessages++;
         this.$nextTick(() => {
           const chatBody = this.$refs.chatBody;
           if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
-        });
       });
+    });
 
       this.socket.on('hand-raised', ({ userId, userName, isRaised }) => {
         if (isRaised) {
@@ -2143,44 +2142,44 @@ export default {
     },
 
     sendMessage() {
-      const text = (this.newMessage || '').trim();
-      if (!text && this.chatAttachments.length === 0) return;
+  const text = (this.newMessage || '').trim();
+  if (!text && this.chatAttachments.length === 0) return;
 
-      let targetSocketId = 'all';
-      if (this.selectedRecipient !== 'all') {
-        const recipientParticipant = this.participants.find(
-          p => (p.socketId || p.userId || p.id) === this.selectedRecipient
-        );
-        if (!recipientParticipant) return;
-        targetSocketId = recipientParticipant.socketId || recipientParticipant.userId || recipientParticipant.id;
-      }
+  let targetSocketId = 'all';
+  if (this.selectedRecipient !== 'all') {
+    const recipientParticipant = this.participants.find(
+      p => (p.socketId || p.userId || p.id) === this.selectedRecipient
+    );
+    if (!recipientParticipant) return;
+    targetSocketId = recipientParticipant.socketId || recipientParticipant.userId || recipientParticipant.id;
+  }
 
-      const message = {
-        sender: this.userName,
-        text,
-        timestamp: Date.now(),
-        attachments: this.chatAttachments.map(a => ({
-        name: a.name,
-        mimeType: a.mimeType,
-        previewUrl: a.previewUrl,
-        base64: a.base64,
-        size: a.size
-      })),
-      targetSocketId,
-    };
+  const message = {
+    sender: this.userName,
+    text,
+    timestamp: Date.now(),
+    attachments: this.chatAttachments.map(a => ({
+      name: a.name,
+      mimeType: a.mimeType,
+      previewUrl: a.previewUrl,
+      base64: a.base64,
+      size: a.size
+    })),
+    targetSocketId,
+  };
 
-    this.safeBroadcast('chat-message', {
-      roomId: this.roomId,
-      ...message
-    });
+  this.safeBroadcast('chat-message', {
+    roomId: this.roomId,
+    ...message
+  });
 
-    this.newMessage = '';
-    this.chatAttachments = [];
-    this.$nextTick(() => {
-      const chatBody = this.$refs.chatBody;
-      if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
-    });
-  },
+  this.newMessage = '';
+  this.chatAttachments = [];
+  this.$nextTick(() => {
+    const chatBody = this.$refs.chatBody;
+    if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+  });
+},
 
     hand_raised() {
       this.hand = !this.hand;
