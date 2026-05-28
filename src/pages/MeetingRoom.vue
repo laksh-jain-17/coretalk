@@ -753,7 +753,11 @@ export default {
       if (total <= 6) return 'grid-6';
       if (total <= 9) return 'grid-9';
       return 'grid-many';
-    }
+    },
+
+    filteredMessages() {
+      return this.messages;
+    },
   },
 
   watch: {
@@ -781,10 +785,6 @@ export default {
           this.aiNotesFadeTimer = null;
         }
       }
-    },
-
-    filteredMessages() {
-      return this.messages;
     },
 
     activePanel(newVal) {
