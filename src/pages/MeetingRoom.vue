@@ -756,7 +756,19 @@ export default {
     },
 
     filteredMessages() {
-      return this.messages;
+      if (this.selectedRecipient === 'all') {
+        return this.messages.filter(msg => !msg.isPrivate || !msg.fromMe);
+      }
+      const recipient = this.participants.find(
+        p => (p.socketId || p.userId || p.id) === this.selectedRecipient
+      );
+      const recipientName = recipient?.name;
+      return this.messages.filter(msg =>
+        msg.isPrivate && (
+          msg.privateLabel?.includes(recipientName) ||
+          msg.sender === recipientName
+        )
+      );
     },
   },
 
@@ -1719,22 +1731,23 @@ export default {
         });
       });*/
 
-      this.socket.on('chat-message', ({ sender, text, timestamp, attachments, isPrivate, privateLabel }) => {
-  const message = {
-    sender: sender || 'Unknown',
-    text: text || '',
-    timestamp: timestamp || Date.now(),
-    attachments: attachments || [],
-    isPrivate: isPrivate || false,
-    privateLabel: privateLabel || '',
-  };
-  this.messages.push(message);
-  if (this.activePanel !== 'chat') this.unreadMessages++;
-  this.$nextTick(() => {
-    const chatBody = this.$refs.chatBody;
-    if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
-  });
-});
+     this.socket.on('chat-message', ({ sender, text, timestamp, attachments, isPrivate, privateLabel }) => {
+        const message = {
+          sender: sender || 'Unknown',
+          text: text || '',
+          timestamp: timestamp || Date.now(),
+          attachments: attachments || [],
+          isPrivate: isPrivate || false,
+          privateLabel: privateLabel || '',
+          fromMe: sender === this.userName,
+        };
+        this.messages.push(message);
+        if (this.activePanel !== 'chat') this.unreadMessages++;
+        this.$nextTick(() => {
+          const chatBody = this.$refs.chatBody;
+          if (chatBody) chatBody.scrollTop = chatBody.scrollHeight;
+        });
+      });
 
       this.socket.on('hand-raised', ({ userId, userName, isRaised }) => {
         if (isRaised) {
