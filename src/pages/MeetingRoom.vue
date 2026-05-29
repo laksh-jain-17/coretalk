@@ -1404,10 +1404,14 @@ export default {
       this.livekitRoom = new Room({
         adaptiveStream: true,
         dynacast: true,
+        stopLocalTrackOnUnpublish: true,  // ✅ prevents ghost tracks causing echo
         audioCaptureDefaults: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: false,  // ✅ set false — AGC can amplify and re-introduce echo
+          googNoiseSuppression: true,
+          googEchoCancellation: true,
+          googHighpassFilter: true,
         },
         audioOutput: {
           deviceId: 'default',
@@ -1612,7 +1616,6 @@ export default {
     attachAudio(track, participant) {
       const id = participant.identity;
 
-      // Remove any previous audio element for this participant
       if (this.remoteAudioElements.has(id)) {
         const old = this.remoteAudioElements.get(id);
         try { track.detach(old); } catch (_) {}
@@ -1621,16 +1624,25 @@ export default {
         this.remoteAudioElements.delete(id);
       }
 
-      const audioEl = track.attach();
+      // ✅ Create element first, then attach — keeps AEC reference intact
+      const audioEl = document.createElement('audio');
       audioEl.muted = false;
       audioEl.autoplay = true;
-      // Critical: never play remote audio through the local speaker loop
       audioEl.setAttribute('playsinline', '');
+      audioEl.setAttribute('crossorigin', 'anonymous');
+  
+      // ✅ Route through default output so AEC knows what's playing
+      if (typeof audioEl.setSinkId === 'function') {
+        audioEl.setSinkId('default').catch(() => {});
+      }
+
       document.body.appendChild(audioEl);
+      track.attach(audioEl);  // ← attach AFTER appending
+  
       this.remoteAudioElements.set(id, audioEl);
 
       audioEl.play().catch(err => {
-        console.warn('Audio play failed (autoplay policy):', err);
+        console.warn('Audio play failed:', err);
       });
     },
 
@@ -1968,7 +1980,7 @@ export default {
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(true, {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true,
+            autoGainControl: false,
           });
           this.micon = true;
           console.log('Microphone enabled');
@@ -2330,72 +2342,107 @@ export default {
   },
     
     async recording() {
-      this.record = !this.record;
+  this.record = !this.record;
 
-      if (this.record) {
-        try {
-          const screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: true
-          });
+  if (this.record) {
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false,
+        }
+      });
 
-          // Mix microphone audio into the recording alongside the screen
-          let combinedStream = screenStream;
-          try {
-            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const audioCtx = new AudioContext();
-            const destination = audioCtx.createMediaStreamDestination();
+      let combinedStream = screenStream;
 
-            // Add system/tab audio from screen capture if present
-            if (screenStream.getAudioTracks().length > 0) {
-              audioCtx.createMediaStreamSource(screenStream).connect(destination);
-            }
-            // Add microphone
-            audioCtx.createMediaStreamSource(micStream).connect(destination);
-
-            combinedStream = new MediaStream([
-              ...screenStream.getVideoTracks(),
-              ...destination.stream.getAudioTracks()
-            ]);
-          } catch (micErr) {
-            console.warn('Mic unavailable for recording, using screen audio only:', micErr);
+      try {
+        // ✅ No AudioContext — direct track merge preserves browser's AEC
+        const micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: false,
           }
+        });
 
-          this.recordedChunks = [];
-          this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+        const tracks = [
+          ...screenStream.getVideoTracks(),
+          // Prefer screen audio if available, otherwise use mic only
+          ...(screenStream.getAudioTracks().length > 0
+            ? screenStream.getAudioTracks()
+            : micStream.getAudioTracks()),
+        ];
 
-          this.mediaRecorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) {
-              this.recordedChunks.push(e.data);
-            }
-          };
-
-          this.mediaRecorder.onstop = () => {
-            const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `meeting-${this.roomId}-${Date.now()}.webm`;
-            a.click();
-            URL.revokeObjectURL(url);
-          };
-
-          this.mediaRecorder.start();
-          this.isRecording = true;
-          console.log('Recording started');
-        } catch (err) {
-          console.error('Recording failed:', err);
-          this.record = false;
+        // Add mic track separately only if screen audio also exists
+        if (screenStream.getAudioTracks().length > 0) {
+          tracks.push(...micStream.getAudioTracks());
         }
-      } else {
-        if (this.mediaRecorder && this.isRecording) {
-          this.mediaRecorder.stop();
-          this.isRecording = false;
-          console.log('Recording stopped');
-        }
+
+        combinedStream = new MediaStream(tracks);
+
+        // Stop mic stream when screen sharing stops
+        screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+          micStream.getTracks().forEach(t => t.stop());
+        });
+
+      } catch (micErr) {
+        console.warn('Mic unavailable for recording, using screen audio only:', micErr);
       }
-    },
 
+      this.recordedChunks = [];
+
+      // Pick best supported format
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+          ? 'video/webm;codecs=vp8,opus'
+          : 'video/webm';
+
+      this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
+
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          this.recordedChunks.push(e.data);
+        }
+      };
+
+      this.mediaRecorder.onstop = () => {
+        // Stop all tracks to release camera/mic indicators
+        combinedStream.getTracks().forEach(t => t.stop());
+
+        const blob = new Blob(this.recordedChunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `meeting-${this.roomId}-${Date.now()}.webm`;
+        a.click();
+
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        this.recordedChunks = [];
+      };
+
+      // Collect data every second for reliability
+      this.mediaRecorder.start(1000);
+      this.isRecording = true;
+      console.log('Recording started with mimeType:', mimeType);
+
+    } catch (err) {
+      console.error('Recording failed:', err);
+      this.record = false;
+      this.isRecording = false;
+    }
+
+  } else {
+    if (this.mediaRecorder && this.isRecording) {
+      this.mediaRecorder.stop();
+      this.isRecording = false;
+      console.log('Recording stopped');
+    }
+  }
+},
+    
     async checkNetworkQuality() {
       if (!this.livekitRoom) return;
     },
