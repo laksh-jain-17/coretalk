@@ -2348,75 +2348,66 @@ export default {
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true // captures tab/system audio
+        audio: true
       });
 
-      const tracks = [...screenStream.getVideoTracks()];
+      const audioCtx = new AudioContext();
+      const destination = audioCtx.createMediaStreamDestination();
 
-      // Add screen/tab audio if available
+      // Add tab audio (remote participants)
       if (screenStream.getAudioTracks().length > 0) {
-        tracks.push(...screenStream.getAudioTracks());
+        audioCtx.createMediaStreamSource(screenStream).connect(destination);
       }
 
-      // ✅ Only add mic if user already has mic ON — never force it
-      if (this.micon && this.livekitRoom?.localParticipant) {
-        try {
-          const micPub = this._getLocalTrack(Track.Source.Microphone);
-          if (micPub?.track?.mediaStreamTrack) {
-            tracks.push(micPub.track.mediaStreamTrack);
-          }
-        } catch (micErr) {
-          console.warn('Could not attach existing mic to recording:', micErr);
+      // Add your own mic only if already on
+      if (this.micon) {
+        const micPub = this._getLocalTrack(Track.Source.Microphone);
+        if (micPub?.track?.mediaStreamTrack) {
+          const micStream = new MediaStream([micPub.track.mediaStreamTrack]);
+          audioCtx.createMediaStreamSource(micStream).connect(destination);
         }
       }
 
-      const combinedStream = new MediaStream(tracks);
+      const combinedStream = new MediaStream([
+        ...screenStream.getVideoTracks(),
+        ...destination.stream.getAudioTracks()
+      ]);
 
       this.recordedChunks = [];
 
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
         ? 'video/webm;codecs=vp9,opus'
-        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-          ? 'video/webm;codecs=vp8,opus'
-          : 'video/webm';
+        : 'video/webm';
 
       this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
 
       this.mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) {
-          this.recordedChunks.push(e.data);
-        }
+        if (e.data && e.data.size > 0) this.recordedChunks.push(e.data);
       };
 
       this.mediaRecorder.onstop = () => {
-        // Only stop screen tracks — never touch the mic track
-        // because user's mic was already open before recording started
         screenStream.getTracks().forEach(t => t.stop());
-
+        audioCtx.close();
         const blob = new Blob(this.recordedChunks, { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = `meeting-${this.roomId}-${Date.now()}.webm`;
         a.click();
-
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         this.recordedChunks = [];
       };
 
-      // Stop recording if user stops screen share from browser UI
       screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
-        if (this.mediaRecorder && this.isRecording) {
+        if (this.isRecording) {
           this.mediaRecorder.stop();
           this.isRecording = false;
           this.record = false;
-          console.log('Recording stopped — screen share ended');
         }
       });
 
       this.mediaRecorder.start(1000);
       this.isRecording = true;
-      console.log('Recording started with mimeType:', mimeType);
 
     } catch (err) {
       console.error('Recording failed:', err);
@@ -2428,7 +2419,6 @@ export default {
     if (this.mediaRecorder && this.isRecording) {
       this.mediaRecorder.stop();
       this.isRecording = false;
-      console.log('Recording stopped');
     }
   }
 },
