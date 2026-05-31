@@ -54,11 +54,6 @@
             <div class="avatar-circle">{{ userInitials }}</div>
           </div>
 
-          <!-- Captions for Local User -->
-          <div v-if="showCaptions && localCaptions" class="captions-overlay">
-            {{ localCaptions }}
-          </div>
-
           <div class="participant-info">
             <span class="participant-name">{{ userName }} (You)</span>
             <div class="participant-controls">
@@ -84,11 +79,6 @@
             <div class="avatar-circle">{{ getInitials(participant.name) }}</div>
           </div>
 
-          <!-- Captions for Remote Participants -->
-          <div v-if="showCaptions && participant.captions" class="captions-overlay">
-            {{ participant.captions }}
-          </div>
-
           <div class="participant-info">
             <span class="participant-name">{{ participant.name }}</span>
             <div class="participant-controls">
@@ -96,19 +86,6 @@
               <span v-if="!participant.hasVideo" class="control-icon muted">📹</span>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Captions Panel (when enabled) -->
-    <div v-if="showCaptions" class="captions-panel">
-      <div class="captions-header">
-        <span>📝 Live Captions</span>
-        <button @click="toggleCaptions" class="close-captions">✕</button>
-      </div>
-      <div class="captions-content">
-        <div v-for="(caption, index) in captionHistory" :key="index" class="caption-line">
-          <strong>{{ caption.speaker }}:</strong> {{ caption.text }}
         </div>
       </div>
     </div>
@@ -326,9 +303,6 @@
             <ul v-if="activeDropdown === 'extras'" class="dropdown-menu extras-menu">
               <li @click.stop="hand_raised">
                 {{ hand ? '✋ Lower hand' : '✋ Raise hand' }}
-              </li>
-              <li @click.stop="toggleCaptions">
-                {{ showCaptions ? '📝 Hide Captions' : '📝 Show Captions' }}
               </li>
               <li @click.stop="toggle_info">
                 ℹ️ Meeting Info
@@ -683,9 +657,6 @@ export default {
       isInitializingMedia: false,
       broadcastRetryTimer: null,
 
-      showCaptions: false,
-      captionHistory: [],
-      localCaptions: '',
       silentBackgroundEnabled: false,
       backgroundNoiseSuppressionStream: null,
       backgroundNoiseSuppressionTrack: null,
@@ -866,17 +837,6 @@ export default {
       }
     },
 
-    toggleCaptions() {
-      this.showCaptions = !this.showCaptions;
-      this.activeDropdown = null;
-
-      if (this.showCaptions) {
-        this.startCaptionRecognition();
-      } else {
-        this.stopCaptionRecognition();
-      }
-    },
-
     toggleAiNotes() {
       this.showAiNotes = !this.showAiNotes;
     },
@@ -888,72 +848,6 @@ export default {
         clearTimeout(this.aiNotesFadeTimer);
         this.aiNotesFadeTimer = null;
       }
-    },
-
-    startCaptionRecognition() {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        //alert('Speech recognition not supported in this browser');//
-        this.showCaptions = false;
-        return;
-      }
-
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-      this.recognition.lang = 'en-US';
-
-      this.recognition.onresult = (event) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        this.localCaptions = interimTranscript || finalTranscript;
-
-        if (finalTranscript) {
-          this.captionHistory.push({
-            speaker: this.userName,
-            text: finalTranscript.trim(),
-            timestamp: Date.now()
-          });
-
-          if (this.captionHistory.length > 50) {
-            this.captionHistory.shift();
-          }
-
-          setTimeout(() => {
-            this.localCaptions = '';
-          }, 2000);
-        }
-      };
-
-      this.recognition.onerror = (e) => {
-        console.error('Speech recognition error:', e);
-      };
-
-      this.recognition.onend = () => {
-        if (this.showCaptions) {
-          this.recognition.start();
-        }
-      };
-
-      this.recognition.start();
-    },
-
-    stopCaptionRecognition() {
-      if (this.recognition) {
-        this.recognition.stop();
-        this.recognition = null;
-      }
-      this.localCaptions = '';
     },
 
     // ==================== SILENT BACKGROUND ====================
@@ -2707,10 +2601,6 @@ export default {
         this.broadcastRetryTimer = null;
       }
 
-      if (this.showCaptions) {
-        this.stopCaptionRecognition();
-      }
-
       if (this.silentBackgroundEnabled) {
         await this.disableBackgroundNoiseSuppression();
         this.silentBackgroundEnabled = false;
@@ -2789,8 +2679,6 @@ export default {
       this.isSocketConnected = false;
       this.broadcastQueue = [];
       this.remoteParticipants.clear();
-      this.captionHistory = [];
-      this.localCaptions = '';
       this.showEmailPanel = false;
       this.gmailAccessToken = null;
       this.emailTo = '';
@@ -3112,74 +3000,6 @@ body {
 
 .local-participant {
   border: 2px solid #4CAF50;
-}
-
-/* ==================== CAPTIONS OVERLAY ==================== */
-.captions-overlay {
-  position: absolute;
-  bottom: 50px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.9);
-  color: white;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
-  max-width: 80%;
-  text-align: center;
-  z-index: 3;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-}
-
-.captions-panel {
-  position: fixed;
-  bottom: 70px;
-  left: 20px;
-  width: 350px;
-  max-height: 250px;
-  background-color: #2a2a2a;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-}
-
-.captions-header {
-  padding: 12px 16px;
-  background-color: #333;
-  border-bottom: 1px solid #444;
-  border-radius: 12px 12px 0 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 600;
-}
-
-.close-captions {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.captions-content {
-  padding: 12px 16px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.caption-line {
-  margin-bottom: 8px;
-  font-size: 13px;
-  line-height: 1.4;
-  color: #e0e0e0;
-}
-
-.caption-line strong {
-  color: #4CAF50;
 }
 
 /* ==================== BOTTOM NAVBAR ==================== */
@@ -3672,18 +3492,6 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #aaaaaa;
-}
-
-.captions-content::-webkit-scrollbar-track {
-  background: #2a2a2a;
-}
-
-.captions-content::-webkit-scrollbar-thumb {
-  background: #555;
-}
-
-.captions-content::-webkit-scrollbar-thumb:hover {
-  background: #666;
 }
 
 /* ==================== EMAIL PANEL ==================== */
