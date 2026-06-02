@@ -526,14 +526,28 @@
             v-for="msg in inboxMessages"
             :key="msg.id"
             class="email-inbox-item"
-            @click="selectedInboxMsg = selectedInboxMsg?.id === msg.id ? null : msg"
+            @click="selectInboxMsg(msg)"
           >
-            <div class="email-inbox-item-header">
-              <span class="email-inbox-from">{{ msg.from }}</span>
-              <span class="email-inbox-date">{{ msg.date }}</span>
-            </div>
+          <div class="email-inbox-item-header">
+            <span class="email-inbox-from">{{ msg.from }}</span>
+            <span class="email-inbox-date">{{ msg.date }}</span>
+          </div>
             <div class="email-inbox-subject">{{ msg.subject }}</div>
-            <div v-if="selectedInboxMsg?.id === msg.id" class="email-inbox-preview">{{ msg.snippet }}</div>
+
+            <!-- Full body when selected -->
+            <div v-if="selectedInboxMsg?.id === msg.id" class="email-inbox-full-body">
+              <div v-if="inboxMsgLoading" style="color:#888; font-size:12px; margin-top:8px;">
+                Loading...
+              </div>
+              <div v-else style="
+                font-size:13px; color:#333; margin-top:8px;
+                white-space:pre-wrap; line-height:1.5;
+                max-height:300px; overflow-y:auto;
+                border-top:1px solid #f0f0f0; padding-top:8px;
+              ">
+                {{ inboxMsgBody }}
+              </div>
+            </div>
           </div>
         </div>
       </template>
@@ -700,6 +714,8 @@ export default {
       isHostMuteLocked: false,
       isMuteAllActive: false,
       selectedRecipient: 'all',
+      inboxMsgBody: '',       
+      inboxMsgLoading: false, 
     };
   },
 
@@ -1820,6 +1836,53 @@ export default {
           isOpen: this.showDocEnact,
           senderId: this.userId,
         });
+      }
+    },
+
+    async selectInboxMsg(msg) {
+      if (this.selectedInboxMsg?.id === msg.id) {
+        this.selectedInboxMsg = null;
+        this.inboxMsgBody = '';
+        return;
+      }
+
+      this.selectedInboxMsg = msg;
+      this.inboxMsgBody = '';
+      this.inboxMsgLoading = true;
+
+      try {
+        const r = await fetch(
+          `https://www.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+          { headers: { Authorization: `Bearer ${this.gmailAccessToken}` } }
+        );
+        const d = await r.json();
+
+        // Extract plain text or html body
+        let body = '';
+        const parts = d.payload?.parts;
+
+        if (parts) {
+          // Multipart email — find text/plain first, fallback to text/html
+          const plain = parts.find(p => p.mimeType === 'text/plain');
+          const html  = parts.find(p => p.mimeType === 'text/html');
+          const part  = plain || html;
+          if (part?.body?.data) {
+            body = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+          }
+        } else if (d.payload?.body?.data) {
+          // Single part email
+          body = atob(d.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+        }
+
+        // Strip HTML tags if html body
+        const tmp = document.createElement('div');
+        tmp.innerHTML = body;
+        this.inboxMsgBody = tmp.textContent || tmp.innerText || d.snippet || '';
+
+      } catch (e) {
+        this.inboxMsgBody = msg.snippet || 'Could not load email body.';
+      } finally {
+        this.inboxMsgLoading = false;
       }
     },
     
@@ -3436,6 +3499,10 @@ body {
   z-index: 101;
   font-weight: 600;
   animation: slideIn 0.3s ease;
+}
+
+.email-inbox-full-body {
+  margin-top: 6px;
 }
 
 @keyframes slideIn {
