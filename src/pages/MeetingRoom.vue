@@ -534,17 +534,19 @@
           </div>
             <div class="email-inbox-subject">{{ msg.subject }}</div>
 
-            <!-- Full body when selected -->
             <div v-if="selectedInboxMsg?.id === msg.id" class="email-inbox-full-body">
               <div v-if="inboxMsgLoading" style="color:#888; font-size:12px; margin-top:8px;">
                 Loading...
               </div>
-              <div v-else style="
+              <div v-else v-html="inboxMsgBody" style="
                 font-size:13px; color:#333; margin-top:8px;
-                line-height:1.5; max-height:300px; overflow-y:auto;
-                border-top:1px solid #f0f0f0; padding-top:8px;
-                " v-html="inboxMsgBody">
-              </div>
+                line-height:1.5;
+                max-height:400px;
+                overflow-y:auto;
+                overflow-x:auto;
+                border-top:1px solid #f0f0f0;
+                padding-top:8px;
+            "></div>
             </div>
           </div>
         </div>
@@ -3536,6 +3538,27 @@ body {
 
 .email-inbox-full-body {
   margin-top: 6px;
+  overflow-x: auto;
+}
+
+.email-inbox-full-body div {
+  max-width: max-content;
+  min-width: 100%;
+}
+
+.email-inbox-full-body img {
+  max-width: none; /* allow images to show at natural width, user can scroll */
+  height: auto;
+}
+
+.email-inbox-full-body a {
+  color: #1a73e8;
+  word-break: break-all;
+}
+
+/* Prevent email styles from leaking into your UI */
+.email-inbox-full-body table {
+  border-collapse: collapse;
 }
 
 @keyframes slideIn {
