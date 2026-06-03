@@ -55,19 +55,112 @@
     </div>
 
     <div v-if="canEdit" class="doc-toolbar">
-      <button @mousedown.prevent="fmt('bold')"               :class="{ active: activeFormats.bold }"      title="Bold (Ctrl+B)"><b>B</b></button>
-      <button @mousedown.prevent="fmt('italic')"             :class="{ active: activeFormats.italic }"    title="Italic (Ctrl+I)"><i>I</i></button>
-      <button @mousedown.prevent="fmt('underline')"          :class="{ active: activeFormats.underline }" title="Underline (Ctrl+U)"><u>U</u></button>
-      <button @mousedown.prevent="fmt('strikeThrough')"      :class="{ active: activeFormats.strike }"    title="Strikethrough"><s>S</s></button>
-      <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="fmtBlock('h1')"            :class="{ active: activeFormats.h1 }"        title="Heading 1">H1</button>
-      <button @mousedown.prevent="fmtBlock('h2')"            :class="{ active: activeFormats.h2 }"        title="Heading 2">H2</button>
-      <button @mousedown.prevent="fmtBlock('h3')"            :class="{ active: activeFormats.h3 }"        title="Heading 3">H3</button>
-      <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="fmt('insertUnorderedList')" :class="{ active: activeFormats.ul }"       title="Bullet List">• List</button>
-      <button @mousedown.prevent="fmt('insertOrderedList')"   :class="{ active: activeFormats.ol }"       title="Numbered List">1. List</button>
-      <div class="toolbar-sep"></div>
-      <button @mousedown.prevent="clearFormatting" title="Clear formatting">¶</button>
+      <!-- Row 1 -->
+      <div class="toolbar-row">
+        <select
+          class="toolbar-select font-family-select"
+          :value="currentFontFamily"
+          @mousedown="saveSelectionNow"
+          @change="setFontFamily($event.target.value)"
+          title="Font Family"
+        >
+          <option value="Segoe UI">Segoe UI</option>
+          <option value="Arial">Arial</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Courier New">Courier New</option>
+          <option value="Verdana">Verdana</option>
+          <option value="Helvetica">Helvetica</option>
+          <option value="Trebuchet MS">Trebuchet MS</option>
+        </select>
+
+        <select
+          class="toolbar-select font-size-select"
+          :value="currentFontSize"
+          @mousedown="saveSelectionNow"
+          @change="setFontSize($event.target.value)"
+          title="Font Size"
+        >
+          <option value="1">8</option>
+          <option value="2">10</option>
+          <option value="3">12</option>
+          <option value="4">14</option>
+          <option value="5">18</option>
+          <option value="6">24</option>
+          <option value="7">36</option>
+        </select>
+
+        <div class="toolbar-sep"></div>
+
+        <button @mousedown.prevent="fmt('bold')"          :class="{ active: activeFormats.bold }"      title="Bold"><b>B</b></button>
+        <button @mousedown.prevent="fmt('italic')"        :class="{ active: activeFormats.italic }"    title="Italic"><i>I</i></button>
+        <button @mousedown.prevent="fmt('underline')"     :class="{ active: activeFormats.underline }" title="Underline"><u>U</u></button>
+        <button @mousedown.prevent="fmt('strikeThrough')" :class="{ active: activeFormats.strike }"    title="Strikethrough"><s>S</s></button>
+        <button @mousedown.prevent="fmt('subscript')"     :class="{ active: activeFormats.sub }"       title="Subscript">X<sub>2</sub></button>
+        <button @mousedown.prevent="fmt('superscript')"   :class="{ active: activeFormats.sup }"       title="Superscript">X<sup>2</sup></button>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- Font Color -->
+        <div class="toolbar-color-wrap" title="Font Color">
+          <button class="color-preview-btn" @mousedown.prevent="$refs.fontColorInput.click()">
+            <span class="color-letter" :style="{ borderBottom: '3px solid ' + activeFontColor }">A</span>
+          </button>
+          <input
+            ref="fontColorInput"
+            type="color"
+            :value="activeFontColor"
+            class="hidden-color-input"
+            @change="setFontColor($event.target.value)"
+          />
+        </div>
+
+        <!-- Highlight Color -->
+        <div class="toolbar-color-wrap" title="Highlight Color">
+          <button class="color-preview-btn" @mousedown.prevent="$refs.highlightColorInput.click()">
+            <span class="color-letter" :style="{ background: activeHighlightColor, padding: '1px 3px', borderRadius: '2px' }">H</span>
+          </button>
+          <input
+            ref="highlightColorInput"
+            type="color"
+            :value="activeHighlightColor"
+            class="hidden-color-input"
+            @change="setHighlightColor($event.target.value)"
+          />
+        </div>
+
+        <div class="toolbar-sep"></div>
+        <button @mousedown.prevent="clearFormatting" title="Clear formatting">¶</button>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="toolbar-row">
+        <button @mousedown.prevent="fmtBlock('h1')" :class="{ active: activeFormats.h1 }" title="Heading 1">H1</button>
+        <button @mousedown.prevent="fmtBlock('h2')" :class="{ active: activeFormats.h2 }" title="Heading 2">H2</button>
+        <button @mousedown.prevent="fmtBlock('h3')" :class="{ active: activeFormats.h3 }" title="Heading 3">H3</button>
+
+        <div class="toolbar-sep"></div>
+
+        <button @mousedown.prevent="fmt('justifyLeft')"    :class="{ active: activeFormats.alignLeft }"    title="Align Left">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="2.5" rx="1"/><rect x="3" y="10" width="12" height="2.5" rx="1"/><rect x="3" y="16" width="18" height="2.5" rx="1"/><rect x="3" y="22" width="12" height="2.5" rx="1"/></svg>
+        </button>
+        <button @mousedown.prevent="fmt('justifyCenter')"  :class="{ active: activeFormats.alignCenter }"  title="Align Center">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="2.5" rx="1"/><rect x="6" y="10" width="12" height="2.5" rx="1"/><rect x="3" y="16" width="18" height="2.5" rx="1"/><rect x="6" y="22" width="12" height="2.5" rx="1"/></svg>
+        </button>
+        <button @mousedown.prevent="fmt('justifyRight')"   :class="{ active: activeFormats.alignRight }"   title="Align Right">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="2.5" rx="1"/><rect x="9" y="10" width="12" height="2.5" rx="1"/><rect x="3" y="16" width="18" height="2.5" rx="1"/><rect x="9" y="22" width="12" height="2.5" rx="1"/></svg>
+        </button>
+        <button @mousedown.prevent="fmt('justifyFull')"    :class="{ active: activeFormats.alignJustify }" title="Justify">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="2.5" rx="1"/><rect x="3" y="10" width="18" height="2.5" rx="1"/><rect x="3" y="16" width="18" height="2.5" rx="1"/><rect x="3" y="22" width="14" height="2.5" rx="1"/></svg>
+        </button>
+
+        <div class="toolbar-sep"></div>
+
+        <button @mousedown.prevent="fmt('insertUnorderedList')" :class="{ active: activeFormats.ul }" title="Bullet List">• List</button>
+        <button @mousedown.prevent="fmt('insertOrderedList')"   :class="{ active: activeFormats.ol }" title="Numbered List">1. List</button>
+        <button @mousedown.prevent="fmt('indent')"  title="Increase Indent (Tab)">⇥</button>
+        <button @mousedown.prevent="fmt('outdent')" title="Decrease Indent">⇤</button>
+      </div>
     </div>
 
     <div
@@ -93,6 +186,7 @@
 
 <script>
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+
 export default {
   name: 'DocEnactPanel',
 
@@ -120,8 +214,15 @@ export default {
       showMembers:   false,
       activeFormats: {
         bold: false, italic: false, underline: false, strike: false,
-        ul: false, ol: false, h1: false, h2: false, h3: false,
+        sub: false, sup: false,
+        ul: false, ol: false,
+        h1: false, h2: false, h3: false,
+        alignLeft: true, alignCenter: false, alignRight: false, alignJustify: false,
       },
+      activeFontColor:      '#000000',
+      activeHighlightColor: '#ffff00',
+      currentFontFamily:    'Segoe UI',
+      currentFontSize:      '3',
       _retry1: null,
       _retry2: null,
     };
@@ -193,67 +294,146 @@ export default {
 
   methods: {
 
+    // ─── Selection helpers ────────────────────────────────────────────────────
+
+    // Called on mousedown of selects so we capture selection BEFORE focus leaves editor
+    saveSelectionNow() {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        try { this.savedRange = sel.getRangeAt(0).cloneRange(); } catch (_) {}
+      }
+    },
+
+    _restoreSavedSelection() {
+      if (!this.savedRange) return false;
+      try {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(this.savedRange);
+        return true;
+      } catch (_) { return false; }
+    },
+
     // ─── Toolbar ─────────────────────────────────────────────────────────────
+
+    _rgbToHex(rgb) {
+      if (!rgb) return null;
+      // Already hex
+      if (rgb.startsWith('#')) return rgb;
+      const m = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+      if (!m) return null;
+      return '#' + [m[1], m[2], m[3]]
+        .map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
+    },
 
     _updateActiveFormats() {
       try {
-        this.activeFormats.bold      = document.queryCommandState('bold');
-        this.activeFormats.italic    = document.queryCommandState('italic');
-        this.activeFormats.underline = document.queryCommandState('underline');
-        this.activeFormats.strike    = document.queryCommandState('strikeThrough');
-        this.activeFormats.ul        = document.queryCommandState('insertUnorderedList');
-        this.activeFormats.ol        = document.queryCommandState('insertOrderedList');
+        this.activeFormats.bold         = document.queryCommandState('bold');
+        this.activeFormats.italic       = document.queryCommandState('italic');
+        this.activeFormats.underline    = document.queryCommandState('underline');
+        this.activeFormats.strike       = document.queryCommandState('strikeThrough');
+        this.activeFormats.sub          = document.queryCommandState('subscript');
+        this.activeFormats.sup          = document.queryCommandState('superscript');
+        this.activeFormats.ul           = document.queryCommandState('insertUnorderedList');
+        this.activeFormats.ol           = document.queryCommandState('insertOrderedList');
+        this.activeFormats.alignLeft    = document.queryCommandState('justifyLeft');
+        this.activeFormats.alignCenter  = document.queryCommandState('justifyCenter');
+        this.activeFormats.alignRight   = document.queryCommandState('justifyRight');
+        this.activeFormats.alignJustify = document.queryCommandState('justifyFull');
+
         const block = (document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, '');
         this.activeFormats.h1 = block === 'h1';
         this.activeFormats.h2 = block === 'h2';
         this.activeFormats.h3 = block === 'h3';
+
+        // Font size at cursor
+        const fs = document.queryCommandValue('fontSize');
+        if (fs) this.currentFontSize = String(fs);
+
+        // Font name at cursor
+        const fn = document.queryCommandValue('fontName');
+        if (fn) {
+          const clean = fn.replace(/['"]/g, '').split(',')[0].trim();
+          if (clean) this.currentFontFamily = clean;
+        }
+
+        // Font color at cursor
+        const fc = document.queryCommandValue('foreColor');
+        const hex = this._rgbToHex(fc);
+        if (hex && hex !== '#000000' || fc) this.activeFontColor = hex || this.activeFontColor;
+
       } catch (_) {}
     },
 
     onCursorChange() {
       this._updateActiveFormats();
-      if (this.isMobile) {
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          try { this.savedRange = sel.getRangeAt(0).cloneRange(); } catch (_) {}
-        }
+      // Always keep savedRange up to date
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        try { this.savedRange = sel.getRangeAt(0).cloneRange(); } catch (_) {}
       }
     },
 
     fmt(command) {
-      this._restoreMobileSelection();
-      document.execCommand(command, false, null);
       this.$refs.docBody?.focus();
+      document.execCommand(command, false, null);
       this._updateActiveFormats();
       this._broadcastContent();
     },
 
     fmtBlock(tag) {
-      this._restoreMobileSelection();
+      this.$refs.docBody?.focus();
       const current = (document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, '');
       document.execCommand('formatBlock', false, current === tag ? 'p' : tag);
-      this.$refs.docBody?.focus();
       this._updateActiveFormats();
       this._broadcastContent();
     },
 
     clearFormatting() {
-      this._restoreMobileSelection();
+      this.$refs.docBody?.focus();
       document.execCommand('removeFormat', false, null);
       document.execCommand('formatBlock',  false, 'p');
-      this.$refs.docBody?.focus();
       this._updateActiveFormats();
       this._broadcastContent();
     },
 
-    _restoreMobileSelection() {
-      if (this.isMobile && this.savedRange) {
-        try {
-          const sel = window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(this.savedRange);
-        } catch (_) {}
+    setFontFamily(family) {
+      // Restore selection that was saved on mousedown of the select
+      this._restoreSavedSelection();
+      this.$refs.docBody?.focus();
+      document.execCommand('fontName', false, family);
+      this.currentFontFamily = family;
+      this._updateActiveFormats();
+      this._broadcastContent();
+    },
+
+    setFontSize(size) {
+      this._restoreSavedSelection();
+      this.$refs.docBody?.focus();
+      document.execCommand('fontSize', false, size);
+      this.currentFontSize = size;
+      this._updateActiveFormats();
+      this._broadcastContent();
+    },
+
+    setFontColor(color) {
+      this.activeFontColor = color;
+      // savedRange was set when user clicked the button (mousedown.prevent keeps focus)
+      this._restoreSavedSelection();
+      this.$refs.docBody?.focus();
+      document.execCommand('foreColor', false, color);
+      this._broadcastContent();
+    },
+
+    setHighlightColor(color) {
+      this.activeHighlightColor = color;
+      this._restoreSavedSelection();
+      this.$refs.docBody?.focus();
+      // hiliteColor is standard; backColor is IE/older fallback
+      if (!document.execCommand('hiliteColor', false, color)) {
+        document.execCommand('backColor', false, color);
       }
+      this._broadcastContent();
     },
 
     // ─── Input / keyboard ────────────────────────────────────────────────────
@@ -266,10 +446,13 @@ export default {
     onKeydown(e) {
       if (e.key === 'Tab') {
         e.preventDefault();
-        // Insert 4 non-breaking spaces (\u00a0) as a visible tab indent.
-        // Regular spaces collapse in HTML; \u00a0 always renders visibly.
-        // In downloadDoc, \u00a0 is converted back to regular spaces for docx.
-        document.execCommand('insertText', false, '\u00a0\u00a0\u00a0\u00a0');
+        if (this.activeFormats.ul || this.activeFormats.ol) {
+          // Inside list: Tab indents, Shift+Tab outdents
+          document.execCommand(e.shiftKey ? 'outdent' : 'indent', false, null);
+        } else {
+          document.execCommand('insertText', false, '\u00a0\u00a0\u00a0\u00a0');
+        }
+        this._updateActiveFormats();
       }
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         this.$nextTick(() => this._updateActiveFormats());
@@ -281,7 +464,7 @@ export default {
     _sendLivekit(payload) {
       try {
         const lp = this.livekitRoom?.localParticipant;
-        if (!lp || !this.livekitRoom.state === 'connected') return; // add this check
+        if (!lp) return;
         lp.publishData(new TextEncoder().encode(JSON.stringify(payload)), 1);
       } catch (err) {
         console.warn('[DocEnact] LiveKit send failed:', err.message);
@@ -408,16 +591,10 @@ export default {
     // ─── Download ────────────────────────────────────────────────────────────
 
     async downloadDoc() {
-      /*const { Document, Packer, Paragraph, TextRun, HeadingLevel } = await import(
-        'https://esm.sh/docx@8.5.0'
-      );*/
-
       const docBody  = this.$refs.docBody;
       const children = [];
 
-      // Recursively converts a DOM subtree to docx TextRuns.
-      // \u00a0 (non-breaking spaces used for tab indent) → regular spaces.
-      const buildRuns = (node, inheritedStyle = {}) => {
+      const buildRuns = (node, inherited = {}) => {
         const runs = [];
 
         if (node.nodeType === Node.TEXT_NODE) {
@@ -425,44 +602,103 @@ export default {
           if (!text) return runs;
           runs.push(new TextRun({
             text,
-            bold:      inheritedStyle.bold      || false,
-            italics:   inheritedStyle.italic    || false,
-            underline: inheritedStyle.underline ? {} : undefined,
-            strike:    inheritedStyle.strike    || false,
+            bold:        inherited.bold      || false,
+            italics:     inherited.italic    || false,
+            underline:   inherited.underline ? {} : undefined,
+            strike:      inherited.strike    || false,
+            subScript:   inherited.sub       || false,
+            superScript: inherited.sup       || false,
+            color:       inherited.color     || undefined,
+            font:        inherited.font      || undefined,
+            size:        inherited.size      || undefined,
           }));
           return runs;
         }
 
         if (node.nodeType !== Node.ELEMENT_NODE) return runs;
 
-        const tag   = node.tagName.toLowerCase();
+        const tag = node.tagName.toLowerCase();
+        const cs  = node.style || {};
+
+        // Parse font size from inline style (px → half-points for docx)
+        let size = inherited.size;
+        if (cs.fontSize) {
+          const px = parseFloat(cs.fontSize);
+          if (!isNaN(px)) size = Math.round(px * 1.5); // approx px → half-pt
+        }
+        // font size from execCommand sets a font element with size 1-7
+        // We handle that via the <font> tag below
+
         const style = {
-          bold:      inheritedStyle.bold      || ['b','strong'].includes(tag) || node.style?.fontWeight === 'bold',
-          italic:    inheritedStyle.italic    || ['i','em'].includes(tag)     || node.style?.fontStyle  === 'italic',
-          underline: inheritedStyle.underline || tag === 'u'                  || node.style?.textDecoration?.includes('underline'),
-          strike:    inheritedStyle.strike    || ['s','strike','del'].includes(tag) || node.style?.textDecoration?.includes('line-through'),
+          bold:      inherited.bold      || ['b','strong'].includes(tag) || cs.fontWeight === 'bold',
+          italic:    inherited.italic    || ['i','em'].includes(tag)     || cs.fontStyle  === 'italic',
+          underline: inherited.underline || tag === 'u'                  || (cs.textDecoration || '').includes('underline'),
+          strike:    inherited.strike    || ['s','strike','del'].includes(tag) || (cs.textDecoration || '').includes('line-through'),
+          sub:       inherited.sub       || tag === 'sub',
+          sup:       inherited.sup       || tag === 'sup',
+          color:     cs.color            ? this._rgbToHex(cs.color)?.replace('#','') : inherited.color,
+          font:      cs.fontFamily       ? cs.fontFamily.replace(/['"]/g,'').split(',')[0].trim() : inherited.font,
+          size,
         };
+
+        // <font size="N"> from execCommand('fontSize')
+        if (tag === 'font') {
+          const sizeAttr = node.getAttribute('size');
+          if (sizeAttr) {
+            // Map HTML font size 1-7 to half-points: 8,10,12,14,18,24,36pt → ×2
+            const map = { '1':16,'2':20,'3':24,'4':28,'5':36,'6':48,'7':72 };
+            style.size = map[sizeAttr] || style.size;
+          }
+          const faceAttr = node.getAttribute('face');
+          if (faceAttr) style.font = faceAttr.replace(/['"]/g,'').split(',')[0].trim();
+          const colorAttr = node.getAttribute('color');
+          if (colorAttr) style.color = colorAttr.replace('#','');
+        }
 
         for (const child of node.childNodes) runs.push(...buildRuns(child, style));
         return runs;
       };
 
-      // Consecutive inline nodes are merged into one Paragraph so that
-      // tab-indented content on the same line stays on that same line in docx.
+      // Correct multi-level list parser — processes direct children only,
+      // recurses manually so nesting depth is always accurate
+      const parseList = (listEl, depth) => {
+        for (const child of listEl.children) {
+          if (child.tagName !== 'LI') continue;
+          // Collect runs from this li, excluding nested list content
+          const liRuns = [];
+          for (const node of child.childNodes) {
+            const t = node.tagName?.toLowerCase();
+            if (t === 'ul' || t === 'ol') continue; // skip nested lists here
+            liRuns.push(...buildRuns(node, {}));
+          }
+          children.push(new Paragraph({
+            bullet: { level: Math.min(depth, 8) },
+            children: liRuns.length ? liRuns : [new TextRun('')],
+          }));
+          // Recurse into nested lists
+          for (const nested of child.children) {
+            const nt = nested.tagName?.toLowerCase();
+            if (nt === 'ul' || nt === 'ol') parseList(nested, depth + 1);
+          }
+        }
+      };
+
       const BLOCK_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','div','ul','ol','br','li','blockquote','pre']);
-      const isInline   = (node) => {
+      const isInline = (node) => {
         if (node.nodeType === Node.TEXT_NODE) return true;
         if (node.nodeType !== Node.ELEMENT_NODE) return false;
         return !BLOCK_TAGS.has(node.tagName.toLowerCase());
       };
 
-      const flushInlineGroup = (group) => {
-        if (!group.length) return;
-        const runs = group.flatMap(n => buildRuns(n));
-        children.push(new Paragraph({ children: runs.length ? runs : [new TextRun('')] }));
+      const getAlignment = (el) => {
+        const a = el?.style?.textAlign;
+        if (a === 'center')  return 'center';
+        if (a === 'right')   return 'right';
+        if (a === 'justify') return 'both';
+        return undefined;
       };
 
-      const parseTopNode = (node) => {
+      const parseNode = (node) => {
         if (node.nodeType === Node.TEXT_NODE) {
           const text = node.textContent.replace(/\u00A0/g, ' ');
           if (text.trim()) children.push(new Paragraph({ children: [new TextRun(text)] }));
@@ -472,40 +708,45 @@ export default {
 
         const tag = node.tagName.toLowerCase();
 
-        if      (tag === 'h1') children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: buildRuns(node) }));
-        else if (tag === 'h2') children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: buildRuns(node) }));
-        else if (tag === 'h3') children.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: buildRuns(node) }));
-        else if (tag === 'ul' || tag === 'ol') {
-          node.querySelectorAll('li').forEach(li =>
-            children.push(new Paragraph({ bullet: { level: 0 }, children: buildRuns(li) }))
-          );
-        }
-        else if (tag === 'br') {
+        if (tag === 'h1') {
+          children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: buildRuns(node, {}) }));
+        } else if (tag === 'h2') {
+          children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: buildRuns(node, {}) }));
+        } else if (tag === 'h3') {
+          children.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: buildRuns(node, {}) }));
+        } else if (tag === 'ul' || tag === 'ol') {
+          parseList(node, 0);
+        } else if (tag === 'br') {
           children.push(new Paragraph({ children: [new TextRun('')] }));
-        }
-        else if (tag === 'div' || tag === 'p') {
+        } else if (tag === 'div' || tag === 'p') {
+          const alignment = getAlignment(node);
           let inlineGroup = [];
+          const flushGroup = () => {
+            if (!inlineGroup.length) return;
+            const runs = inlineGroup.flatMap(n => buildRuns(n, {}));
+            children.push(new Paragraph({ alignment, children: runs.length ? runs : [new TextRun('')] }));
+            inlineGroup = [];
+          };
           for (const child of node.childNodes) {
             if (isInline(child)) {
               inlineGroup.push(child);
             } else {
-              flushInlineGroup(inlineGroup);
-              inlineGroup = [];
-              parseTopNode(child);
+              flushGroup();
+              parseNode(child);
             }
           }
-          flushInlineGroup(inlineGroup);
+          flushGroup();
           if (!node.childNodes.length) {
             children.push(new Paragraph({ children: [new TextRun('')] }));
           }
-        }
-        else {
-          const runs = buildRuns(node);
+        } else {
+          // span, font, etc — treat as inline paragraph
+          const runs = buildRuns(node, {});
           children.push(new Paragraph({ children: runs.length ? runs : [new TextRun('')] }));
         }
       };
 
-      Array.from(docBody.childNodes).forEach(parseTopNode);
+      Array.from(docBody.childNodes).forEach(parseNode);
       if (!children.length) children.push(new Paragraph({ children: [new TextRun('')] }));
 
       const doc    = new Document({ sections: [{ children }] });
@@ -517,7 +758,7 @@ export default {
       URL.revokeObjectURL(a.href);
     },
 
-    // ─── Selection save/restore ───────────────────────────────────────────────
+    // ─── Selection save / restore (for remote sync) ───────────────────────────
 
     _saveSelection() {
       try {
@@ -618,7 +859,6 @@ export default {
 }
 .chevron { opacity: 0.6; transition: transform 0.2s; }
 .chevron.open { transform: rotate(180deg); }
-
 .members-dropdown {
   position: absolute; top: calc(100% + 8px); right: 0;
   width: 280px; background: #fff;
@@ -650,7 +890,6 @@ export default {
 }
 .access-name { font-size: 13px; color: #333; font-weight: 500; }
 .no-participants { font-size: 12px; color: #888; text-align: center; padding: 12px 0; }
-
 .toggle-switch { position: relative; width: 38px; height: 20px; display: inline-block; cursor: pointer; }
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 20px; transition: background 0.2s; }
@@ -661,26 +900,64 @@ export default {
 }
 .toggle-switch input:checked + .toggle-slider { background: #4CAF50; }
 .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
-
 .dropdown-enter-active, .dropdown-leave-active { transition: opacity 0.15s, transform 0.15s; }
 .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-6px) scale(0.97); }
 
 /* ── Toolbar ── */
 .doc-toolbar {
-  display: flex; align-items: center; gap: 2px;
-  padding: 6px 10px; background: #fafafa;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 5px 8px 6px; background: #fafafa;
   border-bottom: 1px solid #e0e0e0;
-  flex-wrap: wrap; flex-shrink: 0;
+  flex-shrink: 0;
+}
+.toolbar-row {
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
 }
 .doc-toolbar button {
   background: none; border: 1px solid transparent; border-radius: 5px;
-  padding: 4px 8px; cursor: pointer; font-size: 13px; color: #333;
-  min-width: 28px; transition: background 0.12s, border-color 0.12s, color 0.12s;
+  padding: 3px 7px; cursor: pointer; font-size: 12px; color: #333;
+  min-width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
   user-select: none; -webkit-user-select: none;
+  white-space: nowrap; flex-shrink: 0;
 }
-.doc-toolbar button:hover { background: #e8e8e8; border-color: #ccc; }
+.doc-toolbar button:hover  { background: #e8e8e8; border-color: #ccc; }
 .doc-toolbar button.active { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; font-weight: 700; }
-.toolbar-sep { width: 1px; height: 20px; background: #ddd; margin: 0 3px; flex-shrink: 0; }
+.toolbar-sep { width: 1px; height: 18px; background: #ddd; margin: 0 2px; flex-shrink: 0; }
+
+.toolbar-select {
+  height: 26px; border: 1px solid #ddd; border-radius: 5px;
+  background: #fff; color: #333; font-size: 11px;
+  cursor: pointer; outline: none; padding: 0 3px;
+  flex-shrink: 0;
+}
+.font-family-select { max-width: 108px; }
+.font-size-select   { max-width: 50px; }
+.toolbar-select:hover { border-color: #bbb; background: #f5f5f5; }
+
+/* Color pickers */
+.toolbar-color-wrap {
+  position: relative; display: inline-flex;
+  align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.color-preview-btn {
+  background: none; border: 1px solid transparent; border-radius: 5px;
+  padding: 3px 7px; cursor: pointer;
+  min-width: 26px; height: 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+.color-preview-btn:hover { background: #e8e8e8; border-color: #ccc; }
+.color-letter {
+  font-size: 13px; font-weight: 700; color: #222;
+  line-height: 1; pointer-events: none;
+}
+.hidden-color-input {
+  position: absolute; width: 0; height: 0;
+  opacity: 0; pointer-events: none; border: none;
+}
 
 /* ── Editor body ── */
 .doc-body {
@@ -688,8 +965,6 @@ export default {
   font-size: 15px; line-height: 1.7; color: #1a1a1a;
   outline: none; min-height: 0;
   word-break: break-word;
-  /* No white-space:pre-wrap — that breaks normal line wrapping.
-     Tab indents are \u00a0 chars which always render visibly without it. */
 }
 .doc-body[data-placeholder]:empty::before {
   content: attr(data-placeholder); color: #bbb; pointer-events: none; display: block;
@@ -699,11 +974,16 @@ export default {
 .doc-body :deep(h1) { font-size: 2em;   margin: 0.4em 0; font-weight: 700; }
 .doc-body :deep(h2) { font-size: 1.5em; margin: 0.4em 0; font-weight: 700; }
 .doc-body :deep(h3) { font-size: 1.2em; margin: 0.4em 0; font-weight: 700; }
-.doc-body :deep(ul), .doc-body :deep(ol) { padding-left: 24px; }
+.doc-body :deep(ul), .doc-body :deep(ol) { padding-left: 24px; margin: 4px 0; }
+.doc-body :deep(ul ul), .doc-body :deep(ol ol),
+.doc-body :deep(ul ol), .doc-body :deep(ol ul) { padding-left: 24px; margin: 2px 0; }
+.doc-body :deep(li) { margin: 2px 0; }
 .doc-body :deep(b), .doc-body :deep(strong) { font-weight: 700; }
 .doc-body :deep(i), .doc-body :deep(em) { font-style: italic; }
 .doc-body :deep(u) { text-decoration: underline; }
 .doc-body :deep(s), .doc-body :deep(strike) { text-decoration: line-through; }
+.doc-body :deep(sub) { vertical-align: sub; font-size: smaller; }
+.doc-body :deep(sup) { vertical-align: super; font-size: smaller; }
 
 /* ── Footer ── */
 .doc-footer {
@@ -722,7 +1002,9 @@ export default {
 /* ── Mobile ── */
 @media (max-width: 768px) {
   #doc-enact-panel { width: 100%; left: 0; bottom: 70px; }
-  .doc-toolbar button { padding: 8px 10px; font-size: 14px; min-width: 36px; min-height: 36px; }
+  .doc-toolbar button { min-width: 32px; height: 32px; font-size: 13px; }
+  .toolbar-select { height: 32px; font-size: 12px; }
+  .color-preview-btn { min-width: 32px; height: 32px; }
   .toggle-switch { width: 46px; height: 26px; }
   .toggle-slider::before { width: 18px; height: 18px; }
   .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
