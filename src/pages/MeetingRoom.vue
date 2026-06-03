@@ -541,11 +541,9 @@
               </div>
               <div v-else style="
                 font-size:13px; color:#333; margin-top:8px;
-                white-space:pre-wrap; line-height:1.5;
-                max-height:300px; overflow-y:auto;
+                line-height:1.5; max-height:300px; overflow-y:auto;
                 border-top:1px solid #f0f0f0; padding-top:8px;
-              ">
-                {{ inboxMsgBody }}
+                " v-html="inboxMsgBody">
               </div>
             </div>
           </div>
@@ -1857,34 +1855,69 @@ export default {
         );
         const d = await r.json();
 
-        // Extract plain text or html body
-        let body = '';
+        const extractBody = (parts, mimeType) => {
+          if (!parts) return null;
+          for (const part of parts) {
+            if (part.mimeType === mimeType && part.body?.data) {
+              return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+            }
+            // Recurse into nested multipart
+            if (part.parts) {
+              const nested = extractBody(part.parts, mimeType);
+              if (nested) return nested;
+            }
+          }
+          return null;
+        };
+
         const parts = d.payload?.parts;
+        let body = '';
 
         if (parts) {
-          // Multipart email — find text/plain first, fallback to text/html
-          const plain = parts.find(p => p.mimeType === 'text/plain');
-          const html  = parts.find(p => p.mimeType === 'text/html');
-          const part  = plain || html;
-          if (part?.body?.data) {
-            body = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+          // Try HTML first (renders newsletters/rich emails properly)
+          const htmlBody = extractBody(parts, 'text/html');
+          if (htmlBody) {
+            body = htmlBody;
+            this.inboxMsgBody = body;
+          } else {
+            // Fallback to plain text
+            const plainBody = extractBody(parts, 'text/plain');
+            if (plainBody) {
+              // Convert plain text to readable HTML
+              this.inboxMsgBody = plainBody
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>');
+              } else {
+                this.inboxMsgBody = d.snippet || '';
+              }
+            }
+          } else if (d.payload?.body?.data) {
+          // Single-part email
+            body = atob(d.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+            const mimeType = d.payload.mimeType || '';
+            if (mimeType === 'text/html') {
+              this.inboxMsgBody = body;
+            } else {
+              // Plain text single-part
+              this.inboxMsgBody = body
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/\n/g, '<br>');
+            }
+          } else {
+            this.inboxMsgBody = d.snippet || 'No content available.';
           }
-        } else if (d.payload?.body?.data) {
-          // Single part email
-          body = atob(d.payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+
+        } catch (e) {
+          console.error('selectInboxMsg error:', e);
+          this.inboxMsgBody = msg.snippet || 'Could not load email body.';
+        } finally {
+          this.inboxMsgLoading = false;
         }
-
-        // Strip HTML tags if html body
-        const tmp = document.createElement('div');
-        tmp.innerHTML = body;
-        this.inboxMsgBody = tmp.textContent || tmp.innerText || d.snippet || '';
-
-      } catch (e) {
-        this.inboxMsgBody = msg.snippet || 'Could not load email body.';
-      } finally {
-        this.inboxMsgLoading = false;
-      }
-    },
+      },
     
     safeBroadcast(event, data) {
       if (this.socket && this.socket.connected && this.isSocketConnected) {
@@ -3888,6 +3921,24 @@ body {
   font-size: 13px;
   color: #000;
   padding: 2px 4px;
+}
+
+.email-inbox-full-body div {
+  all: revert;
+  max-width: 100%;
+  overflow-x: hidden;
+  font-size: 13px !important;
+  font-family: 'Segoe UI', sans-serif !important;
+}
+
+.email-inbox-full-body img {
+  max-width: 100%;
+  height: auto;
+}
+
+.email-inbox-full-body a {
+  color: #1a73e8;
+  word-break: break-all;
 }
 
 .field-error-border {
