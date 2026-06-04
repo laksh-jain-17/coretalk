@@ -1314,11 +1314,11 @@ export default {
       this.livekitRoom = new Room({
         adaptiveStream: true,
         dynacast: true,
-        stopLocalTrackOnUnpublish: true,  // ✅ prevents ghost tracks causing echo
+        stopLocalTrackOnUnpublish: true,
         audioCaptureDefaults: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: false,  // ✅ set false — AGC can amplify and re-introduce echo
+          autoGainControl: true,   // switched back on — prevents silence detection triggering auto-mute
           googNoiseSuppression: true,
           googEchoCancellation: true,
           googHighpassFilter: true,
@@ -1326,8 +1326,12 @@ export default {
         audioOutput: {
           deviceId: 'default',
         },
+        publishDefaults: {
+          stopMicTrackOnMute: false, // don't kill track on mute
+          dtx: false,                // disable discontinuous transmission — prevents silence-based auto-mute
+        },
       });
-
+      
       this.livekitRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
         console.log('LiveKit connection state:', state);
         if (state === ConnectionState.Connected) {
