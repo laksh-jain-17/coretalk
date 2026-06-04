@@ -2338,84 +2338,107 @@ export default {
   },
     
     async recording() {
-  this.record = !this.record;
-
-  if (this.record) {
-    try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true
-      });
-
-      const audioCtx = new AudioContext();
-      const destination = audioCtx.createMediaStreamDestination();
-
-      // Add tab audio (remote participants)
-      if (screenStream.getAudioTracks().length > 0) {
-        audioCtx.createMediaStreamSource(screenStream).connect(destination);
-      }
-
-      // Add your own mic only if already on
-      if (this.micon) {
-        const micPub = this._getLocalTrack(Track.Source.Microphone);
-        if (micPub?.track?.mediaStreamTrack) {
-          const micStream = new MediaStream([micPub.track.mediaStreamTrack]);
-          audioCtx.createMediaStreamSource(micStream).connect(destination);
-        }
-      }
-
-      const combinedStream = new MediaStream([
-        ...screenStream.getVideoTracks(),
-        ...destination.stream.getAudioTracks()
-      ]);
-
-      this.recordedChunks = [];
-
-      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-        ? 'video/webm;codecs=vp9,opus'
-        : 'video/webm';
-
-      this.mediaRecorder = new MediaRecorder(combinedStream, { mimeType });
-
-      this.mediaRecorder.ondataavailable = (e) => {
-        if (e.data && e.data.size > 0) this.recordedChunks.push(e.data);
-      };
-
-      this.mediaRecorder.onstop = () => {
-        screenStream.getTracks().forEach(t => t.stop());
-        audioCtx.close();
-        const blob = new Blob(this.recordedChunks, { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `meeting-${this.roomId}-${Date.now()}.webm`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
-        this.recordedChunks = [];
-      };
-
-      screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
-        if (this.isRecording) {
-          this.mediaRecorder.stop();
-          this.isRecording = false;
-          this.record = false;
-        }
-      });
-
-      this.mediaRecorder.start(1000);
-      this.isRecording = true;
-
-    } catch (err) {
-      console.error('Recording failed:', err);
-      this.record = false;
-      this.isRecording = false;
-    }
-
-  } else {
-    if (this.mediaRecorder && this.isRecording) {
+  // If already recording, stop it
+  if (this.isRecording) {
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
-      this.isRecording = false;
     }
+    this.isRecording = false;
+    this.record = false;
+    return;
+  }
+
+  // Start recording
+  try {
+    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true
+    });
+
+    const audioCtx = new AudioContext();
+    const destination = audioCtx.createMediaStreamDestination();
+
+    // Add screen/tab audio
+    if (screenStream.getAudioTracks().length > 0) {
+      audioCtx.createMediaStreamSource(screenStream).connect(destination);
+    }
+
+    // Add mic if active
+    if (this.micon) {
+      const micPub = this._getLocalTrack(Track.Source.Microphone);
+      if (micPub?.track?.mediaStreamTrack) {
+        const micStream = new MediaStream([micPub.track.mediaStreamTrack]);
+        audioCtx.createMediaStreamSource(micStream).connect(destination);
+      }
+    }
+
+    const combinedStream = new MediaStream([
+      ...screenStream.getVideoTracks(),
+      ...destination.stream.getAudioTracks()
+    ]);
+
+    this.recordedChunks = [];
+
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : MediaRecorder.isTypeSupported('video/webm')
+        ? 'video/webm'
+        : '';
+
+    this.mediaRecorder = new MediaRecorder(
+      combinedStream,
+      mimeType ? { mimeType } : {}
+    );
+
+    this.mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) this.recordedChunks.push(e.data);
+    };
+
+    this.mediaRecorder.onstop = () => {
+      screenStream.getTracks().forEach(t => t.stop());
+      audioCtx.close();
+
+      if (this.recordedChunks.length === 0) {
+        console.warn('No recorded data');
+        return;
+      }
+
+      const blob = new Blob(this.recordedChunks, {
+        type: mimeType || 'video/webm'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `coretalk-${this.roomId}-${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      this.recordedChunks = [];
+    };
+
+    // When user stops sharing via browser UI
+    screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+      if (this.isRecording && this.mediaRecorder?.state !== 'inactive') {
+        this.mediaRecorder.stop();
+      }
+      this.isRecording = false;
+      this.record = false;
+    });
+
+    this.mediaRecorder.start(1000);
+
+    // Only set flags AFTER start() succeeds
+    this.isRecording = true;
+    this.record = true;
+
+  } catch (err) {
+    // User cancelled screen picker or permission denied — reset cleanly
+    console.error('Recording failed:', err);
+    this.isRecording = false;
+    this.record = false;
+    this.mediaRecorder = null;
+    this.recordedChunks = [];
   }
 },
     
