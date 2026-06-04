@@ -1318,7 +1318,8 @@ export default {
         audioCaptureDefaults: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,   // switched back on — prevents silence detection triggering auto-mute
+          autoGainControl: false,
+          voiceActivityDetection: false,
           googNoiseSuppression: true,
           googEchoCancellation: true,
           googHighpassFilter: true,
@@ -1327,8 +1328,9 @@ export default {
           deviceId: 'default',
         },
         publishDefaults: {
-          stopMicTrackOnMute: false, // don't kill track on mute
-          dtx: false,                // disable discontinuous transmission — prevents silence-based auto-mute
+          stopMicTrackOnMute: false,
+          dtx: false,
+          audioBitrate: 32000,
         },
       });
       
@@ -1978,7 +1980,8 @@ export default {
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(true, {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true,
+            autoGainControl: false,
+            voiceActivityDetection: false,  
           });
           this.micon = true;
           console.log('Microphone enabled');
@@ -2339,8 +2342,7 @@ export default {
     this.showExpelModal = false;
   },
     
-    async recording() {
-  // If already recording, stop it
+   async recording() {
   if (this.isRecording) {
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
       this.mediaRecorder.stop();
@@ -2350,30 +2352,43 @@ export default {
     return;
   }
 
-  // Start recording
+  let screenStream = null;
+  let clonedMicTrack = null;
+  let audioCtx = null;
+
   try {
-    const screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
+    // Step 1: get screen + optional tab audio
+    screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 30 } },
       audio: true
     });
 
-    const audioCtx = new AudioContext();
+    // Step 2: reuse LiveKit's existing hardware mic track via .clone()
+    // This avoids opening the device a second time (no AEC breakage, no echo)
+    // stopMicTrackOnMute: false guarantees the hardware track stays alive even when muted in UI
+    try {
+      const micPub = this._getLocalTrack(Track.Source.Microphone);
+      if (micPub?.track?.mediaStreamTrack) {
+        clonedMicTrack = micPub.track.mediaStreamTrack.clone();
+      }
+    } catch (err) {
+      console.warn('Could not clone LiveKit mic track for recording:', err);
+    }
+
+    // Step 3: mix screen audio + mic via AudioContext
+    audioCtx = new AudioContext();
     const destination = audioCtx.createMediaStreamDestination();
 
-    // Add screen/tab audio
     if (screenStream.getAudioTracks().length > 0) {
       audioCtx.createMediaStreamSource(screenStream).connect(destination);
     }
 
-    // Add mic if active
-    if (this.micon) {
-      const micPub = this._getLocalTrack(Track.Source.Microphone);
-      if (micPub?.track?.mediaStreamTrack) {
-        const micStream = new MediaStream([micPub.track.mediaStreamTrack]);
-        audioCtx.createMediaStreamSource(micStream).connect(destination);
-      }
+    if (clonedMicTrack) {
+      const micStream = new MediaStream([clonedMicTrack]);
+      audioCtx.createMediaStreamSource(micStream).connect(destination);
     }
 
+    // Step 4: combine screen video + mixed audio into one stream
     const combinedStream = new MediaStream([
       ...screenStream.getVideoTracks(),
       ...destination.stream.getAudioTracks()
@@ -2383,13 +2398,15 @@ export default {
 
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
       ? 'video/webm;codecs=vp9,opus'
-      : MediaRecorder.isTypeSupported('video/webm')
-        ? 'video/webm'
-        : '';
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
+        : MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : '';
 
     this.mediaRecorder = new MediaRecorder(
       combinedStream,
-      mimeType ? { mimeType } : {}
+      mimeType ? { mimeType, videoBitsPerSecond: 2500000, audioBitsPerSecond: 128000 } : {}
     );
 
     this.mediaRecorder.ondataavailable = (e) => {
@@ -2397,11 +2414,13 @@ export default {
     };
 
     this.mediaRecorder.onstop = () => {
-      screenStream.getTracks().forEach(t => t.stop());
-      audioCtx.close();
+      screenStream?.getTracks().forEach(t => t.stop());
+      clonedMicTrack?.stop();
+      try { audioCtx?.close(); } catch (_) {}
 
       if (this.recordedChunks.length === 0) {
-        console.warn('No recorded data');
+        console.warn('No recorded data — nothing to save');
+        this.recordedChunks = [];
         return;
       }
 
@@ -2419,7 +2438,7 @@ export default {
       this.recordedChunks = [];
     };
 
-    // When user stops sharing via browser UI
+    // fires when user clicks "Stop sharing" in browser toolbar
     screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
       if (this.isRecording && this.mediaRecorder?.state !== 'inactive') {
         this.mediaRecorder.stop();
@@ -2429,14 +2448,14 @@ export default {
     });
 
     this.mediaRecorder.start(1000);
-
-    // Only set flags AFTER start() succeeds
     this.isRecording = true;
     this.record = true;
 
   } catch (err) {
-    // User cancelled screen picker or permission denied — reset cleanly
     console.error('Recording failed:', err);
+    screenStream?.getTracks().forEach(t => t.stop());
+    clonedMicTrack?.stop();
+    try { audioCtx?.close(); } catch (_) {}
     this.isRecording = false;
     this.record = false;
     this.mediaRecorder = null;
