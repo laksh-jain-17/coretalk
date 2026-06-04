@@ -1425,6 +1425,7 @@ export default {
 
       try {
         console.log('Attempting to connect to LiveKit...');
+        await new Promise(resolve => setTimeout(resolve, 300));
         await this.livekitRoom.connect(wsUrl, token);
 
         console.log('LiveKit room connected successfully');
@@ -1973,10 +1974,11 @@ export default {
           } catch (permError) {
             console.warn('Permission request failed:', permError);
           }
+          await new Promise(resolve => setTimeout(resolve, 500));
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(true, {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: false,
+            autoGainControl: true,
           });
           this.micon = true;
           console.log('Microphone enabled');
