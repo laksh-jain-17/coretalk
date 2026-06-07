@@ -135,9 +135,9 @@
 
       <!-- Row 2 -->
       <div class="toolbar-row">
-        <button @mousedown.prevent="fmtBlock('h1')" :class="{ active: activeFormats.h1 }" title="Heading 1">H1</button>
-        <button @mousedown.prevent="fmtBlock('h2')" :class="{ active: activeFormats.h2 }" title="Heading 2">H2</button>
-        <button @mousedown.prevent="fmtBlock('h3')" :class="{ active: activeFormats.h3 }" title="Heading 3">H3</button>
+        <button @mousedown.prevent="applyHeading('h1')" :class="{ active: activeFormats.h1 }" title="Heading 1">H1</button>
+        <button @mousedown.prevent="applyHeading('h2')" :class="{ active: activeFormats.h2 }" title="Heading 2">H2</button>
+        <button @mousedown.prevent="applyHeading('h3')" :class="{ active: activeFormats.h3 }" title="Heading 3">H3</button>
 
         <div class="toolbar-sep"></div>
 
@@ -160,6 +160,56 @@
         <button @mousedown.prevent="fmt('insertOrderedList')"   :class="{ active: activeFormats.ol }" title="Numbered List">1. List</button>
         <button @mousedown.prevent="fmt('indent')"  title="Increase Indent (Tab)">⇥</button>
         <button @mousedown.prevent="fmt('outdent')" title="Decrease Indent">⇤</button>
+
+        <div class="toolbar-sep"></div>
+
+        <!-- Table insert -->
+        <div class="toolbar-color-wrap" ref="tablePickerWrapper" title="Insert Table">
+          <button class="color-preview-btn" @mousedown.prevent="toggleTablePicker" :class="{ active: showTablePicker }">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="3" y1="15" x2="21" y2="15"/>
+              <line x1="9" y1="3" x2="9" y2="21"/>
+              <line x1="15" y1="3" x2="15" y2="21"/>
+            </svg>
+          </button>
+
+          <!-- Table grid picker -->
+          <div v-if="showTablePicker" class="table-picker-popup">
+            <div class="table-picker-label">{{ tableHoverRows }} × {{ tableHoverCols }}</div>
+            <div class="table-grid">
+              <div
+                v-for="r in 6" :key="'row-' + r"
+                class="table-grid-row"
+              >
+                <div
+                  v-for="c in 8" :key="'col-' + c"
+                  class="table-grid-cell"
+                  :class="{ highlighted: r <= tableHoverRows && c <= tableHoverCols }"
+                  @mouseenter="tableHoverRows = r; tableHoverCols = c"
+                  @mousedown.prevent="insertTable(r, c)"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Image insert -->
+        <button @mousedown.prevent="$refs.imageFileInput.click()" title="Insert Image">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </button>
+        <input
+          ref="imageFileInput"
+          type="file"
+          accept="image/*"
+          class="hidden-color-input"
+          @change="insertImage($event)"
+        />
       </div>
     </div>
 
@@ -185,7 +235,7 @@
 </template>
 
 <script>
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 
 export default {
   name: 'DocEnactPanel',
@@ -203,15 +253,18 @@ export default {
 
   data() {
     return {
-      editors:       [],
-      lastContent:   '',
-      debounceTimer: null,
-      saveTimer:     null,
-      statusText:    'Connecting...',
-      isMobile:      /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
-      savedRange:    null,
-      _dataHandler:  null,
-      showMembers:   false,
+      editors:        [],
+      lastContent:    '',
+      debounceTimer:  null,
+      saveTimer:      null,
+      statusText:     'Connecting...',
+      isMobile:       /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+      savedRange:     null,
+      _dataHandler:   null,
+      showMembers:    false,
+      showTablePicker: false,
+      tableHoverRows: 1,
+      tableHoverCols: 1,
       activeFormats: {
         bold: false, italic: false, underline: false, strike: false,
         sub: false, sup: false,
@@ -252,6 +305,9 @@ export default {
     this._handleOutsideClick = (e) => {
       if (this.showMembers && this.$refs.membersWrapperRef && !this.$refs.membersWrapperRef.contains(e.target)) {
         this.showMembers = false;
+      }
+      if (this.showTablePicker && this.$refs.tablePickerWrapper && !this.$refs.tablePickerWrapper.contains(e.target)) {
+        this.showTablePicker = false;
       }
     };
     document.addEventListener('mousedown', this._handleOutsideClick);
@@ -296,7 +352,6 @@ export default {
 
     // ─── Selection helpers ────────────────────────────────────────────────────
 
-    // Called on mousedown of selects so we capture selection BEFORE focus leaves editor
     saveSelectionNow() {
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
@@ -314,11 +369,257 @@ export default {
       } catch (_) { return false; }
     },
 
+    // ─── Get the nearest block-level ancestor ────────────────────────────────
+
+    _getParentBlock(node) {
+      const blockTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'DIV', 'LI', 'BLOCKQUOTE', 'PRE'];
+      const docBody = this.$refs.docBody;
+      let current = node;
+      while (current && current !== docBody) {
+        if (current.nodeType === Node.ELEMENT_NODE && blockTags.includes(current.nodeName)) {
+          return current;
+        }
+        current = current.parentNode;
+      }
+      return null;
+    },
+
+    // ─── FIXED: Heading that respects cursor position ─────────────────────────
+    //
+    // Rules:
+    //   1. If text IS selected → apply formatBlock to selection only (standard behavior)
+    //   2. If cursor only (collapsed) AND current block is empty → just change block tag
+    //   3. If cursor only AND current block has content AND cursor is at END → insert new block after
+    //   4. If cursor only AND mid-block → split block at cursor, apply tag to second half
+
+    applyHeading(tag) {
+      this.$refs.docBody?.focus();
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+
+      // Case 1: text is selected — apply to selection via formatBlock (standard)
+      if (!range.collapsed) {
+        const current = (document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, '');
+        document.execCommand('formatBlock', false, current === tag ? 'p' : tag);
+        this._updateActiveFormats();
+        this._broadcastContent();
+        return;
+      }
+
+      // Collapsed cursor — figure out which block we're in
+      const block = this._getParentBlock(range.startContainer);
+      const docBody = this.$refs.docBody;
+
+      // Current block tag
+      const currentTag = block ? block.tagName.toLowerCase() : '';
+
+      // Toggle off: if already the same heading and cursor is collapsed, switch to p
+      if (currentTag === tag) {
+        document.execCommand('formatBlock', false, 'p');
+        this._updateActiveFormats();
+        this._broadcastContent();
+        return;
+      }
+
+      // Case 2: block is empty — just change the tag in place
+      if (!block || block.textContent.trim() === '') {
+        if (block) {
+          const newBlock = document.createElement(tag);
+          newBlock.innerHTML = '<br>';
+          block.replaceWith(newBlock);
+          // Move cursor into new block
+          const newRange = document.createRange();
+          newRange.setStart(newBlock, 0);
+          newRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        } else {
+          document.execCommand('formatBlock', false, tag);
+        }
+        this._updateActiveFormats();
+        this._broadcastContent();
+        return;
+      }
+
+      // Case 3 & 4: block has content — check cursor position
+      // Get range from block start to cursor
+      const rangeToStart = document.createRange();
+      rangeToStart.setStart(block, 0);
+      rangeToStart.setEnd(range.startContainer, range.startOffset);
+      const textBeforeCursor = rangeToStart.toString();
+
+      // Range from cursor to block end
+      const rangeToEnd = document.createRange();
+      rangeToEnd.setStart(range.startContainer, range.startOffset);
+      rangeToEnd.setEnd(block, block.childNodes.length);
+      const textAfterCursor = rangeToEnd.toString();
+
+      if (textAfterCursor.trim() === '') {
+        // Case 3: cursor is at end of block — insert new block of chosen type after
+        const newBlock = document.createElement(tag);
+        newBlock.innerHTML = '<br>';
+        block.after(newBlock);
+        const newRange = document.createRange();
+        newRange.setStart(newBlock, 0);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      } else if (textBeforeCursor.trim() === '') {
+        // Cursor is at start of block — convert current block, keep cursor at start
+        const newBlock = document.createElement(tag);
+        newBlock.innerHTML = block.innerHTML;
+        block.replaceWith(newBlock);
+        const newRange = document.createRange();
+        newRange.setStart(newBlock, 0);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      } else {
+        // Case 4: cursor is mid-block — split the block
+        // Content before cursor stays in current block
+        // Content after cursor goes into new block with chosen tag
+        const beforeRange = document.createRange();
+        beforeRange.setStart(block, 0);
+        beforeRange.setEnd(range.startContainer, range.startOffset);
+        const beforeFrag = beforeRange.cloneContents();
+
+        const afterRange = document.createRange();
+        afterRange.setStart(range.startContainer, range.startOffset);
+        afterRange.setEnd(block, block.childNodes.length);
+        const afterFrag = afterRange.cloneContents();
+
+        // Update current block to only have "before" content
+        block.innerHTML = '';
+        block.appendChild(beforeFrag);
+        if (!block.innerHTML || block.innerHTML === '') block.innerHTML = '<br>';
+
+        // Create new block for "after" content with chosen heading
+        const newBlock = document.createElement(tag);
+        newBlock.appendChild(afterFrag);
+        if (!newBlock.textContent && !newBlock.querySelector('br')) newBlock.innerHTML = '<br>';
+        block.after(newBlock);
+
+        // Move cursor to start of new block
+        const newRange = document.createRange();
+        newRange.setStart(newBlock, 0);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      }
+
+      this._updateActiveFormats();
+      this._broadcastContent();
+    },
+
+    // ─── Table ────────────────────────────────────────────────────────────────
+
+    toggleTablePicker() {
+      this.showTablePicker = !this.showTablePicker;
+      this.tableHoverRows = 1;
+      this.tableHoverCols = 1;
+    },
+
+    insertTable(rows, cols) {
+      this.showTablePicker = false;
+      this.$refs.docBody?.focus();
+
+      // Build table HTML
+      let html = '<table class="doc-table"><tbody>';
+      for (let r = 0; r < rows; r++) {
+        html += '<tr>';
+        for (let c = 0; c < cols; c++) {
+          html += r === 0
+            ? '<th contenteditable="true"><br></th>'
+            : '<td contenteditable="true"><br></td>';
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table><p><br></p>';
+
+      // Insert at cursor position
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        // If inside a block, insert after it
+        const block = this._getParentBlock(range.startContainer);
+        if (block) {
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = html;
+          const table = wrapper.querySelector('table');
+          const para  = wrapper.querySelector('p');
+          block.after(para);
+          block.after(table);
+          // Move cursor into first cell
+          const firstCell = table.querySelector('th, td');
+          if (firstCell) {
+            const newRange = document.createRange();
+            newRange.setStart(firstCell, 0);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+          }
+        } else {
+          document.execCommand('insertHTML', false, html);
+        }
+      } else {
+        document.execCommand('insertHTML', false, html);
+      }
+
+      this._broadcastContent();
+    },
+
+    // ─── Image ────────────────────────────────────────────────────────────────
+
+    insertImage(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      // Reset input so same file can be picked again
+      event.target.value = '';
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        this.$refs.docBody?.focus();
+
+        // Restore saved selection if any
+        this._restoreSavedSelection();
+
+        const imgHtml = `<img src="${dataUrl}" class="doc-image" style="max-width:100%;height:auto;display:block;margin:8px 0;border-radius:4px;" /><p><br></p>`;
+
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount) {
+          const range = sel.getRangeAt(0);
+          const block = this._getParentBlock(range.startContainer);
+          if (block) {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = imgHtml;
+            const img  = wrapper.querySelector('img');
+            const para = wrapper.querySelector('p');
+            block.after(para);
+            block.after(img);
+            // Move cursor to paragraph after image
+            const newRange = document.createRange();
+            newRange.setStart(para, 0);
+            newRange.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+          } else {
+            document.execCommand('insertHTML', false, imgHtml);
+          }
+        } else {
+          document.execCommand('insertHTML', false, imgHtml);
+        }
+
+        this._broadcastContent();
+      };
+      reader.readAsDataURL(file);
+    },
+
     // ─── Toolbar ─────────────────────────────────────────────────────────────
 
     _rgbToHex(rgb) {
       if (!rgb) return null;
-      // Already hex
       if (rgb.startsWith('#')) return rgb;
       const m = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
       if (!m) return null;
@@ -346,18 +647,15 @@ export default {
         this.activeFormats.h2 = block === 'h2';
         this.activeFormats.h3 = block === 'h3';
 
-        // Font size at cursor
         const fs = document.queryCommandValue('fontSize');
         if (fs) this.currentFontSize = String(fs);
 
-        // Font name at cursor
         const fn = document.queryCommandValue('fontName');
         if (fn) {
           const clean = fn.replace(/['"]/g, '').split(',')[0].trim();
           if (clean) this.currentFontFamily = clean;
         }
 
-        // Font color at cursor
         const fc = document.queryCommandValue('foreColor');
         const hex = this._rgbToHex(fc);
         if (hex && hex !== '#000000' || fc) this.activeFontColor = hex || this.activeFontColor;
@@ -367,7 +665,6 @@ export default {
 
     onCursorChange() {
       this._updateActiveFormats();
-      // Always keep savedRange up to date
       const sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
         try { this.savedRange = sel.getRangeAt(0).cloneRange(); } catch (_) {}
@@ -381,14 +678,6 @@ export default {
       this._broadcastContent();
     },
 
-    fmtBlock(tag) {
-      this.$refs.docBody?.focus();
-      const current = (document.queryCommandValue('formatBlock') || '').toLowerCase().replace(/[<>]/g, '');
-      document.execCommand('formatBlock', false, current === tag ? 'p' : tag);
-      this._updateActiveFormats();
-      this._broadcastContent();
-    },
-
     clearFormatting() {
       this.$refs.docBody?.focus();
       document.execCommand('removeFormat', false, null);
@@ -398,7 +687,6 @@ export default {
     },
 
     setFontFamily(family) {
-      // Restore selection that was saved on mousedown of the select
       this._restoreSavedSelection();
       this.$refs.docBody?.focus();
       document.execCommand('fontName', false, family);
@@ -418,7 +706,6 @@ export default {
 
     setFontColor(color) {
       this.activeFontColor = color;
-      // savedRange was set when user clicked the button (mousedown.prevent keeps focus)
       this._restoreSavedSelection();
       this.$refs.docBody?.focus();
       document.execCommand('foreColor', false, color);
@@ -429,7 +716,6 @@ export default {
       this.activeHighlightColor = color;
       this._restoreSavedSelection();
       this.$refs.docBody?.focus();
-      // hiliteColor is standard; backColor is IE/older fallback
       if (!document.execCommand('hiliteColor', false, color)) {
         document.execCommand('backColor', false, color);
       }
@@ -447,9 +733,27 @@ export default {
       if (e.key === 'Tab') {
         e.preventDefault();
         if (this.activeFormats.ul || this.activeFormats.ol) {
-          // Inside list: Tab indents, Shift+Tab outdents
           document.execCommand(e.shiftKey ? 'outdent' : 'indent', false, null);
         } else {
+          // Tab inside table moves to next cell
+          const sel = window.getSelection();
+          if (sel && sel.rangeCount) {
+            const td = this._getClosestTableCell(sel.getRangeAt(0).startContainer);
+            if (td) {
+              e.preventDefault();
+              const cells = Array.from(td.closest('table').querySelectorAll('th, td'));
+              const idx = cells.indexOf(td);
+              const next = e.shiftKey ? cells[idx - 1] : cells[idx + 1];
+              if (next) {
+                const range = document.createRange();
+                range.selectNodeContents(next);
+                range.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+              return;
+            }
+          }
           document.execCommand('insertText', false, '\u00a0\u00a0\u00a0\u00a0');
         }
         this._updateActiveFormats();
@@ -457,6 +761,34 @@ export default {
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         this.$nextTick(() => this._updateActiveFormats());
       }
+
+      // Enter in a heading → create a new <p> after, not another heading
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return;
+        const block = this._getParentBlock(sel.getRangeAt(0).startContainer);
+        if (block && /^H[1-6]$/.test(block.nodeName)) {
+          e.preventDefault();
+          const newP = document.createElement('p');
+          newP.innerHTML = '<br>';
+          block.after(newP);
+          const range = document.createRange();
+          range.setStart(newP, 0);
+          range.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(range);
+          this._broadcastContent();
+        }
+      }
+    },
+
+    _getClosestTableCell(node) {
+      let current = node;
+      while (current && current !== this.$refs.docBody) {
+        if (current.nodeName === 'TD' || current.nodeName === 'TH') return current;
+        current = current.parentNode;
+      }
+      return null;
     },
 
     // ─── LiveKit / Socket ─────────────────────────────────────────────────────
@@ -620,14 +952,11 @@ export default {
         const tag = node.tagName.toLowerCase();
         const cs  = node.style || {};
 
-        // Parse font size from inline style (px → half-points for docx)
         let size = inherited.size;
         if (cs.fontSize) {
           const px = parseFloat(cs.fontSize);
-          if (!isNaN(px)) size = Math.round(px * 1.5); // approx px → half-pt
+          if (!isNaN(px)) size = Math.round(px * 1.5);
         }
-        // font size from execCommand sets a font element with size 1-7
-        // We handle that via the <font> tag below
 
         const style = {
           bold:      inherited.bold      || ['b','strong'].includes(tag) || cs.fontWeight === 'bold',
@@ -641,11 +970,9 @@ export default {
           size,
         };
 
-        // <font size="N"> from execCommand('fontSize')
         if (tag === 'font') {
           const sizeAttr = node.getAttribute('size');
           if (sizeAttr) {
-            // Map HTML font size 1-7 to half-points: 8,10,12,14,18,24,36pt → ×2
             const map = { '1':16,'2':20,'3':24,'4':28,'5':36,'6':48,'7':72 };
             style.size = map[sizeAttr] || style.size;
           }
@@ -659,23 +986,19 @@ export default {
         return runs;
       };
 
-      // Correct multi-level list parser — processes direct children only,
-      // recurses manually so nesting depth is always accurate
       const parseList = (listEl, depth) => {
         for (const child of listEl.children) {
           if (child.tagName !== 'LI') continue;
-          // Collect runs from this li, excluding nested list content
           const liRuns = [];
           for (const node of child.childNodes) {
             const t = node.tagName?.toLowerCase();
-            if (t === 'ul' || t === 'ol') continue; // skip nested lists here
+            if (t === 'ul' || t === 'ol') continue;
             liRuns.push(...buildRuns(node, {}));
           }
           children.push(new Paragraph({
             bullet: { level: Math.min(depth, 8) },
             children: liRuns.length ? liRuns : [new TextRun('')],
           }));
-          // Recurse into nested lists
           for (const nested of child.children) {
             const nt = nested.tagName?.toLowerCase();
             if (nt === 'ul' || nt === 'ol') parseList(nested, depth + 1);
@@ -683,7 +1006,35 @@ export default {
         }
       };
 
-      const BLOCK_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','div','ul','ol','br','li','blockquote','pre']);
+      // Parse table into docx Table
+      const parseTable = (tableEl) => {
+        const rows = [];
+        for (const tr of tableEl.querySelectorAll('tr')) {
+          const cells = [];
+          for (const cell of tr.querySelectorAll('th, td')) {
+            const cellRuns = buildRuns(cell, {});
+            cells.push(new TableCell({
+              children: [new Paragraph({ children: cellRuns.length ? cellRuns : [new TextRun('')] })],
+              borders: {
+                top:    { style: BorderStyle.SINGLE, size: 1, color: 'AAAAAA' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'AAAAAA' },
+                left:   { style: BorderStyle.SINGLE, size: 1, color: 'AAAAAA' },
+                right:  { style: BorderStyle.SINGLE, size: 1, color: 'AAAAAA' },
+              },
+            }));
+          }
+          if (cells.length) rows.push(new TableRow({ children: cells }));
+        }
+        if (rows.length) {
+          children.push(new Table({
+            rows,
+            width: { size: 100, type: WidthType.PERCENTAGE },
+          }));
+          children.push(new Paragraph({ children: [new TextRun('')] }));
+        }
+      };
+
+      const BLOCK_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','div','ul','ol','br','li','blockquote','pre','table']);
       const isInline = (node) => {
         if (node.nodeType === Node.TEXT_NODE) return true;
         if (node.nodeType !== Node.ELEMENT_NODE) return false;
@@ -714,10 +1065,15 @@ export default {
           children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: buildRuns(node, {}) }));
         } else if (tag === 'h3') {
           children.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: buildRuns(node, {}) }));
+        } else if (tag === 'table') {
+          parseTable(node);
         } else if (tag === 'ul' || tag === 'ol') {
           parseList(node, 0);
         } else if (tag === 'br') {
           children.push(new Paragraph({ children: [new TextRun('')] }));
+        } else if (tag === 'img') {
+          // Images are skipped in docx export (base64 images need additional processing)
+          children.push(new Paragraph({ children: [new TextRun('[Image]')] }));
         } else if (tag === 'div' || tag === 'p') {
           const alignment = getAlignment(node);
           let inlineGroup = [];
@@ -740,7 +1096,6 @@ export default {
             children.push(new Paragraph({ children: [new TextRun('')] }));
           }
         } else {
-          // span, font, etc — treat as inline paragraph
           const runs = buildRuns(node, {});
           children.push(new Paragraph({ children: runs.length ? runs : [new TextRun('')] }));
         }
@@ -959,6 +1314,49 @@ export default {
   opacity: 0; pointer-events: none; border: none;
 }
 
+/* ── Table picker popup ── */
+.table-picker-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  padding: 8px;
+  z-index: 300;
+  min-width: 140px;
+}
+.table-picker-label {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 6px;
+}
+.table-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.table-grid-row {
+  display: flex;
+  gap: 2px;
+}
+.table-grid-cell {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  cursor: pointer;
+  background: #fff;
+  transition: background 0.1s, border-color 0.1s;
+}
+.table-grid-cell.highlighted {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
 /* ── Editor body ── */
 .doc-body {
   flex: 1; padding: 20px 24px; overflow-y: auto;
@@ -985,6 +1383,55 @@ export default {
 .doc-body :deep(sub) { vertical-align: sub; font-size: smaller; }
 .doc-body :deep(sup) { vertical-align: super; font-size: smaller; }
 
+/* ── Table styles ── */
+.doc-body :deep(.doc-table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+  table-layout: fixed;
+}
+.doc-body :deep(.doc-table th),
+.doc-body :deep(.doc-table td) {
+  border: 1px solid #c8c8c8;
+  padding: 7px 10px;
+  min-width: 40px;
+  vertical-align: top;
+  word-break: break-word;
+}
+.doc-body :deep(.doc-table th) {
+  background: #f0f0f0;
+  font-weight: 700;
+  text-align: left;
+  color: #222;
+}
+.doc-body :deep(.doc-table td) {
+  background: #fff;
+}
+.doc-body :deep(.doc-table tr:hover td) {
+  background: #fafafa;
+}
+/* Make table cells editable visually */
+.doc-body :deep(.doc-table th[contenteditable="true"]:focus),
+.doc-body :deep(.doc-table td[contenteditable="true"]:focus) {
+  outline: 2px solid #4CAF50;
+  outline-offset: -1px;
+  background: #f0fff4;
+}
+
+/* ── Image styles ── */
+.doc-body :deep(.doc-image) {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 8px 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.doc-body :deep(.doc-image:hover) {
+  box-shadow: 0 0 0 2px #4CAF50;
+}
+
 /* ── Footer ── */
 .doc-footer {
   display: flex; justify-content: space-between; align-items: center;
@@ -1010,5 +1457,6 @@ export default {
   .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
   .doc-body { padding: 14px 16px; font-size: 16px; }
   .members-dropdown { width: 260px; }
+  .table-picker-popup { left: auto; right: 0; }
 }
 </style>
