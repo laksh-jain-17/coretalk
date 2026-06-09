@@ -153,6 +153,19 @@
           </li>
         </ul>
         <ul id="rightpane">
+          <li v-if="isMobile">
+              <button @click="toggleDropdown('mobileMenu')">☰</button>
+              <ul v-if="activeDropdown === 'mobileMenu'" class="dropdown-menu extras-menu">
+                <li @click.stop="toggleSilentBackground">{{ silentBackgroundEnabled ? 'Silent Mode ON' : 'Silent Background' }}</li>
+                <li @click.stop="recording">{{ isRecording ? 'Stop Recording' : 'Start Recording' }}</li>
+                <li @click.stop="turn">Change Panel</li>
+                <li @click.stop="toggleFullscreen">{{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen' }}</li>
+                <li v-if="!isGuest" @click.stop="emailEnact">Gmail Enact</li>
+                <li @click.stop="showWhiteboard = !showWhiteboard">{{ showWhiteboard ? 'Whiteboard ON' : 'Whiteboard' }}</li>
+                <li @click.stop="toggleDocEnact">{{ showDocEnact ? 'Doc Enact ON' : 'Doc Enact' }}</li>
+                <li @click.stop="toggleAiNotes">{{ showAiNotes ? 'AI Summary ON' : 'AI Summary' }}</li>
+            </ul>
+          </li>
           <li>
             <button @click="togglePanel('list')" @mouseenter="() => setHover('participants')" @mouseleave="() => setHover(null)">
               <IconMaterialSymbolsLightGroup />
@@ -4196,10 +4209,15 @@ body {
   opacity: 0.5;
 }
 
-/* ==================== RESPONSIVE DESIGN ==================== */
+/* ==================== RESPONSIVE DESIGN ==================== */  
 @media (max-width: 768px) {
   #left-tray {
-    width: 180px;
+    display: none !important;
+  }
+  
+  #page:not(.tray-hidden) #main-content {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 
   #chat-box,
