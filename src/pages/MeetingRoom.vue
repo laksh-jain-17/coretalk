@@ -298,7 +298,7 @@
             <div v-if="hoveredIcon === 'chat'" class="nav-tooltip">Chat</div>
           </div>
 
-          <!-- Mobile menu (all features in one place on mobile) -->
+          <!-- Mobile menu -->
           <div class="nav-btn-wrap" v-if="isMobile" style="position:relative;">
             <button
               @click.stop="toggleDropdown('mobileMenu')"
@@ -730,7 +730,6 @@ export default {
       inboxMsgBody: '',
       inboxMsgLoading: false,
 
-      // Meeting duration timer
       meetingStartTime: null,
       meetingDuration: '00:00',
       durationInterval: null,
@@ -820,40 +819,74 @@ export default {
       }, 1000);
     },
 
+    // ==================== FULLSCREEN (from doc2 - working) ====================
     toggleFullscreen() {
-      if (!this.isFullscreen) this.enterFullscreen();
-      else this.exitFullscreen();
+      if (!this.isFullscreen) {
+        this.enterFullscreen();
+      } else {
+        this.exitFullscreen();
+      }
     },
+
     enterFullscreen() {
       const elem = document.documentElement;
-      if (elem.requestFullscreen) elem.requestFullscreen();
-      else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
-      else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        elem.msRequestFullscreen();
+      }
       this.isFullscreen = true;
     },
+
     exitFullscreen() {
-      if (document.exitFullscreen) document.exitFullscreen();
-      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-      else if (document.msExitFullscreen) document.msExitFullscreen();
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
       this.isFullscreen = false;
     },
+
     handleFullscreenChange() {
-      this.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+      this.isFullscreen = !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement
+      );
     },
+
     handleEscKey(e) {
-      if (e.key === 'Escape' && this.isFullscreen) this.exitFullscreen();
+      if (e.key === 'Escape' && this.isFullscreen) {
+        this.exitFullscreen();
+      }
     },
-    toggleAiNotes() { this.showAiNotes = !this.showAiNotes; },
+
+    // ==================== AI NOTES (from doc2 - working) ====================
+    toggleAiNotes() {
+      this.showAiNotes = !this.showAiNotes;
+    },
+
     closeAiNotes() {
       this.showAiNotes = false;
       this.aiNotesFaded = false;
-      if (this.aiNotesFadeTimer) { clearTimeout(this.aiNotesFadeTimer); this.aiNotesFadeTimer = null; }
+      if (this.aiNotesFadeTimer) {
+        clearTimeout(this.aiNotesFadeTimer);
+        this.aiNotesFadeTimer = null;
+      }
     },
 
+    // ==================== SILENT BACKGROUND ====================
     async toggleSilentBackground() {
       this.silentBackgroundEnabled = !this.silentBackgroundEnabled;
-      if (this.silentBackgroundEnabled) await this.enableBackgroundNoiseSuppression();
-      else await this.disableBackgroundNoiseSuppression();
+      if (this.silentBackgroundEnabled) {
+        await this.enableBackgroundNoiseSuppression();
+      } else {
+        await this.disableBackgroundNoiseSuppression();
+      }
     },
 
     async enableBackgroundNoiseSuppression() {
@@ -866,9 +899,14 @@ export default {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             audio: {
-              echoCancellation: true, noiseSuppression: true, autoGainControl: true,
-              googNoiseSuppression: true, googHighpassFilter: true,
-              googNoiseSuppression2: true, googEchoCancellation: true, googAutoGainControl: true,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              googNoiseSuppression: true,
+              googHighpassFilter: true,
+              googNoiseSuppression2: true,
+              googEchoCancellation: true,
+              googAutoGainControl: true,
             },
             video: false,
           });
@@ -1103,10 +1141,8 @@ export default {
         },
         audioOutput: { deviceId: 'default' },
         publishDefaults: {
-          // FIX: stopMicTrackOnMute: true releases the hardware track when muted
-          // This clears the browser/OS mic-in-use indicator when user mutes
-          // Recording still works because we clone the track BEFORE mediaRecorder.start()
-          stopMicTrackOnMute: true,
+          // doc2: stopMicTrackOnMute: false keeps hardware track alive for recording clone
+          stopMicTrackOnMute: false,
           dtx: false,
           audioBitrate: 32000,
         },
@@ -1358,12 +1394,20 @@ export default {
         if (this.$router) this.$router.push('/Ending');
         else window.location.href = '/Ending';
       });
+      // ==================== MUTE ALL (from doc2 - working) ====================
       this.socket.on('all-muted', async ({ locked }) => {
-        if (this.isHost) { this.isMuteAllActive = locked; return; }
+        if (this.isHost) {
+          this.isMuteAllActive = locked;
+          return;
+        }
         this.isHostMuteLocked = locked;
         if (locked) {
           if (this.micon && this.livekitRoom?.localParticipant) {
-            try { await this.livekitRoom.localParticipant.setMicrophoneEnabled(false); } catch (err) { console.error('Force-mute failed:', err); }
+            try {
+              await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
+            } catch (err) {
+              console.error('Force-mute failed:', err);
+            }
           }
           this.micon = false;
         }
@@ -1442,12 +1486,15 @@ export default {
       }
     },
 
+    // ==================== DOC ENACT (from doc2 - working) ====================
     toggleDocEnact() {
       this.showDocEnact = !this.showDocEnact;
       if (this.socket && this.socket.connected) {
         this.socket.emit('doc-relay', {
-          roomId: this.roomId, type: 'doc-enact-visibility',
-          isOpen: this.showDocEnact, senderId: this.userId,
+          roomId: this.roomId,
+          type: 'doc-enact-visibility',
+          isOpen: this.showDocEnact,
+          senderId: this.userId,
         });
       }
     },
@@ -1531,8 +1578,6 @@ export default {
         if (this.micon) {
           await this.livekitRoom.localParticipant.setMicrophoneEnabled(false);
           this.micon = false;
-          // stopMicTrackOnMute: true means LiveKit stops the hardware track here,
-          // releasing the device so Chrome/OS removes the mic-in-use indicator
         } else {
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1725,13 +1770,17 @@ export default {
       else window.location.href = '/Ending';
     },
 
+    // ==================== END MEETING (from doc2 - working) ====================
     async endMeeting() {
       if (!this.isHost) return;
       try {
         const authToken = localStorage.getItem('token');
         const res = await fetch(`${import.meta.env.VITE_API_URL}/api/end-meeting`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
           body: JSON.stringify({ roomId: this.roomId })
         });
         if (res.ok) {
@@ -1743,6 +1792,7 @@ export default {
       } catch (err) { console.error('Error ending meeting:', err); }
     },
 
+    // ==================== MUTE ALL (from doc2 - working) ====================
     async muteAll() {
       if (!this.isHost) return;
       const nextState = !this.isMuteAllActive;
@@ -1750,7 +1800,10 @@ export default {
         const authToken = localStorage.getItem('token');
         await fetch(`${import.meta.env.VITE_API_URL}/api/mute-all`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
           body: JSON.stringify({ roomId: this.roomId, locked: nextState })
         });
       } catch (err) { console.error('Error toggling mute all:', err); }
@@ -1758,10 +1811,13 @@ export default {
 
     openExpelModal() { this.expelSelected = []; this.showExpelModal = true; this.activeDropdown = null; },
 
+    // ==================== EXPEL MEMBERS (from doc2 - working) ====================
     expelSelectedMembers() {
       if (!this.isHost || this.expelSelected.length === 0) return;
       this.expelSelected.forEach(selectedId => {
-        const found = this.participants.find(p => p.socketId === selectedId || p.userId === selectedId || p.id === selectedId);
+        const found = this.participants.find(
+          p => p.socketId === selectedId || p.userId === selectedId || p.id === selectedId
+        );
         const targetSocketId = found?.socketId || selectedId;
         this.socket.emit('expel-participant', { roomId: this.roomId, targetSocketId });
       });
@@ -1769,6 +1825,7 @@ export default {
       this.showExpelModal = false;
     },
 
+    // ==================== RECORDING (from doc2 - working, stopMicTrackOnMute: false) ====================
     async recording() {
       if (this.isRecording) {
         if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
@@ -1784,25 +1841,15 @@ export default {
           video: { frameRate: { ideal: 30 } },
           audio: true
         });
-        // With stopMicTrackOnMute: true, the hardware track is only alive when mic is on.
-        // If user is muted, briefly enable mic to get a track, clone it, then restore muted state.
-        let wasAlreadyMuted = !this.micon;
-        if (wasAlreadyMuted) {
-          try {
-            await this.livekitRoom.localParticipant.setMicrophoneEnabled(true, {
-              echoCancellation: true, noiseSuppression: true, autoGainControl: false, voiceActivityDetection: false,
-            });
-          } catch (e) { console.warn('Could not enable mic for recording clone:', e); }
-        }
+        // doc2: reuse LiveKit's existing hardware mic track via .clone()
+        // stopMicTrackOnMute: false guarantees hardware track stays alive even when UI-muted
         try {
           const micPub = this._getLocalTrack(Track.Source.Microphone);
           if (micPub?.track?.mediaStreamTrack) {
             clonedMicTrack = micPub.track.mediaStreamTrack.clone();
           }
-        } catch (err) { console.warn('Could not clone LiveKit mic track for recording:', err); }
-        // Re-mute if it was muted before
-        if (wasAlreadyMuted) {
-          try { await this.livekitRoom.localParticipant.setMicrophoneEnabled(false); } catch (e) {}
+        } catch (err) {
+          console.warn('Could not clone LiveKit mic track for recording:', err);
         }
         audioCtx = new AudioContext();
         const destination = audioCtx.createMediaStreamDestination();
@@ -1870,7 +1917,10 @@ export default {
       if (!this.livekitRoom) return;
     },
 
-    emailEnact() { this.initiateGmailOAuth(); },
+    // ==================== GMAIL ENACT (from doc2 - working) ====================
+    emailEnact() {
+      this.initiateGmailOAuth();
+    },
 
     initiateGmailOAuth() {
       const clientId = import.meta.env.VITE_GMAIL_CLIENT_ID;
@@ -1983,7 +2033,10 @@ export default {
         const toField = this.emailToList.map(addr => addr.trim()).join(', ');
         const response = await fetch(`${import.meta.env.VITE_API_URL}/api/send-email`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
           body: JSON.stringify({
             accessToken: this.gmailAccessToken, senderEmail,
             to: toField, subject: this.emailSubject.trim(),
@@ -2161,7 +2214,6 @@ export default {
     document.addEventListener('msfullscreenchange', this.handleFullscreenChange);
     document.addEventListener('keydown', this.handleEscKey);
 
-    // Close dropdowns when clicking outside
     this._outsideClickHandler = (e) => {
       if (this.activeDropdown) this.activeDropdown = null;
       if (this.show_info && !e.target.closest('#info_box')) this.show_info = false;
@@ -2192,7 +2244,7 @@ body {
   flex-direction: column;
 }
 
-/* ==================== MAIN CONTENT — full width, no left margin ==================== */
+/* ==================== MAIN CONTENT ==================== */
 #main-content {
   flex: 1;
   display: flex;
@@ -2240,9 +2292,7 @@ body {
   transition: border-color 0.2s;
 }
 
-.participant-tile:hover {
-  border-color: #3a3a3a;
-}
+.participant-tile:hover { border-color: #3a3a3a; }
 
 .participant-tile video {
   width: 100%;
@@ -2300,10 +2350,7 @@ body {
   text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
 
-.participant-controls {
-  display: flex;
-  gap: 4px;
-}
+.participant-controls { display: flex; gap: 4px; }
 
 .ctrl-icon {
   display: flex;
@@ -2315,13 +2362,9 @@ body {
   background: rgba(0,0,0,0.55);
 }
 
-.ctrl-icon.muted {
-  color: #ff5252;
-}
+.ctrl-icon.muted { color: #ff5252; }
 
-.local-participant {
-  border: 1.5px solid rgba(74, 200, 120, 0.5);
-}
+.local-participant { border: 1.5px solid rgba(74, 200, 120, 0.5); }
 
 /* ==================== BOTTOM NAVBAR ==================== */
 #navbar {
@@ -2339,7 +2382,6 @@ body {
   z-index: 10;
 }
 
-/* Left: meeting info */
 #navbar-left {
   display: flex;
   flex-direction: column;
@@ -2364,14 +2406,12 @@ body {
   letter-spacing: 0.5px;
 }
 
-/* Center: main controls */
 #navbar-center {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-/* Right: secondary controls */
 #navbar-right {
   display: flex;
   align-items: center;
@@ -2394,7 +2434,7 @@ body {
   user-select: none;
 }
 
-/* ==================== NAV BUTTONS — main (larger) ==================== */
+/* ==================== NAV BUTTONS — main ==================== */
 .nav-btn {
   width: 46px;
   height: 46px;
@@ -2411,10 +2451,8 @@ body {
 
 .nav-btn:hover { transform: scale(1.06); }
 .nav-btn:active { transform: scale(0.97); }
-
 .nav-btn svg { flex-shrink: 0; }
 
-/* Button state variants */
 .btn-active  { background-color: #2a2a2a; color: #4ac878; }
 .btn-danger  { background-color: #3d1515; color: #ff5252; }
 .btn-accent  { background-color: #1a3a2a; color: #4ac878; }
@@ -2427,7 +2465,7 @@ body {
 .btn-neutral:hover { background-color: #333; }
 .btn-leave:hover   { background-color: #a93226; }
 
-/* ==================== NAV BUTTONS — small (right side) ==================== */
+/* ==================== NAV BUTTONS — small ==================== */
 .nav-btn-sm {
   width: 38px;
   height: 38px;
@@ -2530,29 +2568,14 @@ body {
 }
 
 .feature-tile:hover { background: #2e2e2e; border-color: #444; }
-
 .feature-tile svg { color: #aaa; }
+.feature-tile span:not(.feat-on-badge) { font-size: 11px; color: #bbb; text-align: center; line-height: 1.2; }
 
-.feature-tile span:not(.feat-on-badge) {
-  font-size: 11px;
-  color: #bbb;
-  text-align: center;
-  line-height: 1.2;
-}
-
-.feature-tile-on {
-  background: #1a3a2a;
-  border-color: #2d6b46;
-}
-
+.feature-tile-on { background: #1a3a2a; border-color: #2d6b46; }
 .feature-tile-on svg { color: #4ac878; }
 .feature-tile-on span:not(.feat-on-badge) { color: #4ac878; }
 
-.feature-tile-rec {
-  background: #3a1a1a;
-  border-color: #6b2d2d;
-}
-
+.feature-tile-rec { background: #3a1a1a; border-color: #6b2d2d; }
 .feature-tile-rec svg { color: #ff5252; }
 .feature-tile-rec span:not(.feat-on-badge) { color: #ff5252; }
 
@@ -2602,7 +2625,7 @@ body {
 
 .dropdown-menu li:hover { background-color: #2a2a2a; }
 
-/* ==================== SIDE PANELS (CHAT & PARTICIPANTS) ==================== */
+/* ==================== SIDE PANELS ==================== */
 #chat-box,
 #list-box {
   position: fixed;
@@ -2703,7 +2726,6 @@ body {
 .chat-send:disabled { background-color: #ccc; cursor: not-allowed; }
 .chat-send svg { transform: rotate(-45deg); }
 
-/* Participant list items */
 .participant {
   background-color: #f7f7f7;
   border-radius: 8px;
@@ -2944,7 +2966,6 @@ body {
 ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
 
-/* Panel scrollbars (white bg panels) */
 .panel-body::-webkit-scrollbar-thumb,
 #chat-box ::-webkit-scrollbar-thumb,
 #list-box ::-webkit-scrollbar-thumb { background: #ccc; }
